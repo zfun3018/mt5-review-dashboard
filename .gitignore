@@ -1,0 +1,34 @@
+# Local runtime data and machine-specific configuration
+mt5-review-system/config.local.json
+mt5-review-system/data/journal.sqlite
+mt5-review-system/data/raw-events/
+mt5-review-system/data/screenshots/
+mt5-review-system/backups/
+MT5ReviewBridge-EA备份/
+
+# Runtime data and generated artefacts in any project subdirectory
+**/data/
+**/backups/
+**/raw-events/
+**/screenshots/
+**/artifacts/
+**/config.local.json
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.ex5
+
+# Python and editor artefacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+.idea/
+.vscode/
+
+# MT5 generated binaries and compiler output
+mt5-review-system/mt5-ea/*.ex5
+mt5-review-system/mt5-ea/compile.log

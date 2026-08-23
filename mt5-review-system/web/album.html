@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>复盘画册 | MT5交易复盘表</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/album.css" />
+  </head>
+  <body class="album-page">
+    <div class="shell">
+      <header class="topbar album-topbar">
+        <div class="brand-block">
+          <p class="eyebrow">REVIEW ALBUM / LOCAL JOURNAL</p>
+          <h1>复盘画册</h1>
+          <p class="album-lede">以截图为证据，按交易日重新浏览你的决策与结果。</p>
+        </div>
+        <nav class="site-nav" aria-label="主导航">
+          <a class="site-nav-link" href="/">仪表盘</a>
+          <a class="site-nav-link active" href="/album.html" aria-current="page">复盘画册</a>
+        </nav>
+        <div class="top-actions">
+          <button id="albumRefresh" class="primary-btn" type="button">刷新画册</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="panel album-toolbar" aria-label="画册筛选">
+          <div class="album-toolbar-head">
+            <div>
+              <p class="eyebrow">CURATE THE EVIDENCE</p>
+              <h2>筛选画册</h2>
+            </div>
+            <div class="album-toolbar-actions">
+              <span id="albumFilterNote" class="album-filter-note">标签组内任选，跨组同时满足</span>
+              <button id="albumClear" class="ghost-btn" type="button">清空条件</button>
+            </div>
+          </div>
+          <div class="album-basic-filters">
+            <label>
+              <span>品种</span>
+              <select id="albumSymbol">
+                <option value="">全部品种</option>
+              </select>
+            </label>
+            <label>
+              <span>开始日期</span>
+              <input id="albumStart" type="date" />
+            </label>
+            <label>
+              <span>结束日期</span>
+              <input id="albumEnd" type="date" />
+            </label>
+            <label>
+              <span>时间顺序</span>
+              <select id="albumSort">
+                <option value="desc">最新优先</option>
+                <option value="asc">最早优先</option>
+              </select>
+            </label>
+          </div>
+          <div id="albumTagGroups" class="album-tag-groups" aria-label="标签筛选"></div>
+        </section>
+
+        <section class="album-summary-row" aria-live="polite">
+          <div>
+            <span class="eyebrow">CURRENT VIEW</span>
+            <strong id="albumResultCount">读取中</strong>
+          </div>
+          <div>
+            <span class="eyebrow">TRADING DAYS</span>
+            <strong id="albumDayCount">-</strong>
+          </div>
+          <div>
+            <span class="eyebrow">NET P/L</span>
+            <strong id="albumNetPnl">-</strong>
+          </div>
+          <div id="albumError" class="album-error" role="alert" hidden></div>
+        </section>
+
+        <section id="albumDays" class="album-days" aria-live="polite"></section>
+        <div id="albumEmpty" class="album-empty" hidden>
+          <strong>当前条件没有交易</strong>
+          <span>清空筛选后查看全部有效订单。</span>
+          <button id="albumEmptyClear" class="primary-btn" type="button">清空筛选</button>
+        </div>
+        <div id="albumLoading" class="album-loading" hidden>正在读取交易截图...</div>
+      </main>
+    </div>
+
+    <div id="albumImageModal" class="album-image-modal" aria-hidden="true">
+      <button id="albumImageClose" class="icon-btn" type="button" title="关闭大图">X</button>
+      <figure>
+        <img id="albumModalImage" alt="交易截图大图" />
+        <figcaption id="albumModalCaption"></figcaption>
+      </figure>
+    </div>
+    <div id="albumToast" class="toast"></div>
+    <script src="/album.js"></script>
+  </body>
+</html>

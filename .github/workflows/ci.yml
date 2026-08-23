@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Python tests
+        working-directory: mt5-review-system/server
+        run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Compile Python sources
+        working-directory: mt5-review-system
+        run: python -m compileall -q server
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run frontend tests
+        working-directory: mt5-review-system
+        run: node --test web/tests/custom-fields-ui.test.js web/tests/review-album-ui.test.js
+
+      - name: Check frontend syntax
+        working-directory: mt5-review-system
+        shell: bash
+        run: |
+          node --check web/app.js
+          node --check web/album.js

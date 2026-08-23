@@ -1,0 +1,173 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from app import storage
+
+
+class ReviewAlbumTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.originals = {
+            "PROJECT_ROOT": storage.PROJECT_ROOT,
+            "DATA_DIR": storage.DATA_DIR,
+            "SCREENSHOT_DIR": storage.SCREENSHOT_DIR,
+            "RAW_EVENTS_DIR": storage.RAW_EVENTS_DIR,
+            "BACKUP_DIR": storage.BACKUP_DIR,
+            "DB_PATH": storage.DB_PATH,
+        }
+        storage.PROJECT_ROOT = self.root
+        storage.DATA_DIR = self.root / "data"
+        storage.SCREENSHOT_DIR = storage.DATA_DIR / "screenshots"
+        storage.RAW_EVENTS_DIR = storage.DATA_DIR / "raw-events"
+        storage.BACKUP_DIR = self.root / "backups"
+        storage.DB_PATH = storage.DATA_DIR / "journal.sqlite"
+        storage.init_db(seed=False)
+
+        self.single = storage.create_custom_field(
+            {
+                "name": "错误类型",
+                "field_type": "single",
+                "options": [
+                    {"label": "追单", "color": "#ff5c7a"},
+                    {"label": "逆势", "color": "#f97316"},
+                ],
+            }
+        )
+        self.multi = storage.create_custom_field(
+            {
+                "name": "交易标签",
+                "field_type": "multi",
+                "options": [
+                    {"label": "欧盘", "color": "#2bd4ff"},
+                    {"label": "突破", "color": "#4ade80"},
+                ],
+            }
+        )
+        self.text = storage.create_custom_field({"name": "复盘摘要", "field_type": "text"})
+
+        self._insert_trade(
+            "T-1",
+            "EURUSD",
+            "2026-08-20T16:30:00+00:00",
+            "follow",
+            "breakout",
+            screenshot_path="screenshots/missing.png",
+            single=self.single["options"][0]["id"],
+            multi=[self.multi["options"][0]["id"]],
+        )
+        self._insert_trade(
+            "T-2",
+            "EURUSD",
+            "2026-08-20T17:30:00+00:00",
+            "reversal",
+            "breakout",
+            single=self.single["options"][1]["id"],
+            multi=[self.multi["options"][1]["id"]],
+        )
+        self._insert_trade(
+            "T-3",
+            "XAUUSD",
+            "2026-08-19T17:30:00+00:00",
+            "follow",
+            "range",
+            multi=[self.multi["options"][0]["id"], self.multi["options"][1]["id"]],
+        )
+        self._insert_trade(
+            "T-DELETED",
+            "EURUSD",
+            "2026-08-20T18:30:00+00:00",
+            "follow",
+            "breakout",
+        )
+        storage.delete_trade("T-DELETED")
+
+    def tearDown(self):
+        for name, value in self.originals.items():
+            setattr(storage, name, value)
+        self.tmp.cleanup()
+
+    def _insert_trade(
+        self,
+        trade_id,
+        symbol,
+        close_time,
+        trade_type,
+        strategy,
+        screenshot_path="",
+        single=None,
+        multi=None,
+    ):
+        storage.upsert_trade(
+            {
+                "id": trade_id,
+                "account": "123",
+                "order_no": trade_id,
+                "position_id": trade_id,
+                "order_ticket": trade_id,
+                "deal_ticket": trade_id,
+                "symbol": symbol,
+                "side": "long",
+                "lots": 0.01,
+                "open_time_utc": close_time,
+                "close_time_utc": close_time,
+                "entry_price": 1.0,
+                "exit_price": 1.5,
+                "pnl": 10.0,
+                "screenshot_path": screenshot_path,
+                "trade_type": trade_type,
+                "strategy": strategy,
+            }
+        )
+        if single is not None:
+            storage.update_trade_custom_value(self._last_id(trade_id), self.single["id"], {"value": str(single)})
+        if multi is not None:
+            storage.update_trade_custom_value(self._last_id(trade_id), self.multi["id"], {"value": multi})
+
+    @staticmethod
+    def _last_id(trade_id):
+        return trade_id
+
+    def test_groups_by_beijing_close_date_excludes_deleted_and_keeps_missing_screenshot(self):
+        result = storage.query_review_album()
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual([day["date"] for day in result["days"]], ["2026-08-21", "2026-08-20"])
+        self.assertEqual([trade["id"] for trade in result["days"][0]["trades"]], ["T-2", "T-1"])
+        missing = next(trade for day in result["days"] for trade in day["trades"] if trade["id"] == "T-1")
+        self.assertTrue(missing["screenshot_missing"])
+        self.assertEqual(missing["album_date"], "2026-08-21")
+
+    def test_tag_filter_uses_or_within_dimension_and_and_across_dimensions(self):
+        result = storage.query_review_album(
+            tags=["trade_type:follow", "trade_type:reversal", "strategy:breakout"]
+        )
+
+        self.assertEqual([trade["id"] for trade in result["trades"]], ["T-2", "T-1"])
+
+        option_id = self.single["options"][0]["id"]
+        result = storage.query_review_album(tags=[f"trade_type:follow", f"field:{self.single['id']}:{option_id}"])
+        self.assertEqual([trade["id"] for trade in result["trades"]], ["T-1"])
+
+    def test_available_tags_exclude_text_fields_and_stopped_classification(self):
+        storage.delete_classification_option("follow")
+
+        result = storage.query_review_album()
+        tag_keys = {tag["key"] for tag in result["available_filters"]["tags"]}
+
+        self.assertNotIn("trade_type:follow", tag_keys)
+        self.assertTrue(any(key.startswith(f"field:{self.single['id']}:") for key in tag_keys))
+        self.assertFalse(any(key.startswith(f"field:{self.text['id']}:") for key in tag_keys))
+        historical = next(tag for trade in result["trades"] for tag in trade["album_tags"] if tag["key"] == "trade_type:follow")
+        self.assertEqual(historical["label"], "交易类型 / 跟随")
+
+    def test_invalid_date_and_unknown_tag_are_rejected(self):
+        with self.assertRaises(ValueError):
+            storage.query_review_album(start_date="2026-08-22", end_date="2026-08-20")
+        with self.assertRaises(ValueError):
+            storage.query_review_album(tags=["side:long"])
+
+
+if __name__ == "__main__":
+    unittest.main()

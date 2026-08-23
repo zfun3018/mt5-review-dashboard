@@ -1,0 +1,95 @@
+﻿MT5复盘仪表盘 简单使用教程
+
+一、目录说明
+
+1. mt5-review-system
+   这是完整项目副本，包含前端页面、后端服务、数据库、交易截图、原始事件、备份和 MT5 EA 源码。
+
+2. MT5ReviewBridge-EA备份
+   这里单独备份了 MT5ReviewBridge EA 文件，至少包含：
+   - MT5ReviewBridge.mq5：EA 源码
+   - MT5ReviewBridge.ex5：EA 编译后的插件文件（如果本机已找到）
+
+3. 使用教程.txt
+   当前这份说明文档。
+
+二、启动仪表盘
+
+1. 打开 PowerShell。
+2. 进入项目目录：
+   cd /d "F:\文件\MT5复盘仪表盘\mt5-review-system"
+
+   如果 PowerShell 不支持 cd /d，可以用：
+   Set-Location "F:\文件\MT5复盘仪表盘\mt5-review-system"
+
+3. 启动服务：
+   .\start.ps1
+
+4. 浏览器打开：
+   http://127.0.0.1:8787
+
+三、MT5 EA 使用方式
+
+1. EA 名称：MT5ReviewBridge。
+2. 作用：监听 MT5 账户交易事件，把订单流水、原始事件和截图同步到本地复盘仪表盘。
+3. 建议不要和其他 EA 挂在同一个图表上。
+4. 推荐做法：
+   - 保留原来的“一键平仓所有”EA 在原图表上。
+   - 新开一个图表，例如 XAUUSDc 或 EURUSD，周期建议 M5。
+   - 把 MT5ReviewBridge 单独挂到这个新图表上。
+   - 两个图表都保持打开。
+
+四、如果需要重新安装 EA
+
+1. 将 MT5ReviewBridge-EA备份 里的 MT5ReviewBridge.mq5 或 MT5ReviewBridge.ex5 复制到 MT5 的 Experts 目录。
+2. 当前检测到的 Experts 目录通常是：
+   C:\Users\<USERNAME>\AppData\Roaming\MetaQuotes\Terminal\<TERMINAL_ID>\MQL5\Experts
+3. 如果复制的是 .mq5 源码，需要在 MetaEditor 中编译。
+4. 回到 MT5，在导航器中刷新 EA 列表，然后挂载 MT5ReviewBridge。
+
+五、MT5 WebRequest 设置
+
+如果 EA 需要直接推送数据到仪表盘，请在 MT5 中允许 WebRequest：
+
+1. MT5 顶部菜单：工具 -> 选项 -> EA交易。
+2. 勾选允许 WebRequest。
+3. 加入地址：
+   http://127.0.0.1:8787
+
+如果没有开启 WebRequest，EA 仍可能写入本地 JSONL 原始文件，但同步实时性会受影响。
+
+六、重要数据位置
+
+项目内的重要数据在：
+
+mt5-review-system\data\journal.sqlite
+mt5-review-system\data\raw-events\
+mt5-review-system\data\screenshots\
+mt5-review-system\backups\
+
+其中 journal.sqlite 是本地数据库；raw-events 是原始交易事件；screenshots 是订单截图；backups 是备份包。
+
+七、恢复或迁移建议
+
+1. 迁移项目时，优先复制整个 mt5-review-system 文件夹。
+2. 不要只复制 web 或 server，否则数据和截图可能缺失。
+3. 如果仪表盘打不开，先确认服务是否已启动，再访问 http://127.0.0.1:8787。
+4. 如果新交易没有同步，检查：
+   - MT5ReviewBridge 是否挂在某个打开的图表上。
+   - 本地服务是否正在运行。
+   - MT5 是否允许 WebRequest 到 http://127.0.0.1:8787。
+
+八、停止服务
+
+在启动服务的 PowerShell 窗口中按 Ctrl + C 即可停止。
+
+九、一键启动
+
+这个目录下已经放好了：
+
+一键启动MT5复盘仪表盘.bat
+
+以后可以直接双击这个文件启动仪表盘。它会自动打开浏览器访问：
+http://127.0.0.1:8787
+
+启动窗口不要关闭。关闭窗口或在窗口里按 Ctrl + C，服务就会停止。

@@ -1,0 +1,8 @@
+{
+  "mt5_install_dir": "D:\\Apps\\MetaTrader5",
+  "mt5_data_dir": "C:\\Users\\<USERNAME>\\AppData\\Roaming\\MetaQuotes\\Terminal\\<TERMINAL_ID>",
+  "mql5_experts_dir": "C:\\Users\\<USERNAME>\\AppData\\Roaming\\MetaQuotes\\Terminal\\<TERMINAL_ID>\\MQL5\\Experts",
+  "mql5_files_bridge_dir": "C:\\Users\\<USERNAME>\\AppData\\Roaming\\MetaQuotes\\Terminal\\<TERMINAL_ID>\\MQL5\\Files\\MT5ReviewBridge",
+  "local_dashboard_url": "http://127.0.0.1:8787",
+  "local_bridge_endpoint": "http://127.0.0.1:8787/api/mt5/events"
+}
