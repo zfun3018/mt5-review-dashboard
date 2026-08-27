@@ -73,6 +73,37 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_PATCH(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path.startswith("/api/campaigns/") and parsed.path.endswith("/review"):
+            campaign_id = unquote(parsed.path.split("/")[3])
+            try:
+                self._json_response(
+                    storage.update_campaign_review(campaign_id, self._read_json())
+                )
+            except KeyError:
+                self._json_response({"error": "Campaign not found"}, HTTPStatus.NOT_FOUND)
+            except ValueError as exc:
+                self._json_response({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path.startswith("/api/positions/") and parsed.path.endswith("/initial-stop"):
+            position_id = unquote(parsed.path.split("/")[3])
+            try:
+                payload = self._read_json()
+                self._json_response(
+                    storage.update_position_initial_stop(
+                        position_id, payload.get("initial_stop_price")
+                    )
+                )
+            except KeyError:
+                self._json_response({"error": "Position not found"}, HTTPStatus.NOT_FOUND)
+            except ValueError as exc:
+                self._json_response({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+        if parsed.path == "/api/analysis-settings":
+            try:
+                self._json_response(storage.update_analysis_settings(self._read_json()))
+            except ValueError as exc:
+                self._json_response({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
         if parsed.path.startswith("/api/trades/") and parsed.path.endswith("/review"):
             trade_id = unquote(parsed.path.split("/")[3])
             try:
@@ -201,6 +232,31 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
                         page_size=_optional_int(_first(query, "page_size", "50")) or 50,
                     )
                 )
+            elif path == "/api/campaigns":
+                self._json_response(
+                    storage.list_campaigns(
+                        query=_first(query, "q", "") or "",
+                        symbol=_first(query, "symbol", "") or "",
+                        side=_first(query, "side", "all") or "all",
+                        trade_type=_first(query, "trade_type", "all") or "all",
+                        strategy=_first(query, "strategy", "all") or "all",
+                        start_date=_first(query, "start", None),
+                        end_date=_first(query, "end", None),
+                        r_missing_only=(_first(query, "r_missing", "0") or "0")
+                        in {"1", "true"},
+                        page=_optional_int(_first(query, "page", "1")) or 1,
+                        page_size=_optional_int(_first(query, "page_size", "50")) or 50,
+                    )
+                )
+            elif path.startswith("/api/campaigns/"):
+                campaign_id = unquote(path.split("/")[3])
+                campaign = storage.get_campaign(campaign_id)
+                if not campaign:
+                    self._json_response({"error": "Campaign not found"}, HTTPStatus.NOT_FOUND)
+                else:
+                    self._json_response(campaign)
+            elif path == "/api/analysis-settings":
+                self._json_response(storage.get_analysis_settings())
             elif path == "/api/review-album":
                 allowed = {"start", "end", "symbol", "tag", "sort", "page", "page_size"}
                 unknown = sorted(set(query) - allowed)

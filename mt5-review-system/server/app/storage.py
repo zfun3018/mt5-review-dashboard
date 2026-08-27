@@ -4,6 +4,7 @@ import json
 import base64
 import binascii
 import hashlib
+import math
 import mimetypes
 import sqlite3
 import uuid
@@ -13,6 +14,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .campaigns import (
+    build_r_metrics,
+    calculate_campaign_r,
+    calculate_position_risk,
+    group_campaigns,
+    reconstruct_positions,
+)
 from .analytics import (
     build_daily_system_evaluation,
     build_cumulative_return_curve,
@@ -66,11 +74,50 @@ def db():
         conn.close()
 
 
+def _backup_before_v4_migration() -> dict[str, Any] | None:
+    if not DB_PATH.exists() or DB_PATH.stat().st_size == 0:
+        return None
+    source = sqlite3.connect(DB_PATH, timeout=10)
+    try:
+        table = source.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_meta'"
+        ).fetchone()
+        version_row = (
+            source.execute(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).fetchone()
+            if table
+            else None
+        )
+        version = int(version_row[0]) if version_row else 0
+        if version >= 4:
+            return None
+        created_at = datetime.now(timezone.utc)
+        filename = (
+            f"pre-v4-{created_at.strftime('%Y%m%d-%H%M%S')}-"
+            f"{uuid.uuid4().hex[:6]}.sqlite"
+        )
+        snapshot_path = BACKUP_DIR / filename
+        destination = sqlite3.connect(snapshot_path)
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+        return {
+            "file_path": str(snapshot_path),
+            "created_at": created_at.isoformat(),
+            "size_bytes": snapshot_path.stat().st_size,
+        }
+    finally:
+        source.close()
+
+
 def init_db(seed: bool = True) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     RAW_EVENTS_DIR.mkdir(parents=True, exist_ok=True)
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    migration_backup = _backup_before_v4_migration()
 
     with db() as conn:
         conn.executescript(
@@ -191,6 +238,15 @@ def init_db(seed: bool = True) -> None:
             """
         )
         _ensure_schema(conn)
+        if migration_backup:
+            conn.execute(
+                "INSERT INTO backups (file_path, created_at, size_bytes) VALUES (?, ?, ?)",
+                (
+                    migration_backup["file_path"],
+                    migration_backup["created_at"],
+                    migration_backup["size_bytes"],
+                ),
+            )
     if seed:
         seed_demo_data()
 
@@ -311,8 +367,115 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(side)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_type ON trades(trade_type)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_strategy ON trades(strategy)")
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS deal_events (
+            deal_ticket TEXT PRIMARY KEY,
+            account TEXT NOT NULL,
+            position_id TEXT NOT NULL,
+            order_ticket TEXT,
+            entry_kind TEXT NOT NULL,
+            deal_type TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            volume REAL NOT NULL,
+            price REAL NOT NULL,
+            time_utc TEXT NOT NULL,
+            time_msc INTEGER NOT NULL,
+            profit REAL NOT NULL DEFAULT 0,
+            commission REAL NOT NULL DEFAULT 0,
+            swap REAL NOT NULL DEFAULT 0,
+            fee REAL NOT NULL DEFAULT 0,
+            screenshot_path TEXT,
+            source_kind TEXT NOT NULL DEFAULT 'mt5',
+            source_trade_id TEXT,
+            raw_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS positions (
+            id TEXT PRIMARY KEY,
+            account TEXT NOT NULL,
+            position_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            opened_at_utc TEXT NOT NULL,
+            closed_at_utc TEXT,
+            opened_sort_msc INTEGER NOT NULL,
+            opened_sort_ticket TEXT NOT NULL,
+            closed_sort_msc INTEGER,
+            closed_sort_ticket TEXT,
+            entry_volume REAL NOT NULL,
+            exit_volume REAL NOT NULL,
+            weighted_entry_price REAL,
+            reconstruction_status TEXT NOT NULL,
+            initial_stop_price REAL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (account, position_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS trade_campaigns (
+            id TEXT PRIMARY KEY,
+            account TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            opened_at_utc TEXT NOT NULL,
+            closed_at_utc TEXT,
+            status TEXT NOT NULL,
+            net_pnl REAL NOT NULL DEFAULT 0,
+            review_text TEXT NOT NULL DEFAULT '',
+            trade_type TEXT NOT NULL DEFAULT 'unclassified',
+            strategy TEXT NOT NULL DEFAULT 'strategy_unclassified',
+            screenshot_path TEXT,
+            classification_conflict INTEGER NOT NULL DEFAULT 0,
+            deleted_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS campaign_positions (
+            campaign_id TEXT NOT NULL REFERENCES trade_campaigns(id) ON DELETE CASCADE,
+            position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (campaign_id, position_id),
+            UNIQUE (position_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS campaign_source_trades (
+            campaign_id TEXT NOT NULL REFERENCES trade_campaigns(id) ON DELETE CASCADE,
+            trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+            PRIMARY KEY (campaign_id, trade_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS campaign_position_history (
+            position_id TEXT PRIMARY KEY,
+            campaign_id TEXT NOT NULL,
+            campaign_created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS analysis_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_deal_position_time
+            ON deal_events(account, position_id, time_msc, deal_ticket);
+        CREATE INDEX IF NOT EXISTS idx_positions_campaign_lookup
+            ON positions(account, symbol, side, closed_at_utc);
+        CREATE INDEX IF NOT EXISTS idx_campaign_closed
+            ON trade_campaigns(account, symbol, side, closed_at_utc);
+        CREATE INDEX IF NOT EXISTS idx_campaign_positions_campaign
+            ON campaign_positions(campaign_id, sort_order);
+        """
+    )
     conn.execute(
-        "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '3') "
+        "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('scratch_threshold_r', '0.15')"
+    )
+    _rebuild_campaign_models_conn(conn)
+    conn.execute(
+        "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4') "
         "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
 
@@ -474,17 +637,25 @@ def seed_demo_data() -> None:
             "INSERT INTO equity_snapshots (time_utc, balance, equity) VALUES (?, ?, ?)",
             snapshots,
         )
+    rebuild_campaign_models()
 
 
 def get_dashboard(year: int | None = None, month: int | None = None) -> dict[str, Any]:
     trades = list_trades()
     snapshots = list_equity_snapshots()
     classification_options = list_classification_options()
+    with db() as conn:
+        campaigns = [record for record in _campaign_records_conn(conn) if record.get("status") == "closed"]
+    threshold = get_analysis_settings()["scratch_threshold_r"]
     anchor = _latest_activity_time(trades, snapshots)
     target = to_beijing(anchor)
     selected_year = year or target.year
     selected_month = month or target.month
 
+    periods = build_period_summaries(trades, anchor)
+    period_r_metrics = _build_campaign_period_metrics(campaigns, anchor, threshold)
+    for key, metrics in period_r_metrics.items():
+        periods.setdefault(key, {})["r_metrics"] = metrics
     return {
         "summary": build_summary(trades, snapshots, anchor),
         "status": get_local_status(),
@@ -492,14 +663,23 @@ def get_dashboard(year: int | None = None, month: int | None = None) -> dict[str
         "custom_fields": list_custom_fields(),
         "classification_options": classification_options,
         "trades": trades,
+        "campaigns": [
+            _serialize_campaign_record(record, include_positions=False) for record in campaigns
+        ],
+        "r_metrics": build_r_metrics(campaigns, threshold),
+        "periods": periods,
         "equity": build_cumulative_return_curve(trades, snapshots, now_utc=anchor, hours=24 * 30),
         "calendar": build_month_calendar(trades, selected_year, selected_month),
         "heatmap": build_hour_heatmap(trades, anchor_utc=anchor, days=7),
         "sessions": build_session_stats(trades),
-        "system_evaluation": build_daily_system_evaluation(trades),
+        "system_evaluation": _build_daily_campaign_evaluation(campaigns, threshold),
         "mode_evaluation": {
-            "trade_type": _labeled_mode_evaluation(trades, "trade_type", classification_options),
-            "strategy": _labeled_mode_evaluation(trades, "strategy", classification_options),
+            "trade_type": _labeled_campaign_mode_evaluation(
+                campaigns, "trade_type", classification_options, threshold
+            ),
+            "strategy": _labeled_campaign_mode_evaluation(
+                campaigns, "strategy", classification_options, threshold
+            ),
         },
         "backups": list_backups(),
     }
@@ -513,17 +693,28 @@ def get_analysis(
     trades = _filter_trades_by_date(list_trades(), start_date, end_date)
     snapshots = list_equity_snapshots()
     classification_options = list_classification_options()
+    with db() as conn:
+        all_campaigns = [
+            record for record in _campaign_records_conn(conn) if record.get("status") == "closed"
+        ]
+    campaigns = _filter_campaigns_by_date(all_campaigns, start_date, end_date)
+    threshold = get_analysis_settings()["scratch_threshold_r"]
     anchor = (
         datetime.fromisoformat(f"{end_date}T23:59:59+08:00").astimezone(timezone.utc)
         if end_date
         else _latest_activity_time(trades, snapshots)
     )
     days = max(1, min(int(equity_days), 366))
+    periods = build_period_summaries(trades, anchor)
+    period_r_metrics = _build_campaign_period_metrics(campaigns, anchor, threshold)
+    for key, metrics in period_r_metrics.items():
+        periods.setdefault(key, {})["r_metrics"] = metrics
     return {
         "start_date": start_date or "",
         "end_date": end_date or "",
         "metrics": build_trade_metrics(trades),
-        "periods": build_period_summaries(trades, anchor),
+        "r_metrics": build_r_metrics(campaigns, threshold),
+        "periods": periods,
         "equity": build_cumulative_return_curve(
             trades,
             snapshots,
@@ -532,11 +723,134 @@ def get_analysis(
             start_date=start_date,
             end_date=end_date,
         ),
-        "system_evaluation": build_daily_system_evaluation(trades),
+        "system_evaluation": _build_daily_campaign_evaluation(campaigns, threshold),
         "mode_evaluation": {
-            "trade_type": _labeled_mode_evaluation(trades, "trade_type", classification_options),
-            "strategy": _labeled_mode_evaluation(trades, "strategy", classification_options),
+            "trade_type": _labeled_campaign_mode_evaluation(
+                campaigns, "trade_type", classification_options, threshold
+            ),
+            "strategy": _labeled_campaign_mode_evaluation(
+                campaigns, "strategy", classification_options, threshold
+            ),
         },
+    }
+
+
+def _campaign_cash_metrics(campaigns: list[dict[str, Any]]) -> dict[str, Any]:
+    proxy_trades = [
+        {
+            "pnl": float(campaign.get("net_pnl") or 0.0),
+            "commission": 0.0,
+            "swap": 0.0,
+            "fee": 0.0,
+        }
+        for campaign in campaigns
+    ]
+    metrics = build_trade_metrics(proxy_trades)
+    metrics["cash_win_rate"] = metrics["win_rate"]
+    return metrics
+
+
+def _campaign_evaluation_row(
+    campaigns: list[dict[str, Any]], threshold: float
+) -> dict[str, Any]:
+    cash = _campaign_cash_metrics(campaigns)
+    r_metrics = build_r_metrics(campaigns, threshold)
+    return {
+        **cash,
+        "r_metrics": r_metrics,
+        "z_score": r_metrics["z_score"],
+    }
+
+
+def _build_daily_campaign_evaluation(
+    campaigns: list[dict[str, Any]], threshold: float
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for campaign in campaigns:
+        closed_at = campaign.get("closed_at_utc")
+        if not closed_at:
+            continue
+        key = to_beijing(closed_at).date().isoformat()
+        grouped.setdefault(key, []).append(campaign)
+    rows = []
+    for key in sorted(grouped):
+        rows.append({"date": key, **_campaign_evaluation_row(grouped[key], threshold)})
+    return rows
+
+
+def _labeled_campaign_mode_evaluation(
+    campaigns: list[dict[str, Any]],
+    dimension: str,
+    options: list[dict[str, Any]],
+    threshold: float,
+) -> list[dict[str, Any]]:
+    if dimension not in {"trade_type", "strategy"}:
+        raise ValueError("dimension must be trade_type or strategy")
+    labels = {
+        str(option["id"]): str(option["label"])
+        for option in options
+        if option["dimension"] == dimension
+    }
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for campaign in campaigns:
+        key = str(campaign.get(dimension) or "unclassified")
+        grouped.setdefault(key, []).append(campaign)
+    total = len(campaigns)
+    return [
+        {
+            "key": key,
+            "label": labels.get(key, key),
+            "share": len(grouped[key]) / total if total else 0.0,
+            **_campaign_evaluation_row(grouped[key], threshold),
+        }
+        for key in sorted(grouped)
+    ]
+
+
+def _filter_campaigns_by_date(
+    campaigns: list[dict[str, Any]],
+    start_date: str | None,
+    end_date: str | None,
+) -> list[dict[str, Any]]:
+    start = date.fromisoformat(start_date) if start_date else None
+    end = date.fromisoformat(end_date) if end_date else None
+    if start and end and start > end:
+        raise ValueError("start_date cannot be after end_date")
+    selected = []
+    for campaign in campaigns:
+        closed_at = campaign.get("closed_at_utc")
+        if not closed_at:
+            continue
+        closed = to_beijing(closed_at).date()
+        if start and closed < start:
+            continue
+        if end and closed > end:
+            continue
+        selected.append(campaign)
+    return selected
+
+
+def _build_campaign_period_metrics(
+    campaigns: list[dict[str, Any]], anchor: datetime, threshold: float
+) -> dict[str, dict[str, Any]]:
+    anchor_date = to_beijing(anchor).date()
+    windows = {
+        "today": (anchor_date, anchor_date),
+        "week": (anchor_date - timedelta(days=anchor_date.weekday()), anchor_date),
+        "month": (anchor_date.replace(day=1), anchor_date),
+        "year": (anchor_date.replace(month=1, day=1), anchor_date),
+    }
+    return {
+        key: build_r_metrics(
+            [
+                campaign
+                for campaign in campaigns
+                if campaign.get("closed_at_utc")
+                and start <= to_beijing(campaign["closed_at_utc"]).date() <= end
+            ],
+            threshold,
+        )
+        for key, (start, end) in windows.items()
     }
 
 
@@ -1144,6 +1458,7 @@ def delete_trade(trade_id: str) -> None:
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
+    rebuild_campaign_models()
 
 
 def restore_trade(trade_id: str) -> dict[str, Any]:
@@ -1154,6 +1469,7 @@ def restore_trade(trade_id: str) -> dict[str, Any]:
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
+    rebuild_campaign_models()
     trade = get_trade(trade_id)
     if not trade:
         raise KeyError(trade_id)
@@ -1722,6 +2038,17 @@ def _apply_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
         snapshot = upsert_equity_snapshot(payload)
         return {"trade_id": None, "snapshot": snapshot, "restored": False}
 
+    if payload.get("type") == "deal":
+        deal = _event_to_deal(payload)
+        if not deal:
+            return {"trade_id": None, "deal_ticket": None, "restored": False}
+        upsert_deal_event(deal)
+        return {
+            "trade_id": None,
+            "deal_ticket": deal["deal_ticket"],
+            "restored": False,
+        }
+
     trade = _event_to_trade(payload)
     if not trade:
         return {"trade_id": None, "restored": False}
@@ -1747,6 +2074,84 @@ def upsert_equity_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
             (time_utc, balance, equity),
         )
     return {"time_utc": time_utc, "balance": balance, "equity": equity}
+
+
+def _event_to_deal(payload: dict[str, Any]) -> dict[str, Any] | None:
+    required = (
+        "deal_ticket",
+        "position_id",
+        "entry_kind",
+        "deal_type",
+        "symbol",
+        "volume",
+        "price",
+        "time_utc",
+    )
+    if any(payload.get(key) in (None, "") for key in required):
+        return None
+    time_utc = str(payload["time_utc"])
+    return {
+        "deal_ticket": str(payload["deal_ticket"]),
+        "account": str(payload.get("account") or "MT5-LOCAL"),
+        "position_id": str(payload["position_id"]),
+        "order_ticket": str(payload.get("order_ticket") or ""),
+        "entry_kind": str(payload["entry_kind"]).lower(),
+        "deal_type": str(payload["deal_type"]).lower(),
+        "symbol": str(payload["symbol"]),
+        "volume": float(payload["volume"]),
+        "price": float(payload["price"]),
+        "time_utc": time_utc,
+        "time_msc": int(payload.get("time_msc") or _legacy_time_msc(time_utc)),
+        "profit": float(payload.get("profit", 0.0) or 0.0),
+        "commission": float(payload.get("commission", 0.0) or 0.0),
+        "swap": float(payload.get("swap", 0.0) or 0.0),
+        "fee": float(payload.get("fee", 0.0) or 0.0),
+        "screenshot_path": str(payload.get("screenshot_path") or ""),
+        "source_kind": "mt5",
+        "source_trade_id": None,
+        "raw_json": json.dumps(payload, ensure_ascii=False),
+    }
+
+
+def upsert_deal_event(deal: dict[str, Any]) -> None:
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO deal_events (
+                deal_ticket, account, position_id, order_ticket, entry_kind, deal_type,
+                symbol, volume, price, time_utc, time_msc, profit, commission, swap,
+                fee, screenshot_path, source_kind, source_trade_id, raw_json
+            ) VALUES (
+                :deal_ticket, :account, :position_id, :order_ticket, :entry_kind, :deal_type,
+                :symbol, :volume, :price, :time_utc, :time_msc, :profit, :commission, :swap,
+                :fee, :screenshot_path, :source_kind, :source_trade_id, :raw_json
+            )
+            ON CONFLICT(deal_ticket) DO UPDATE SET
+                account = excluded.account,
+                position_id = excluded.position_id,
+                order_ticket = excluded.order_ticket,
+                entry_kind = excluded.entry_kind,
+                deal_type = excluded.deal_type,
+                symbol = excluded.symbol,
+                volume = excluded.volume,
+                price = excluded.price,
+                time_utc = excluded.time_utc,
+                time_msc = excluded.time_msc,
+                profit = excluded.profit,
+                commission = excluded.commission,
+                swap = excluded.swap,
+                fee = excluded.fee,
+                screenshot_path = CASE
+                    WHEN excluded.screenshot_path != '' THEN excluded.screenshot_path
+                    ELSE deal_events.screenshot_path
+                END,
+                source_kind = excluded.source_kind,
+                raw_json = excluded.raw_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            deal,
+        )
+        _rebuild_campaign_models_conn(conn)
 
 
 def upsert_trade(trade: dict[str, Any]) -> None:
@@ -1808,6 +2213,619 @@ def upsert_trade(trade: dict[str, Any]) -> None:
             """,
             trade,
         )
+    rebuild_campaign_models()
+
+
+def _legacy_time_msc(value: str, fallback: int = 0) -> int:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return int(parsed.timestamp() * 1000)
+    except (TypeError, ValueError):
+        return int(fallback)
+
+
+def _sync_legacy_deal_events_conn(conn: sqlite3.Connection) -> None:
+    conn.execute("DELETE FROM deal_events WHERE source_kind = 'legacy'")
+    rows = [dict(row) for row in conn.execute("SELECT * FROM trades ORDER BY open_time_utc, id")]
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        account = str(row.get("account") or "MT5-LOCAL")
+        position_id = str(row.get("position_id") or row["id"])
+        grouped.setdefault((account, position_id), []).append(row)
+
+    for (account, position_id), source_rows in grouped.items():
+        has_native = conn.execute(
+            """
+            SELECT 1 FROM deal_events
+            WHERE account = ? AND position_id = ? AND source_kind = 'mt5'
+            LIMIT 1
+            """,
+            (account, position_id),
+        ).fetchone()
+        if has_native:
+            continue
+        active = [row for row in source_rows if not row.get("deleted_at")]
+        if not active:
+            continue
+        active.sort(key=lambda row: (str(row["open_time_utc"]), str(row["id"])))
+        total_volume = sum(float(row.get("lots") or 0.0) for row in active)
+        if total_volume <= 0:
+            continue
+        entry_price = sum(
+            float(row.get("lots") or 0.0) * float(row.get("entry_price") or 0.0)
+            for row in active
+        ) / total_volume
+        first = active[0]
+        side = str(first.get("side") or "long").lower()
+        entry_ticket = f"legacy-in:{account}:{position_id}"
+        conn.execute(
+            """
+            INSERT INTO deal_events (
+                deal_ticket, account, position_id, order_ticket, entry_kind, deal_type,
+                symbol, volume, price, time_utc, time_msc, profit, commission, swap,
+                fee, screenshot_path, source_kind, source_trade_id, raw_json
+            ) VALUES (?, ?, ?, ?, 'in', ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, '', 'legacy', ?, ?)
+            """,
+            (
+                entry_ticket,
+                account,
+                position_id,
+                str(first.get("order_ticket") or ""),
+                "buy" if side == "long" else "sell",
+                str(first.get("symbol") or ""),
+                total_volume,
+                entry_price,
+                str(first["open_time_utc"]),
+                _legacy_time_msc(str(first["open_time_utc"])),
+                str(first["id"]),
+                json.dumps({"legacy_estimated": True, "source_trade_ids": [row["id"] for row in active]}),
+            ),
+        )
+        for index, row in enumerate(active):
+            close_time = str(row["close_time_utc"])
+            conn.execute(
+                """
+                INSERT INTO deal_events (
+                    deal_ticket, account, position_id, order_ticket, entry_kind, deal_type,
+                    symbol, volume, price, time_utc, time_msc, profit, commission, swap,
+                    fee, screenshot_path, source_kind, source_trade_id, raw_json
+                ) VALUES (?, ?, ?, ?, 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'legacy', ?, ?)
+                """,
+                (
+                    f"legacy-out:{row['id']}",
+                    account,
+                    position_id,
+                    str(row.get("order_ticket") or ""),
+                    "sell" if side == "long" else "buy",
+                    str(row.get("symbol") or ""),
+                    float(row.get("lots") or 0.0),
+                    float(row.get("exit_price") or 0.0),
+                    close_time,
+                    _legacy_time_msc(close_time) + index,
+                    float(row.get("pnl") or 0.0),
+                    float(row.get("commission") or 0.0),
+                    float(row.get("swap") or 0.0),
+                    float(row.get("fee") or 0.0),
+                    str(row.get("screenshot_path") or ""),
+                    str(row["id"]),
+                    str(row.get("raw_json") or ""),
+                ),
+            )
+
+
+def _rebuild_campaign_models_conn(conn: sqlite3.Connection) -> None:
+    _sync_legacy_deal_events_conn(conn)
+    deal_rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT deal_ticket, account, position_id, order_ticket, entry_kind,
+                   deal_type, symbol, volume, price, time_utc, time_msc, profit,
+                   commission, swap, fee, screenshot_path, source_kind, source_trade_id
+            FROM deal_events
+            ORDER BY time_msc, deal_ticket
+            """
+        )
+    ]
+    positions = reconstruct_positions(deal_rows)
+    source_kinds: dict[str, set[str]] = {}
+    for deal in deal_rows:
+        key = f"{deal['account']}:{deal['position_id']}"
+        source_kinds.setdefault(key, set()).add(str(deal.get("source_kind") or "mt5"))
+
+    previous_stops = {
+        row["id"]: row["initial_stop_price"]
+        for row in conn.execute("SELECT id, initial_stop_price FROM positions")
+    }
+    previous_memberships = {
+        row["position_id"]: {
+            "campaign_id": row["campaign_id"],
+            "created_at": row["created_at"],
+        }
+        for row in conn.execute(
+            """
+            SELECT campaign_positions.position_id, campaign_positions.campaign_id,
+                   trade_campaigns.created_at
+            FROM campaign_positions
+            JOIN trade_campaigns ON trade_campaigns.id = campaign_positions.campaign_id
+            """
+        )
+    }
+    for row in conn.execute(
+        "SELECT position_id, campaign_id, campaign_created_at FROM campaign_position_history"
+    ):
+        previous_memberships.setdefault(
+            row["position_id"],
+            {
+                "campaign_id": row["campaign_id"],
+                "created_at": row["campaign_created_at"],
+            },
+        )
+    for position in positions:
+        if (
+            position["reconstruction_status"] == "complete"
+            and source_kinds.get(position["id"]) == {"legacy"}
+        ):
+            position["reconstruction_status"] = "legacy_estimated"
+        position["initial_stop_price"] = previous_stops.get(position["id"])
+        opened_ticket = str(position["entry_deals"][0]["deal_ticket"] if position["entry_deals"] else "")
+        closed_ticket = str(position["exit_deals"][-1]["deal_ticket"] if position["exit_deals"] else "")
+        conn.execute(
+            """
+            INSERT INTO positions (
+                id, account, position_id, symbol, side, opened_at_utc, closed_at_utc,
+                opened_sort_msc, opened_sort_ticket, closed_sort_msc, closed_sort_ticket,
+                entry_volume, exit_volume, weighted_entry_price, reconstruction_status,
+                initial_stop_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                account = excluded.account,
+                position_id = excluded.position_id,
+                symbol = excluded.symbol,
+                side = excluded.side,
+                opened_at_utc = excluded.opened_at_utc,
+                closed_at_utc = excluded.closed_at_utc,
+                opened_sort_msc = excluded.opened_sort_msc,
+                opened_sort_ticket = excluded.opened_sort_ticket,
+                closed_sort_msc = excluded.closed_sort_msc,
+                closed_sort_ticket = excluded.closed_sort_ticket,
+                entry_volume = excluded.entry_volume,
+                exit_volume = excluded.exit_volume,
+                weighted_entry_price = excluded.weighted_entry_price,
+                reconstruction_status = excluded.reconstruction_status,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                position["id"],
+                position["account"],
+                position["position_id"],
+                position["symbol"],
+                position["side"],
+                position["opened_at_utc"],
+                position["closed_at_utc"],
+                int(position["opened_sort_key"][0]),
+                opened_ticket,
+                int(position["closed_sort_key"][0]) if position.get("closed_sort_key") else None,
+                closed_ticket or None,
+                position["entry_volume"],
+                position["exit_volume"],
+                position["weighted_entry_price"],
+                position["reconstruction_status"],
+                position["initial_stop_price"],
+            ),
+        )
+
+    source_rows = [dict(row) for row in conn.execute("SELECT * FROM trades")]
+    source_by_position: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in source_rows:
+        key = (
+            str(row.get("account") or "MT5-LOCAL"),
+            str(row.get("position_id") or row["id"]),
+        )
+        source_by_position.setdefault(key, []).append(row)
+
+    conn.execute("DELETE FROM campaign_positions")
+    conn.execute("DELETE FROM campaign_source_trades")
+    for campaign in group_campaigns(positions):
+        candidates = {
+            previous_memberships[position_id]["campaign_id"]: previous_memberships[position_id]["created_at"]
+            for position_id in campaign["position_ids"]
+            if position_id in previous_memberships
+        }
+        campaign_id = (
+            min(candidates, key=lambda key: (str(candidates[key]), key))
+            if candidates
+            else str(uuid.uuid4())
+        )
+        members = campaign["positions"]
+        related_rows = []
+        for member in members:
+            related_rows.extend(
+                source_by_position.get((member["account"], member["position_id"]), [])
+            )
+        active_rows = [row for row in related_rows if not row.get("deleted_at")]
+        active_rows.sort(key=lambda row: (str(row.get("close_time_utc") or ""), str(row["id"])))
+        reviews = [
+            f"来源 {row['id']}\n{str(row.get('review_text') or '').strip()}"
+            for row in active_rows
+            if str(row.get("review_text") or "").strip()
+        ]
+        trade_types = list(dict.fromkeys(str(row.get("trade_type") or "unclassified") for row in active_rows))
+        strategies = list(
+            dict.fromkeys(str(row.get("strategy") or "strategy_unclassified") for row in active_rows)
+        )
+        screenshot_path = next(
+            (str(row.get("screenshot_path") or "") for row in reversed(active_rows) if row.get("screenshot_path")),
+            "",
+        )
+        net_pnl = round(sum(trade_net_pnl(row) for row in active_rows), 2)
+        conn.execute(
+            """
+            INSERT INTO trade_campaigns (
+                id, account, symbol, side, opened_at_utc, closed_at_utc, status,
+                net_pnl, review_text, trade_type, strategy, screenshot_path,
+                classification_conflict
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                account = excluded.account,
+                symbol = excluded.symbol,
+                side = excluded.side,
+                opened_at_utc = excluded.opened_at_utc,
+                closed_at_utc = excluded.closed_at_utc,
+                status = excluded.status,
+                net_pnl = excluded.net_pnl,
+                review_text = CASE
+                    WHEN trade_campaigns.review_text = '' THEN excluded.review_text
+                    ELSE trade_campaigns.review_text
+                END,
+                screenshot_path = CASE
+                    WHEN excluded.screenshot_path != '' THEN excluded.screenshot_path
+                    ELSE trade_campaigns.screenshot_path
+                END,
+                classification_conflict = excluded.classification_conflict,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                campaign_id,
+                campaign["account"],
+                campaign["symbol"],
+                campaign["side"],
+                campaign["opened_at_utc"],
+                campaign["closed_at_utc"],
+                campaign["status"],
+                net_pnl,
+                "\n\n".join(reviews),
+                trade_types[0] if trade_types else "unclassified",
+                strategies[0] if strategies else "strategy_unclassified",
+                screenshot_path,
+                int(len(trade_types) > 1 or len(strategies) > 1),
+            ),
+        )
+        for index, member in enumerate(members):
+            conn.execute(
+                "INSERT INTO campaign_positions (campaign_id, position_id, sort_order) VALUES (?, ?, ?)",
+                (campaign_id, member["id"], index),
+            )
+            created_at = conn.execute(
+                "SELECT created_at FROM trade_campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()["created_at"]
+            conn.execute(
+                """
+                INSERT INTO campaign_position_history (
+                    position_id, campaign_id, campaign_created_at
+                ) VALUES (?, ?, ?)
+                ON CONFLICT(position_id) DO UPDATE SET
+                    campaign_id = excluded.campaign_id,
+                    campaign_created_at = excluded.campaign_created_at
+                """,
+                (member["id"], campaign_id, created_at),
+            )
+        for row in related_rows:
+            conn.execute(
+                "INSERT OR IGNORE INTO campaign_source_trades (campaign_id, trade_id) VALUES (?, ?)",
+                (campaign_id, row["id"]),
+            )
+
+
+def rebuild_campaign_models() -> None:
+    with db() as conn:
+        _rebuild_campaign_models_conn(conn)
+
+
+def _campaign_records_conn(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    campaigns = {
+        row["id"]: dict(row)
+        for row in conn.execute(
+            """
+            SELECT * FROM trade_campaigns
+            WHERE deleted_at IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM campaign_positions
+                  WHERE campaign_positions.campaign_id = trade_campaigns.id
+              )
+            ORDER BY COALESCE(closed_at_utc, opened_at_utc) DESC, id DESC
+            """
+        )
+    }
+    position_rows = [dict(row) for row in conn.execute("SELECT * FROM positions")]
+    deal_rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT deal_ticket, account, position_id, order_ticket, entry_kind,
+                   deal_type, symbol, volume, price, time_utc, time_msc, profit,
+                   commission, swap, fee, screenshot_path, source_kind, source_trade_id
+            FROM deal_events ORDER BY time_msc, deal_ticket
+            """
+        )
+    ]
+    reconstructed = {position["id"]: position for position in reconstruct_positions(deal_rows)}
+    position_domains: dict[str, dict[str, Any]] = {}
+    for row in position_rows:
+        position = reconstructed.get(row["id"])
+        if not position:
+            continue
+        position = dict(position)
+        position["initial_stop_price"] = row["initial_stop_price"]
+        position["reconstruction_status"] = row["reconstruction_status"]
+        position_domains[row["id"]] = position
+
+    memberships: dict[str, list[str]] = {}
+    for row in conn.execute(
+        "SELECT campaign_id, position_id FROM campaign_positions ORDER BY campaign_id, sort_order"
+    ):
+        memberships.setdefault(row["campaign_id"], []).append(row["position_id"])
+    source_ids: dict[str, list[str]] = {}
+    for row in conn.execute(
+        "SELECT campaign_id, trade_id FROM campaign_source_trades ORDER BY campaign_id, trade_id"
+    ):
+        source_ids.setdefault(row["campaign_id"], []).append(row["trade_id"])
+
+    records = []
+    for campaign_id, campaign in campaigns.items():
+        members = [
+            position_domains[position_id]
+            for position_id in memberships.get(campaign_id, [])
+            if position_id in position_domains
+        ]
+        risk = calculate_campaign_r(campaign, members)
+        record = {
+            **campaign,
+            **risk,
+            "positions": members,
+            "position_count": len(members),
+            "scale_in_count": max(0, len(members) - 1),
+            "partial_exit_count": sum(int(member.get("partial_exit_count") or 0) for member in members),
+            "source_trade_ids": source_ids.get(campaign_id, []),
+            "display_order_kind": "Campaign",
+            "display_order_no": campaign_id[:8],
+            "campaign_total_pnl": float(campaign.get("net_pnl") or 0.0),
+            "net_pnl": float(campaign.get("net_pnl") or 0.0),
+            "open_time_utc": campaign.get("opened_at_utc"),
+            "close_time_utc": campaign.get("closed_at_utc"),
+        }
+        records.append(record)
+    return records
+
+
+def _serialize_position_for_campaign(position: dict[str, Any]) -> dict[str, Any]:
+    risk = calculate_position_risk(position)
+    raw_id = str(position.get("position_id") or "")
+    display_id = f"••••{raw_id[-4:]}" if len(raw_id) > 4 else raw_id
+    return {
+        **position,
+        **risk,
+        "display_position_id": display_id,
+    }
+
+
+def _serialize_campaign_record(record: dict[str, Any], *, include_positions: bool) -> dict[str, Any]:
+    serialized = {key: value for key, value in record.items() if key != "positions"}
+    if record.get("opened_at_utc"):
+        serialized["open_time_bj"] = to_beijing(record["opened_at_utc"]).isoformat()
+    if record.get("closed_at_utc"):
+        serialized["close_time_bj"] = to_beijing(record["closed_at_utc"]).isoformat()
+    serialized["risk_missing_label"] = {
+        "complete": "",
+        "missing": "待补初始止损",
+        "invalid": "止损方向无效",
+        "incomplete": "成交数据不完整",
+    }.get(str(record.get("risk_status")), "R 数据不完整")
+    if include_positions:
+        serialized["positions"] = [
+            _serialize_position_for_campaign(position) for position in record.get("positions", [])
+        ]
+    return serialized
+
+
+def list_campaigns(
+    query: str = "",
+    symbol: str = "",
+    side: str = "all",
+    trade_type: str = "all",
+    strategy: str = "all",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    r_missing_only: bool = False,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict[str, Any]:
+    with db() as conn:
+        records = _campaign_records_conn(conn)
+    needle = query.strip().lower()
+    symbol_needle = symbol.strip().lower()
+    selected = []
+    for record in records:
+        closed_at = record.get("closed_at_utc")
+        if start_date or end_date:
+            if not closed_at:
+                continue
+            closed_date = to_beijing(closed_at).date()
+            if start_date and closed_date < date.fromisoformat(start_date):
+                continue
+            if end_date and closed_date > date.fromisoformat(end_date):
+                continue
+        haystack = " ".join(
+            [str(record.get("id") or ""), str(record.get("symbol") or "")]
+            + [str(value) for value in record.get("source_trade_ids", [])]
+        ).lower()
+        if needle and needle not in haystack:
+            continue
+        if symbol_needle and symbol_needle not in str(record.get("symbol") or "").lower():
+            continue
+        if side != "all" and record.get("side") != side:
+            continue
+        if trade_type != "all" and record.get("trade_type") != trade_type:
+            continue
+        if strategy != "all" and record.get("strategy") != strategy:
+            continue
+        if r_missing_only and record.get("risk_status") == "complete":
+            continue
+        selected.append(_serialize_campaign_record(record, include_positions=False))
+    safe_page = max(1, int(page))
+    safe_size = max(1, min(int(page_size), 200))
+    start = (safe_page - 1) * safe_size
+    page_records = selected[start : start + safe_size]
+    return {
+        "campaigns": page_records,
+        "trades": page_records,
+        "total": len(selected),
+        "page": safe_page,
+        "page_size": safe_size,
+    }
+
+
+def get_campaign(campaign_id: str) -> dict[str, Any] | None:
+    with db() as conn:
+        record = next(
+            (item for item in _campaign_records_conn(conn) if item["id"] == campaign_id),
+            None,
+        )
+    return _serialize_campaign_record(record, include_positions=True) if record else None
+
+
+def update_position_initial_stop(position_id: str, value: Any) -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute("SELECT id FROM positions WHERE id = ?", (position_id,)).fetchone()
+        if not row:
+            raise KeyError(position_id)
+        membership = conn.execute(
+            "SELECT campaign_id FROM campaign_positions WHERE position_id = ?", (position_id,)
+        ).fetchone()
+        if value in (None, ""):
+            stop = None
+        else:
+            try:
+                stop = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("初始止损必须是有效数字") from exc
+            if not math.isfinite(stop):
+                raise ValueError("初始止损必须是有效数字")
+            records = _campaign_records_conn(conn)
+            position = next(
+                (
+                    member
+                    for campaign in records
+                    for member in campaign.get("positions", [])
+                    if member["id"] == position_id
+                ),
+                None,
+            )
+            if not position:
+                raise KeyError(position_id)
+            validation = calculate_position_risk({**position, "initial_stop_price": stop})
+            if validation["risk_status"] == "invalid":
+                raise ValueError("初始止损方向无效：多单止损须低于入场价，空单止损须高于入场价")
+        conn.execute(
+            "UPDATE positions SET initial_stop_price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (stop, position_id),
+        )
+        campaign_id = str(membership["campaign_id"]) if membership else ""
+    campaign = get_campaign(campaign_id)
+    if not campaign:
+        raise KeyError(campaign_id)
+    position = next(item for item in campaign["positions"] if item["id"] == position_id)
+    return {"position": position, "campaign": _serialize_campaign_record(campaign, include_positions=False)}
+
+
+def get_analysis_settings() -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT value FROM analysis_settings WHERE key = 'scratch_threshold_r'"
+        ).fetchone()
+    return {"scratch_threshold_r": float(row["value"] if row else 0.15)}
+
+
+def update_analysis_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        threshold = float(payload.get("scratch_threshold_r"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Scratch 阈值必须是有效数字") from exc
+    if not math.isfinite(threshold) or not 0 <= threshold <= 5:
+        raise ValueError("Scratch 阈值必须在 0R 到 5R 之间")
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO analysis_settings (key, value, updated_at)
+            VALUES ('scratch_threshold_r', ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+            """,
+            (str(threshold),),
+        )
+    return {"scratch_threshold_r": threshold}
+
+
+def update_campaign_review(campaign_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    review_text = str(payload.get("review_text") or "")
+    if len(review_text) > 10000:
+        raise ValueError("复盘内容不能超过 10000 个字符")
+    with db() as conn:
+        current = conn.execute(
+            "SELECT trade_type, strategy FROM trade_campaigns WHERE id = ? AND deleted_at IS NULL",
+            (campaign_id,),
+        ).fetchone()
+        if not current:
+            raise KeyError(campaign_id)
+        trade_type = _ensure_classification_option(
+            conn,
+            "trade_type",
+            str(payload.get("trade_type") or current["trade_type"] or "unclassified"),
+        )
+        strategy = _ensure_classification_option(
+            conn,
+            "strategy",
+            str(payload.get("strategy") or current["strategy"] or "strategy_unclassified"),
+        )
+        conn.execute(
+            """
+            UPDATE trade_campaigns
+            SET review_text = ?, trade_type = ?, strategy = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (review_text, trade_type, strategy, campaign_id),
+        )
+        source = conn.execute(
+            """
+            SELECT trade_id FROM campaign_source_trades
+            WHERE campaign_id = ? ORDER BY trade_id LIMIT 1
+            """,
+            (campaign_id,),
+        ).fetchone()
+        if source:
+            conn.execute(
+                """
+                UPDATE trades
+                SET review_text = ?, trade_type = ?, strategy = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (review_text, trade_type, strategy, source["trade_id"]),
+            )
+    updated = get_campaign(campaign_id)
+    if not updated:
+        raise KeyError(campaign_id)
+    return updated
 
 
 def _trade(

@@ -50,27 +50,53 @@ void OnTradeTransaction(
       return;
 
    long entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
-   if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_INOUT)
-      return;
-
    string symbol = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
    long positionId = HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
-   datetime closeServerTime = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
-   double closePrice = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
+   long dealType = HistoryDealGetInteger(trans.deal, DEAL_TYPE);
+   datetime dealServerTime = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
+   long dealTimeMsc = HistoryDealGetInteger(trans.deal, DEAL_TIME_MSC);
+   double dealPrice = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
    double volume = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
    double profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT);
    double commission = HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
    double swap = HistoryDealGetDouble(trans.deal, DEAL_SWAP);
+   double fee = HistoryDealGetDouble(trans.deal, DEAL_FEE);
+   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   bool isExit = (entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_INOUT || entry == DEAL_ENTRY_OUT_BY);
 
-   datetime openServerTime = closeServerTime;
-   double openPrice = closePrice;
+   string shot = "";
+   if(isExit && InpCaptureScreenshot)
+      shot = CaptureM5Screenshot(symbol, positionId, trans.deal);
+
+   string dealJson = StringFormat(
+      "{\"type\":\"deal\",\"account\":\"%I64d\",\"deal_ticket\":\"%I64d\",\"position_id\":\"%I64d\",\"order_ticket\":\"%I64d\",\"entry_kind\":\"%s\",\"deal_type\":\"%s\",\"symbol\":\"%s\",\"volume\":%s,\"price\":%s,\"time_utc\":\"%s\",\"time_msc\":%I64d,\"profit\":%s,\"commission\":%s,\"swap\":%s,\"fee\":%s,\"screenshot_path\":\"%s\"}",
+      AccountInfoInteger(ACCOUNT_LOGIN),
+      trans.deal,
+      positionId,
+      trans.order,
+      DealEntryName(entry),
+      DealTypeName(dealType),
+      JsonEscape(symbol),
+      DoubleToString(volume, 2),
+      DoubleToString(dealPrice, digits),
+      IsoUtc(ServerToUtc(dealServerTime)),
+      dealTimeMsc - (long)InpServerUtcOffsetHours * 3600000,
+      DoubleToString(profit, 2),
+      DoubleToString(commission, 2),
+      DoubleToString(swap, 2),
+      DoubleToString(fee, 2),
+      JsonEscape(shot)
+   );
+   Publish(dealJson);
+
+   if(!isExit)
+      return;
+
+   datetime openServerTime = dealServerTime;
+   double openPrice = dealPrice;
    string side = "long";
    ulong openingDeal = 0;
    FindOpeningDeal(positionId, openServerTime, openPrice, side, openingDeal);
-
-   string shot = "";
-   if(InpCaptureScreenshot)
-      shot = CaptureM5Screenshot(symbol, positionId, trans.deal);
 
    string tradeId = StringFormat("%I64d-%I64d", positionId, trans.deal);
    string json = StringFormat(
@@ -85,9 +111,9 @@ void OnTradeTransaction(
       side,
       DoubleToString(volume, 2),
       IsoUtc(ServerToUtc(openServerTime)),
-      IsoUtc(ServerToUtc(closeServerTime)),
-      DoubleToString(openPrice, _Digits),
-      DoubleToString(closePrice, _Digits),
+      IsoUtc(ServerToUtc(dealServerTime)),
+      DoubleToString(openPrice, digits),
+      DoubleToString(dealPrice, digits),
       DoubleToString(profit, 2),
       DoubleToString(commission, 2),
       DoubleToString(swap, 2),
@@ -95,6 +121,28 @@ void OnTradeTransaction(
    );
 
    Publish(json);
+}
+
+string DealEntryName(long entry)
+{
+   if(entry == DEAL_ENTRY_IN)
+      return "in";
+   if(entry == DEAL_ENTRY_OUT)
+      return "out";
+   if(entry == DEAL_ENTRY_INOUT)
+      return "inout";
+   if(entry == DEAL_ENTRY_OUT_BY)
+      return "out_by";
+   return "unknown";
+}
+
+string DealTypeName(long dealType)
+{
+   if(dealType == DEAL_TYPE_BUY)
+      return "buy";
+   if(dealType == DEAL_TYPE_SELL)
+      return "sell";
+   return "other";
 }
 
 void FindOpeningDeal(

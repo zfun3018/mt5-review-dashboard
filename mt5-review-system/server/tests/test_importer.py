@@ -199,6 +199,83 @@ class ImporterTest(unittest.TestCase):
         self.assertEqual(second["screenshots_copied"], 1)
         self.assertTrue((storage.DATA_DIR / payload["screenshot_path"]).exists())
 
+    def test_ingests_full_deal_lifecycle_and_is_idempotent(self):
+        entry = {
+            "type": "deal",
+            "account": "123456",
+            "deal_ticket": "9001",
+            "position_id": "7001",
+            "order_ticket": "8001",
+            "entry_kind": "in",
+            "deal_type": "buy",
+            "symbol": "XAUUSD",
+            "volume": 1.0,
+            "price": 100.0,
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "time_msc": 1786678800000,
+            "profit": 0.0,
+        }
+        exit_deal = {
+            **entry,
+            "deal_ticket": "9002",
+            "order_ticket": "8002",
+            "entry_kind": "out",
+            "deal_type": "sell",
+            "price": 104.0,
+            "time_utc": "2026-08-14T01:30:00+00:00",
+            "time_msc": 1786680600000,
+            "profit": 4.0,
+        }
+
+        first = storage.ingest_mt5_event(entry)
+        storage.ingest_mt5_event(exit_deal)
+        duplicate = storage.ingest_mt5_event(exit_deal)
+        campaign = storage.list_campaigns()["campaigns"][0]
+
+        self.assertEqual(first["deal_ticket"], "9001")
+        self.assertTrue(duplicate["duplicate"])
+        self.assertEqual(campaign["status"], "closed")
+        self.assertEqual(campaign["position_count"], 1)
+        with storage.db() as conn:
+            count = conn.execute("SELECT COUNT(*) AS value FROM deal_events").fetchone()["value"]
+        self.assertEqual(count, 2)
+
+    def test_late_entry_completes_position_after_exit_arrives_first(self):
+        exit_deal = {
+            "type": "deal",
+            "account": "123456",
+            "deal_ticket": "9102",
+            "position_id": "7101",
+            "order_ticket": "8102",
+            "entry_kind": "out",
+            "deal_type": "sell",
+            "symbol": "XAUUSD",
+            "volume": 1.0,
+            "price": 104.0,
+            "time_utc": "2026-08-14T01:30:00+00:00",
+            "time_msc": 1786680600000,
+            "profit": 4.0,
+        }
+        entry = {
+            **exit_deal,
+            "deal_ticket": "9101",
+            "order_ticket": "8101",
+            "entry_kind": "in",
+            "deal_type": "buy",
+            "price": 100.0,
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "time_msc": 1786678800000,
+            "profit": 0.0,
+        }
+
+        storage.ingest_mt5_event(exit_deal)
+        before = storage.get_campaign(storage.list_campaigns()["campaigns"][0]["id"])
+        storage.ingest_mt5_event(entry)
+        after = storage.get_campaign(storage.list_campaigns()["campaigns"][0]["id"])
+
+        self.assertEqual(before["positions"][0]["reconstruction_status"], "incomplete")
+        self.assertEqual(after["positions"][0]["reconstruction_status"], "complete")
+
 
 if __name__ == "__main__":
     unittest.main()
