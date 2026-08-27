@@ -53,8 +53,17 @@
               <span>结束日期</span>
               <input id="endDateFilter" type="date" title="结束日期" />
             </label>
+            <label class="scratch-setting">
+              <span>Scratch 阈值（R）</span>
+              <span class="inline-setting-control">
+                <input id="scratchThresholdR" type="number" min="0" max="5" step="0.01" value="0.15" inputmode="decimal" />
+                <button id="saveScratchThreshold" class="icon-btn" type="button" title="保存 Scratch 阈值" aria-label="保存 Scratch 阈值">✓</button>
+              </span>
+            </label>
           </div>
         </section>
+
+        <section id="rMetricSummary" class="r-metric-summary" aria-label="R 倍数指标"></section>
 
         <section class="dashboard-grid">
           <article class="panel equity-panel">
@@ -126,18 +135,19 @@
             </div>
             <div id="systemEvaluationSummary" class="system-summary-grid"></div>
             <details class="z-score-guide" open>
-              <summary>Z 分数说明</summary>
+              <summary>Campaign 版 Z 分数说明</summary>
               <div class="z-score-guide-body">
+                <p><strong>统计顺序</strong>：按 Campaign 最终平仓时间排列；Scratch 和 R 缺失的 Campaign 不进入序列。</p>
                 <p><strong>Z &gt; +1.96</strong>：结果更倾向交替出现，盈利后容易接亏损。</p>
                 <p><strong>-1.96 至 +1.96</strong>：未发现显著连贯性，可视为独立随机。</p>
                 <p><strong>Z &lt; -1.96</strong>：结果更倾向成串出现，连胜或连败更明显。</p>
-                <p><strong>样本不足</strong>：有效盈亏交易少于 3 笔，暂不做判断。</p>
+                <p><strong>样本不足</strong>：有效序列不足，或样本只有盈利/只有亏损时，暂不做判断。</p>
               </div>
             </details>
             <div class="table-wrap evaluation-table-wrap">
               <table class="evaluation-table">
                 <thead>
-                  <tr><th>日期</th><th>回报</th><th>笔数</th><th>盈亏比</th><th>胜率</th><th>盈利 / 亏损</th><th>Z 分数</th></tr>
+                  <tr><th>日期</th><th>现金回报</th><th>Campaign</th><th>现金 PF</th><th>E_R</th><th>SQN</th><th>R 覆盖率</th></tr>
                 </thead>
                 <tbody id="systemEvaluationRows"></tbody>
               </table>
@@ -175,6 +185,10 @@
                 <select id="strategyFilter" title="交易策略">
                   <option value="all">全部策略</option>
                 </select>
+                <label class="toggle-filter">
+                  <input id="riskMissingOnly" type="checkbox" />
+                  <span>仅看 R 缺失</span>
+                </label>
                 <button id="fieldManagerBtn" class="ghost-btn">字段与分类</button>
                 <button id="clearDateFilter" class="ghost-btn hidden">清除日期</button>
               </div>
@@ -247,6 +261,14 @@
 
     <div id="toast" class="toast"></div>
     <div id="calendarTooltip" class="calendar-tooltip"></div>
+    <div id="metricExplanationPopover" class="metric-explanation-popover" role="dialog" aria-modal="false" aria-labelledby="metricExplanationTitle" hidden>
+      <div class="metric-explanation-head">
+        <strong id="metricExplanationTitle"></strong>
+        <button id="metricExplanationClose" class="icon-btn" type="button" aria-label="关闭指标说明" title="关闭">×</button>
+      </div>
+      <div id="metricExplanationBody" class="metric-explanation-body"></div>
+    </div>
+    <script src="/r-multiple.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

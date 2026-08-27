@@ -1,6 +1,9 @@
 const state = {
   data: null,
   analysis: null,
+  campaigns: [],
+  campaignDetail: null,
+  selectedCampaignId: null,
   selectedTradeId: null,
   calendarYear: null,
   calendarMonth: null,
@@ -13,6 +16,9 @@ const state = {
   startDate: "",
   endDate: "",
   calendarDateFilter: "",
+  riskMissingOnly: false,
+  analysisSettings: { scratch_threshold_r: 0.15 },
+  metricExplanationTrigger: null,
   choiceEditor: null,
 };
 
@@ -82,14 +88,33 @@ document.addEventListener("DOMContentLoaded", () => {
     state.strategy = event.target.value;
     renderTrades();
   });
+  document.getElementById("riskMissingOnly").addEventListener("change", async (event) => {
+    state.riskMissingOnly = event.target.checked;
+    const visible = filteredCampaigns();
+    if (state.riskMissingOnly && !visible.some((campaign) => campaign.id === state.selectedCampaignId)) {
+      state.selectedCampaignId = visible[0]?.id || null;
+      await loadSelectedCampaignDetail();
+      renderTradeDetail();
+    }
+    renderTrades();
+    if (state.riskMissingOnly) focusFirstMissingStop();
+  });
+  document.getElementById("saveScratchThreshold").addEventListener("click", saveScratchThreshold);
+  document.getElementById("metricExplanationClose").addEventListener("click", closeMetricExplanation);
   syncEquityDaysToAnalysisWindow();
   document.getElementById("clearDateFilter").addEventListener("click", () => {
     state.calendarDateFilter = "";
     renderTrades();
   });
   document.addEventListener("click", closeChoicePopover);
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".metric-explanation-popover, [data-metric-info]")) {
+      closeMetricExplanation();
+    }
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeChoicePopover();
+    if (event.key === "Escape") closeMetricExplanation();
   });
   window.addEventListener("resize", closeChoicePopover);
   window.setInterval(() => renderMarketClock(), 60_000);
@@ -99,26 +124,39 @@ document.addEventListener("DOMContentLoaded", () => {
 async function loadDashboard(year = state.calendarYear, month = state.calendarMonth) {
   const params = year && month ? `?year=${year}&month=${month}` : "";
   try {
-    const data = await api(`/api/bootstrap${params}`);
+    const [data, campaignPage, settings] = await Promise.all([
+      api(`/api/bootstrap${params}`),
+      api("/api/campaigns?page_size=200"),
+      api("/api/analysis-settings"),
+    ]);
     state.data = data;
+    state.campaigns = campaignPage.campaigns || [];
+    state.analysisSettings = settings;
+    document.getElementById("scratchThresholdR").value = Number(settings.scratch_threshold_r ?? 0.15).toFixed(2);
     state.analysis = {
       equity: data.equity,
-      periods: {
+      periods: data.periods || {
         today: data.summary.today,
         week: data.summary.week,
         month: data.summary.month,
       },
+      r_metrics: data.r_metrics || {},
       system_evaluation: data.system_evaluation || [],
       mode_evaluation: data.mode_evaluation || { trade_type: [], strategy: [] },
     };
     state.calendarYear = data.calendar.year;
     state.calendarMonth = data.calendar.month;
     const requestedTradeId = new URLSearchParams(window.location.search).get("trade");
-    if (requestedTradeId && data.trades.some((trade) => trade.id === requestedTradeId)) {
-      state.selectedTradeId = requestedTradeId;
-    } else if (!state.selectedTradeId && data.trades.length) {
-      state.selectedTradeId = data.trades[0].id;
+    if (requestedTradeId) {
+      const requestedCampaign = state.campaigns.find((campaign) =>
+        (campaign.source_trade_ids || []).includes(requestedTradeId),
+      );
+      if (requestedCampaign) state.selectedCampaignId = requestedCampaign.id;
     }
+    if (!state.selectedCampaignId || !state.campaigns.some((campaign) => campaign.id === state.selectedCampaignId)) {
+      state.selectedCampaignId = state.campaigns[0]?.id || null;
+    }
+    await loadSelectedCampaignDetail();
     renderAll();
     toast("本地数据已刷新");
   } catch (error) {
@@ -136,12 +174,153 @@ async function refreshAnalysis() {
   try {
     state.analysis = await api(`/api/analysis?${params.toString()}`);
     renderEquity();
+    renderRMetricSummary();
     renderSystemEvaluationSummary();
     renderSystemEvaluation();
     renderModeEvaluation();
   } catch (error) {
     toast(error.message || "分析数据刷新失败");
   }
+}
+
+async function loadCampaigns() {
+  const page = await api("/api/campaigns?page_size=200");
+  state.campaigns = page.campaigns || [];
+  if (!state.campaigns.some((campaign) => campaign.id === state.selectedCampaignId)) {
+    state.selectedCampaignId = state.campaigns[0]?.id || null;
+  }
+}
+
+async function loadSelectedCampaignDetail() {
+  if (!state.selectedCampaignId) {
+    state.campaignDetail = null;
+    return;
+  }
+  state.campaignDetail = await api(`/api/campaigns/${encodeURIComponent(state.selectedCampaignId)}`);
+}
+
+async function saveScratchThreshold() {
+  const input = document.getElementById("scratchThresholdR");
+  const value = Number(input.value);
+  if (!Number.isFinite(value) || value < 0 || value > 5) {
+    toast("Scratch 阈值必须在 0R 到 5R 之间");
+    input.value = Number(state.analysisSettings.scratch_threshold_r ?? 0.15).toFixed(2);
+    return;
+  }
+  try {
+    state.analysisSettings = await api("/api/analysis-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ scratch_threshold_r: value }),
+    });
+    input.value = Number(state.analysisSettings.scratch_threshold_r).toFixed(2);
+    await refreshAnalysis();
+    toast("Scratch 阈值已更新");
+  } catch (error) {
+    input.value = Number(state.analysisSettings.scratch_threshold_r ?? 0.15).toFixed(2);
+    toast(error.message || "Scratch 阈值保存失败");
+  }
+}
+
+function metricContext(metrics = {}, extra = {}) {
+  return {
+    scratchThresholdR: Number(metrics.scratch_threshold_r ?? state.analysisSettings.scratch_threshold_r ?? 0.15),
+    sampleCount: Number(metrics.sample_count || 0),
+    completeCount: Number(metrics.complete_count || 0),
+    missingCount: Number(metrics.missing_count || 0),
+    missingPositionCount: Number(extra.missingPositionCount || 0),
+  };
+}
+
+function metricInfoButton(metricKey, label, metrics = {}, extra = {}) {
+  const context = escapeAttr(JSON.stringify(metricContext(metrics, extra)));
+  return `<button class="metric-info-btn" type="button" data-metric-info="${escapeAttr(metricKey)}" data-metric-context="${context}" aria-label="解释 ${escapeAttr(label)}" aria-expanded="false">i</button>`;
+}
+
+function bindMetricInfoButtons() {
+  document.querySelectorAll("[data-metric-info]").forEach((button) => {
+    if (button.dataset.metricBound) return;
+    button.dataset.metricBound = "1";
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openMetricExplanation(button);
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openMetricExplanation(button);
+      }
+    });
+  });
+}
+
+function openMetricExplanation(button) {
+  const popover = document.getElementById("metricExplanationPopover");
+  let context = {};
+  try {
+    context = JSON.parse(button.dataset.metricContext || "{}");
+  } catch (_error) {
+    context = {};
+  }
+  const explanation = RMultipleUI.metricExplanation(button.dataset.metricInfo, context);
+  document.getElementById("metricExplanationTitle").textContent = explanation.title;
+  document.getElementById("metricExplanationBody").innerHTML = `
+    <p><strong>公式</strong>${escapeHtml(explanation.formula)}</p>
+    <p><strong>阈值</strong>${escapeHtml(explanation.threshold)}</p>
+    <p><strong>样本</strong>${escapeHtml(explanation.sample)}</p>
+    <p><strong>缺失</strong>${escapeHtml(explanation.missing)}</p>
+    <p><strong>限制</strong>${escapeHtml(explanation.limitation)}</p>
+  `;
+  document.querySelectorAll("[data-metric-info][aria-expanded='true']").forEach((node) => {
+    node.setAttribute("aria-expanded", "false");
+  });
+  button.setAttribute("aria-expanded", "true");
+  state.metricExplanationTrigger = button;
+  popover.hidden = false;
+  popover.classList.add("open");
+  const rect = button.getBoundingClientRect();
+  const left = Math.min(window.innerWidth - 432, Math.max(12, rect.left - 180));
+  popover.style.left = `${Math.max(12, left)}px`;
+  popover.style.top = `${Math.min(window.innerHeight - 320, rect.bottom + 8)}px`;
+  document.getElementById("metricExplanationClose").focus();
+}
+
+function closeMetricExplanation() {
+  const popover = document.getElementById("metricExplanationPopover");
+  if (!popover || popover.hidden) return;
+  popover.hidden = true;
+  popover.classList.remove("open");
+  if (state.metricExplanationTrigger) {
+    state.metricExplanationTrigger.setAttribute("aria-expanded", "false");
+    state.metricExplanationTrigger.focus();
+  }
+  state.metricExplanationTrigger = null;
+}
+
+function renderRMetricSummary() {
+  const node = document.getElementById("rMetricSummary");
+  if (!node) return;
+  const metrics = state.analysis?.r_metrics || {};
+  const sqn = metrics.sqn_status === "available" ? Number(metrics.sqn).toFixed(2) : "样本不足";
+  const items = [
+    ["decisive_win_rate", "净胜率", formatPercent(metrics.decisive_win_rate)],
+    ["all_sample_win_rate", "全样本胜率", formatPercent(metrics.all_sample_win_rate)],
+    ["scratch", "Scratch 占比", formatPercent(metrics.scratch_rate)],
+    ["expectancy_r", "R 期望 E_R", formatRValue(metrics.expectancy_r)],
+    ["sqn", "SQN", sqn],
+    ["coverage", "R 数据覆盖率", formatPercent(metrics.coverage_rate)],
+  ];
+  node.innerHTML = items
+    .map(
+      ([key, label, value]) => `
+        <div class="r-metric-item">
+          <span>${escapeHtml(label)} ${metricInfoButton(key, label, metrics)}</span>
+          <strong>${escapeHtml(value)}</strong>
+          <small>${metrics.complete_count || 0} / ${metrics.sample_count || 0} 个 Campaign</small>
+        </div>
+      `,
+    )
+    .join("");
+  bindMetricInfoButtons();
 }
 
 async function api(path, options = {}) {
@@ -161,6 +340,7 @@ async function api(path, options = {}) {
 
 function renderAll() {
   renderSummary();
+  renderRMetricSummary();
   renderMarketClock();
   renderStatus();
   renderEquity();
@@ -180,23 +360,28 @@ function renderAll() {
 function renderSummary() {
   const summary = state.data.summary;
   const periods = [
-    ["今日", summary.today],
-    ["本周", summary.week],
-    ["本月", summary.month],
-    ["本年", summary.year],
+    ["今日", "today", summary.today],
+    ["本周", "week", summary.week],
+    ["本月", "month", summary.month],
+    ["本年", "year", summary.year],
   ];
   document.getElementById("summary").innerHTML = periods
     .map(
-      ([label, item]) => `
+      ([label, key, item]) => {
+        const r = state.analysis?.periods?.[key]?.r_metrics || {};
+        return `
         <div class="metric">
           <span>${escapeHtml(label)}</span>
           <strong class="${profitClass(item.net_pnl)}">${escapeHtml(money.format(item.net_pnl))}</strong>
-          <em>${item.order_count} 单 · 胜率 ${formatPercent(item.win_rate)} · 盈亏比 ${formatRatio(item.payoff_ratio)}</em>
+          <em>${item.order_count} 笔现金记录 · 现金胜率 ${formatPercent(item.win_rate)} · PF ${formatRatio(item.profit_factor)}</em>
+          <em>R 期望 ${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "R 期望", r)} · 覆盖率 ${formatPercent(r.coverage_rate)} ${metricInfoButton("coverage", "R 数据覆盖率", r)}</em>
           <em>最大 ${money.format(item.max_profit)} / ${money.format(item.max_loss)} · 均值 ${money.format(item.avg_trade)}</em>
         </div>
-      `,
+      `;
+      },
     )
     .join("");
+  bindMetricInfoButtons();
 }
 
 function renderMarketClock() {
@@ -553,21 +738,30 @@ function renderSystemEvaluationSummary() {
   if (!node) return;
   node.innerHTML = items
     .map(
-      ([label, item]) => `
+      ([label, item]) => {
+        const r = item.r_metrics || {};
+        const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "样本不足";
+        return `
         <article class="evaluation-summary-card">
           <header><span>${escapeHtml(label)}</span><strong class="${profitClass(item.net_pnl)}">${escapeHtml(money.format(item.net_pnl))}</strong></header>
           <div class="evaluation-summary-grid-inner">
-            <span>交易笔数<strong>${item.order_count}</strong></span>
-            <span>盈亏比<strong>${formatRatio(item.payoff_ratio)}</strong></span>
-            <span>胜率<strong>${formatPercent(item.win_rate)}</strong></span>
-            <span>盈利 / 亏损<strong>${escapeHtml(money.format(item.gross_profit))} / ${escapeHtml(money.format(-Number(item.gross_loss || 0)))}</strong></span>
-            <span>盈利笔数 / 亏损笔数<strong>${item.win_count || 0} / ${item.loss_count || 0}</strong></span>
-            <span class="evaluation-z-row">Z 分数<strong>${escapeHtml(formatZScore(item.z_score))}</strong></span>
+            <span>Campaign 数<strong>${r.sample_count || 0}</strong></span>
+            <span>现金 PF<strong>${formatRatio(item.profit_factor)}</strong></span>
+            <span>现金胜率<strong>${formatPercent(item.cash_win_rate ?? item.win_rate)}</strong></span>
+            <span>净胜率 ${metricInfoButton("decisive_win_rate", "净胜率", r)}<strong>${formatPercent(r.decisive_win_rate)}</strong></span>
+            <span>全样本胜率 ${metricInfoButton("all_sample_win_rate", "全样本胜率", r)}<strong>${formatPercent(r.all_sample_win_rate)}</strong></span>
+            <span>Scratch ${metricInfoButton("scratch", "Scratch 占比", r)}<strong>${formatPercent(r.scratch_rate)}</strong></span>
+            <span>E_R ${metricInfoButton("expectancy_r", "R 期望", r)}<strong>${formatRValue(r.expectancy_r)}</strong></span>
+            <span>SQN ${metricInfoButton("sqn", "SQN", r)}<strong>${sqn}</strong></span>
+            <span>R 覆盖率 ${metricInfoButton("coverage", "R 数据覆盖率", r)}<strong>${formatPercent(r.coverage_rate)}</strong></span>
+            <span class="evaluation-z-row">R 版 Z 分数<strong>${escapeHtml(formatZScore(r.z_score || item.z_score))}</strong></span>
           </div>
         </article>
-      `,
+      `;
+      },
     )
     .join("") || `<div class="detail-empty">当前范围暂无交易</div>`;
+  bindMetricInfoButtons();
 }
 
 function renderSystemEvaluation() {
@@ -575,21 +769,22 @@ function renderSystemEvaluation() {
   const node = document.getElementById("systemEvaluationRows");
   node.innerHTML = rows
     .map((row) => {
-      const z = row.z_score || {};
-      const zLabel = formatZScore(z);
+      const r = row.r_metrics || {};
+      const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "样本不足";
       return `
         <tr>
           <td><strong>${escapeHtml(row.date)}</strong></td>
           <td class="${profitClass(row.net_pnl)}">${money.format(row.net_pnl)}</td>
           <td>${row.order_count}</td>
-          <td>${formatRatio(row.payoff_ratio)}</td>
-          <td>${formatPercent(row.win_rate)}</td>
-          <td>${money.format(row.gross_profit)} / ${money.format(-Number(row.gross_loss || 0))}</td>
-          <td>${escapeHtml(zLabel)}</td>
+          <td>${formatRatio(row.profit_factor)}</td>
+          <td>${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "R 期望", r)}</td>
+          <td>${sqn} ${metricInfoButton("sqn", "SQN", r)}</td>
+          <td>${formatPercent(r.coverage_rate)} ${metricInfoButton("coverage", "R 数据覆盖率", r)}</td>
         </tr>
       `;
     })
     .join("") || `<tr><td colspan="7">当前范围暂无交易</td></tr>`;
+  bindMetricInfoButtons();
 }
 
 function classificationOptions(dimension) {
@@ -649,7 +844,15 @@ function renderModeEvaluation() {
               <article class="mode-card">
                 <header><strong>${escapeHtml(row.label || row.key)}</strong><span>${formatPercent(row.share)}</span></header>
                 <div class="${profitClass(row.net_pnl)}">${money.format(row.net_pnl)}</div>
-                <small>${row.order_count} 单 · 胜率 ${formatPercent(row.win_rate)} · 盈亏比 ${formatRatio(row.payoff_ratio)}</small>
+                <small>${row.order_count} 个 Campaign · 现金胜率 ${formatPercent(row.cash_win_rate ?? row.win_rate)} · 现金 PF ${formatRatio(row.profit_factor)}</small>
+                <dl class="mode-r-metrics">
+                  <div><dt>净胜率 ${metricInfoButton("decisive_win_rate", "净胜率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.decisive_win_rate)}</dd></div>
+                  <div><dt>全样本胜率 ${metricInfoButton("all_sample_win_rate", "全样本胜率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.all_sample_win_rate)}</dd></div>
+                  <div><dt>Scratch ${metricInfoButton("scratch", "Scratch 占比", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.scratch_rate)}</dd></div>
+                  <div><dt>E_R ${metricInfoButton("expectancy_r", "R 期望", row.r_metrics || {})}</dt><dd>${formatRValue(row.r_metrics?.expectancy_r)}</dd></div>
+                  <div><dt>SQN ${metricInfoButton("sqn", "SQN", row.r_metrics || {})}</dt><dd>${row.r_metrics?.sqn_status === "available" ? Number(row.r_metrics.sqn).toFixed(2) : "样本不足"}</dd></div>
+                  <div><dt>覆盖率 ${metricInfoButton("coverage", "R 数据覆盖率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.coverage_rate)}</dd></div>
+                </dl>
               </article>
             `).join("") || `<div class="detail-empty">当前范围暂无数据</div>`}
           </div>
@@ -657,6 +860,7 @@ function renderModeEvaluation() {
       `,
     )
     .join("");
+  bindMetricInfoButtons();
 }
 
 function renderClassificationManager() {
@@ -763,19 +967,21 @@ function renderTradeHeader() {
   const customHeaders = customFields()
     .map((field) => `<th class="custom-col">${escapeHtml(field.name)}<span>${fieldTypeLabel(field.field_type)}</span></th>`)
     .join("");
+  const metrics = state.analysis?.r_metrics || {};
   document.getElementById("tradeHead").innerHTML = `
     <tr>
-      <th>成交号</th>
+      <th>交易组合</th>
       <th>品种</th>
-      <th>手数</th>
+      <th>Position</th>
       <th>北京时间</th>
-      <th>持有</th>
-      <th>价格</th>
-      <th>盈亏</th>
+      <th>执行结构</th>
+      <th class="r-col">R ${metricInfoButton("campaign_r", "组合 R", metrics)}</th>
+      <th>组合盈亏</th>
       ${customHeaders}
       <th>截图</th>
     </tr>
   `;
+  bindMetricInfoButtons();
 }
 
 function renderTrades() {
@@ -784,71 +990,74 @@ function renderTrades() {
   clearDate.classList.toggle("hidden", !state.calendarDateFilter);
   clearDate.textContent = state.calendarDateFilter ? `清除 ${state.calendarDateFilter}` : "清除日期";
   const fieldCount = customFields().length;
-  const rows = filteredTrades()
-    .map((trade) => {
-      const active = trade.id === state.selectedTradeId ? "active" : "";
-      const shot = trade.screenshot_url
+  const rows = filteredCampaigns()
+    .map((campaign) => {
+      const trade = campaignSourceTrade(campaign);
+      const active = campaign.id === state.selectedCampaignId ? "active" : "";
+      const riskClass = campaign.risk_status === "complete" ? "risk-complete" : `risk-${campaign.risk_status || "missing"}`;
+      const shot = trade?.screenshot_url
         ? `<button class="shot-btn" data-shot="${escapeAttr(trade.screenshot_url)}" title="查看截图"><img src="${escapeAttr(trade.screenshot_url)}" alt="M5截图" /></button>`
         : `<span class="muted-mini">无</span>`;
       const customCells = customFields()
         .map(
           (field) => `
             <td class="custom-value-cell">
-              ${renderCustomValueEditor(trade, field, "table")}
+              ${trade ? renderCustomValueEditor(trade, field, "table") : `<span class="muted-mini">-</span>`}
             </td>
           `,
         )
         .join("");
       return `
-        <tr class="${active}" data-trade-id="${escapeAttr(trade.id)}">
+        <tr class="campaign-row ${active} ${campaign.risk_status === "complete" ? "" : "has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}">
           <td>
             <div class="order-main">
-              <strong>${escapeHtml(trade.display_order_no || trade.deal_ticket || trade.id)}</strong>
-              <span>${escapeHtml(trade.display_order_kind || "Trade")} · ${escapeHtml(trade.position_id || "")}</span>
+              <strong>${escapeHtml(campaign.display_order_no || campaign.id.slice(0, 8))}</strong>
+              <span>Campaign · ${escapeHtml(RMultipleUI.campaignActivityLabel(campaign))}</span>
             </div>
           </td>
           <td>
             <div class="symbol-cell">
-              <span class="side ${trade.side}">${trade.side === "long" ? "多" : "空"}</span>
+              <span class="side ${campaign.side}">${campaign.side === "long" ? "多" : "空"}</span>
               <div class="order-main">
-                <strong>${escapeHtml(trade.symbol)}</strong>
-                <span>${escapeHtml(trade.session_label || "")}</span>
+                <strong>${escapeHtml(campaign.symbol)}</strong>
+                <span>${escapeHtml(classificationOptionLabel("trade_type", campaign.trade_type))}</span>
               </div>
             </div>
           </td>
-          <td>${Number(trade.lots).toFixed(2)}</td>
+          <td>${campaign.position_count} 个</td>
           <td>
             <div class="time-stack">
-              <strong>${formatTime(trade.close_time_bj)}</strong>
-              <span>进 ${formatTime(trade.open_time_bj)}</span>
+              <strong>${campaign.close_time_bj ? formatTime(campaign.close_time_bj) : "持仓中"}</strong>
+              <span>进 ${formatTime(campaign.open_time_bj)}</span>
             </div>
           </td>
-          <td>${escapeHtml(trade.duration_label)}</td>
-          <td>
-            <div class="price-stack">
-              <strong>${trade.exit_price}</strong>
-              <span>开 ${trade.entry_price}</span>
-            </div>
-          </td>
-          <td class="${profitClass(trade.net_pnl)}">${money.format(trade.net_pnl)}</td>
+          <td>${escapeHtml(RMultipleUI.campaignActivityLabel(campaign))}</td>
+          <td class="campaign-r-cell ${riskClass}">${escapeHtml(RMultipleUI.formatCampaignR(campaign))}</td>
+          <td class="${profitClass(campaign.net_pnl)}">${money.format(campaign.net_pnl)}</td>
           ${customCells}
           <td>${shot}</td>
         </tr>
       `;
     })
     .join("");
-  document.getElementById("tradeRows").innerHTML = rows || `<tr><td colspan="${8 + fieldCount}">没有匹配的订单</td></tr>`;
+  document.getElementById("tradeRows").innerHTML = rows || `<tr><td colspan="${8 + fieldCount}">没有匹配的交易组合</td></tr>`;
   document.querySelectorAll("[data-shot]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       openImageModal(button.dataset.shot);
     });
   });
-  document.querySelectorAll("tr[data-trade-id]").forEach((row) => {
-    row.addEventListener("click", () => {
-      state.selectedTradeId = row.dataset.tradeId;
+  document.querySelectorAll("tr[data-campaign-id]").forEach((row) => {
+    row.addEventListener("click", async () => {
+      state.selectedCampaignId = row.dataset.campaignId;
       renderTrades();
+      try {
+        await loadSelectedCampaignDetail();
+      } catch (error) {
+        toast(error.message || "交易组合详情加载失败");
+      }
       renderTradeDetail();
+      if (state.riskMissingOnly) focusFirstMissingStop();
     });
   });
   bindCustomValueInputs();
@@ -856,10 +1065,16 @@ function renderTrades() {
 }
 
 function renderTradeDetail() {
-  const trade = selectedTrade();
+  const campaign = selectedCampaign();
+  const detail = state.campaignDetail?.id === campaign?.id ? state.campaignDetail : null;
+  const trade = campaignSourceTrade(campaign);
   const node = document.getElementById("tradeDetail");
-  if (!trade) {
-    node.innerHTML = `<div class="detail-empty">选择一笔订单开始复盘</div>`;
+  if (!campaign) {
+    node.innerHTML = `<div class="detail-empty">选择一个交易组合开始复盘</div>`;
+    return;
+  }
+  if (!detail) {
+    node.innerHTML = `<div class="detail-empty">正在加载交易组合详情</div>`;
     return;
   }
   const customFieldInputs = customFields()
@@ -867,55 +1082,100 @@ function renderTradeDetail() {
       (field) => `
         <div class="field compact-field">
           <label>${escapeHtml(field.name)}</label>
-          ${renderCustomValueEditor(trade, field, "detail")}
+          ${trade ? renderCustomValueEditor(trade, field, "detail") : `<span class="muted-mini">无代表订单</span>`}
         </div>
       `,
     )
+    .join("");
+  const missingPositions = Math.max(0, Number(detail.risk_positions_total || 0) - Number(detail.risk_positions_complete || 0));
+  const positionRows = (detail.positions || [])
+    .map((position) => {
+      const exits = (position.exit_deals || [])
+        .map(
+          (exitDeal) => `
+            <li><span>${formatBeijingDateTime(exitDeal.time_utc)}</span><strong>${Number(exitDeal.volume).toFixed(2)} 手 @ ${escapeHtml(exitDeal.price)}</strong></li>
+          `,
+        )
+        .join("");
+      const positionR = position.position_r === null || position.position_r === undefined
+        ? position.risk_missing_reason === "missing_initial_stop" ? "待补初始止损" : "R 不可用"
+        : formatRValue(position.position_r);
+      return `
+        <section class="campaign-position ${position.risk_status === "complete" ? "" : "position-risk-gap"}">
+          <div class="campaign-position-head">
+            <div>
+              <strong>Position ${escapeHtml(position.display_position_id || position.position_id)}</strong>
+              <span>${formatBeijingDateTime(position.opened_at_utc)} · ${Number(position.entry_volume || 0).toFixed(2)} 手 @ ${formatPrice(position.weighted_entry_price)}</span>
+            </div>
+            <span class="position-r-status ${position.risk_status}">${escapeHtml(positionR)}</span>
+          </div>
+          <div class="initial-stop-editor">
+            <label for="stop-${escapeAttr(position.id)}">初始计划止损</label>
+            <input id="stop-${escapeAttr(position.id)}" data-position-stop="${escapeAttr(position.id)}" type="number" step="any" inputmode="decimal" value="${escapeAttr(position.initial_stop_price ?? "")}" placeholder="填写入场时止损价" />
+            <button class="ghost-btn" type="button" data-position-save="${escapeAttr(position.id)}">保存</button>
+          </div>
+          <p class="position-risk-note">${escapeHtml(positionRiskMessage(position))}</p>
+          <ul class="position-exits">${exits || `<li><span>尚未平仓</span></li>`}</ul>
+        </section>
+      `;
+    })
     .join("");
   node.innerHTML = `
     <div class="detail-body dense-detail">
       <div class="detail-title">
         <div>
-          <p class="eyebrow">${escapeHtml(trade.symbol)} · ${escapeHtml(trade.display_order_no || trade.id)}</p>
-          <h2>${trade.side === "long" ? "多单" : "空单"} ${Number(trade.lots).toFixed(2)} 手</h2>
+          <p class="eyebrow">${escapeHtml(campaign.symbol)} · Campaign ${escapeHtml(campaign.display_order_no || campaign.id.slice(0, 8))}</p>
+          <h2>${campaign.side === "long" ? "多单" : "空单"} · ${campaign.position_count} 个 Position</h2>
         </div>
-        <strong class="${profitClass(trade.net_pnl)}">${money.format(trade.net_pnl)}</strong>
+        <strong class="${profitClass(campaign.net_pnl)}">${money.format(campaign.net_pnl)}</strong>
       </div>
-      ${renderScreenshotEditor(trade)}
+      <div class="campaign-risk-summary ${campaign.risk_status === "complete" ? "complete" : "missing"}">
+        <div><span>组合 R ${metricInfoButton("campaign_r", "组合 R", state.analysis?.r_metrics || {}, { missingPositionCount: missingPositions })}</span><strong>${escapeHtml(RMultipleUI.formatCampaignR(campaign))}</strong></div>
+        <small>${escapeHtml(RMultipleUI.campaignActivityLabel(campaign))} · 初始计划风险不代表实际最大浮亏</small>
+      </div>
+      <div class="campaign-position-list">${positionRows}</div>
+      ${trade ? renderScreenshotEditor(trade) : ""}
       <div class="field-grid classification-grid">
         <div class="field compact-field">
           <label>交易类型</label>
           <select id="detailTradeType">
-            ${classificationSelectOptions("trade_type", trade.trade_type)}
+            ${classificationSelectOptions("trade_type", campaign.trade_type)}
           </select>
         </div>
         <div class="field compact-field">
           <label>交易策略</label>
           <select id="detailStrategy">
-            ${classificationSelectOptions("strategy", trade.strategy)}
+            ${classificationSelectOptions("strategy", campaign.strategy)}
           </select>
         </div>
       </div>
       ${customFieldInputs ? `<div class="field-grid">${customFieldInputs}</div>` : ""}
       <div class="field">
         <label>复盘</label>
-        <textarea id="detailReview" class="review-editor" maxlength="10000" placeholder="记录入场依据、执行过程、风险控制与改进计划">${escapeHtml(trade.review_text || "")}</textarea>
+        <textarea id="detailReview" class="review-editor" maxlength="10000" placeholder="记录入场依据、执行过程、风险控制与改进计划">${escapeHtml(campaign.review_text || "")}</textarea>
       </div>
       <div class="detail-actions">
-        <button id="deleteTrade" class="danger-btn">删除订单</button>
-        <button id="saveReview" class="primary-btn">保存复盘</button>
+        <button id="saveReview" class="primary-btn">保存组合复盘</button>
       </div>
     </div>
   `;
   document.getElementById("saveReview").addEventListener("click", saveReview);
-  document.getElementById("deleteTrade").addEventListener("click", deleteSelectedTrade);
   document.getElementById("detailShot")?.addEventListener("click", (event) => {
     event.stopPropagation();
     openImageModal(event.currentTarget.dataset.shot);
   });
   bindScreenshotEditor();
+  document.querySelectorAll("[data-position-save]").forEach((button) => {
+    button.addEventListener("click", () => savePositionInitialStop(button.dataset.positionSave));
+  });
+  document.querySelectorAll("[data-position-stop]").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") savePositionInitialStop(input.dataset.positionStop);
+    });
+  });
   bindCustomValueInputs();
   bindChoiceTriggers();
+  bindMetricInfoButtons();
 }
 
 function renderScreenshotEditor(trade) {
@@ -1202,20 +1462,58 @@ async function saveCustomValue(input) {
   toast("字段内容已保存");
 }
 async function saveReview() {
-  const trade = selectedTrade();
-  if (!trade) return;
+  const campaign = selectedCampaign();
+  if (!campaign) return;
   const payload = {
-    trend_id: trade.trend_id || null,
     trade_type: document.getElementById("detailTradeType").value,
     strategy: document.getElementById("detailStrategy").value,
     review_text: document.getElementById("detailReview").value,
   };
-  await api(`/api/trades/${encodeURIComponent(trade.id)}/review`, {
+  await api(`/api/campaigns/${encodeURIComponent(campaign.id)}/review`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
-  toast("复盘已保存到本地");
-  await loadDashboard();
+  await loadCampaigns();
+  await loadSelectedCampaignDetail();
+  renderTrades();
+  renderTradeDetail();
+  toast("组合复盘已保存到本地");
+}
+
+async function savePositionInitialStop(positionId) {
+  const input = document.querySelector(`[data-position-stop="${CSS.escape(positionId)}"]`);
+  if (!input) return;
+  const raw = input.value.trim();
+  const initialStop = raw === "" ? null : Number(raw);
+  if (initialStop !== null && !Number.isFinite(initialStop)) {
+    toast("初始止损必须是有效数字");
+    input.focus();
+    return;
+  }
+  input.disabled = true;
+  try {
+    await api(`/api/positions/${encodeURIComponent(positionId)}/initial-stop`, {
+      method: "PATCH",
+      body: JSON.stringify({ initial_stop_price: initialStop }),
+    });
+    await loadCampaigns();
+    await loadSelectedCampaignDetail();
+    await refreshAnalysis();
+    if (state.riskMissingOnly) {
+      const visible = filteredCampaigns();
+      if (!visible.some((campaign) => campaign.id === state.selectedCampaignId)) {
+        state.selectedCampaignId = visible[0]?.id || null;
+        await loadSelectedCampaignDetail();
+      }
+    }
+    renderTrades();
+    renderTradeDetail();
+    toast(initialStop === null ? "初始止损已清空" : "初始止损已保存，R 已重新计算");
+  } catch (error) {
+    input.disabled = false;
+    input.focus();
+    toast(error.message || "初始止损保存失败");
+  }
 }
 
 async function deleteSelectedTrade() {
@@ -1307,6 +1605,29 @@ function filteredTrades() {
     return searchOk && sideOk && typeOk && strategyOk && dateOk && startOk && endOk;
   });
 }
+
+function filteredCampaigns() {
+  const window = dateWindowForFilter();
+  const riskFiltered = RMultipleUI.filterRiskMissing(state.campaigns, state.riskMissingOnly);
+  return riskFiltered.filter((campaign) => {
+    const sourceTrade = campaignSourceTrade(campaign);
+    const customText = sourceTrade
+      ? customFields().map((field) => customValueLabel(sourceTrade, field)).join(" ")
+      : "";
+    const typeLabel = classificationOptionLabel("trade_type", campaign.trade_type);
+    const strategyLabel = classificationOptionLabel("strategy", campaign.strategy);
+    const haystack = `${campaign.symbol} ${campaign.id} ${(campaign.source_trade_ids || []).join(" ")} ${typeLabel} ${strategyLabel} ${customText}`.toLowerCase();
+    const searchOk = !state.search || haystack.includes(state.search);
+    const sideOk = state.side === "all" || campaign.side === state.side;
+    const typeOk = state.tradeType === "all" || campaign.trade_type === state.tradeType;
+    const strategyOk = state.strategy === "all" || campaign.strategy === state.strategy;
+    const campaignDate = String(campaign.close_time_bj || campaign.open_time_bj || "").slice(0, 10);
+    const dateOk = !state.calendarDateFilter || campaignDate === state.calendarDateFilter;
+    const startOk = !window.start || campaignDate >= window.start;
+    const endOk = !window.end || campaignDate <= window.end;
+    return searchOk && sideOk && typeOk && strategyOk && dateOk && startOk && endOk;
+  });
+}
 function tradesForDate(date) {
   return state.data.trades.filter((trade) => trade.close_time_bj.slice(0, 10) === date);
 }
@@ -1361,7 +1682,37 @@ function shiftDateKey(dateKey, days) {
 }
 
 function selectedTrade() {
-  return state.data.trades.find((trade) => trade.id === state.selectedTradeId) || state.data.trades[0];
+  return campaignSourceTrade(selectedCampaign()) || state.data.trades[0];
+}
+
+function selectedCampaign() {
+  return state.campaigns.find((campaign) => campaign.id === state.selectedCampaignId) || state.campaigns[0] || null;
+}
+
+function campaignSourceTrade(campaign) {
+  if (!campaign || !state.data) return null;
+  const ids = campaign.source_trade_ids || [];
+  return [...ids]
+    .reverse()
+    .map((id) => state.data.trades.find((trade) => trade.id === id))
+    .find(Boolean) || null;
+}
+
+function focusFirstMissingStop() {
+  window.setTimeout(() => {
+    document.querySelector(".position-risk-gap [data-position-stop]")?.focus();
+  }, 0);
+}
+
+function positionRiskMessage(position) {
+  return {
+    missing_initial_stop: "缺少入场时设置的初始止损，组合 R 暂不计算。",
+    invalid_stop_direction: "止损方向无效：多单需低于所有入场价，空单需高于所有入场价。",
+    invalid_initial_stop: "初始止损不是有效价格。",
+    position_incomplete: "Position 成交尚未闭合，平仓完成后才能计算 R。",
+    volume_mismatch: "开仓与退出手数不一致，当前不计算 R。",
+    zero_risk: "初始计划风险为零，当前不计算 R。",
+  }[position.risk_missing_reason] || "R 已按该 Position 的初始计划风险计算。";
 }
 
 function customFields() {
@@ -1746,6 +2097,30 @@ function minutesToClock(minutes) {
 
 function formatPercent(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function formatRValue(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "-";
+  return RMultipleUI.signedR(value);
+}
+
+function formatPrice(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "-";
+  return Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 8 });
+}
+
+function formatBeijingDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 }
 
 function formatRatio(value) {
