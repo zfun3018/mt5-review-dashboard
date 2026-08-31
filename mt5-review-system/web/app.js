@@ -5,6 +5,7 @@ const state = {
   campaignDetail: null,
   selectedCampaignId: null,
   selectedTradeId: null,
+  selectedPositionId: null,
   calendarYear: null,
   calendarMonth: null,
   search: "",
@@ -18,6 +19,7 @@ const state = {
   calendarDateFilter: "",
   riskMissingOnly: false,
   analysisSettings: { scratch_threshold_r: 0.15 },
+  expandedCampaignIds: new Set(),
   metricExplanationTrigger: null,
   choiceEditor: null,
 };
@@ -130,7 +132,7 @@ async function loadDashboard(year = state.calendarYear, month = state.calendarMo
       api("/api/analysis-settings"),
     ]);
     state.data = data;
-    state.campaigns = campaignPage.campaigns || [];
+    state.campaigns = await hydrateCampaignPositionSummaries(campaignPage.campaigns || []);
     state.analysisSettings = settings;
     document.getElementById("scratchThresholdR").value = Number(settings.scratch_threshold_r ?? 0.15).toFixed(2);
     state.analysis = {
@@ -174,7 +176,6 @@ async function refreshAnalysis() {
   try {
     state.analysis = await api(`/api/analysis?${params.toString()}`);
     renderEquity();
-    renderRMetricSummary();
     renderSystemEvaluationSummary();
     renderSystemEvaluation();
     renderModeEvaluation();
@@ -185,7 +186,7 @@ async function refreshAnalysis() {
 
 async function loadCampaigns() {
   const page = await api("/api/campaigns?page_size=200");
-  state.campaigns = page.campaigns || [];
+  state.campaigns = await hydrateCampaignPositionSummaries(page.campaigns || []);
   if (!state.campaigns.some((campaign) => campaign.id === state.selectedCampaignId)) {
     state.selectedCampaignId = state.campaigns[0]?.id || null;
   }
@@ -203,7 +204,7 @@ async function saveScratchThreshold() {
   const input = document.getElementById("scratchThresholdR");
   const value = Number(input.value);
   if (!Number.isFinite(value) || value < 0 || value > 5) {
-    toast("Scratch 阈值必须在 0R 到 5R 之间");
+    toast("打平阈值必须在 0R 到 5R 之间");
     input.value = Number(state.analysisSettings.scratch_threshold_r ?? 0.15).toFixed(2);
     return;
   }
@@ -214,10 +215,11 @@ async function saveScratchThreshold() {
     });
     input.value = Number(state.analysisSettings.scratch_threshold_r).toFixed(2);
     await refreshAnalysis();
-    toast("Scratch 阈值已更新");
+    renderTrades();
+    toast("打平阈值已更新");
   } catch (error) {
     input.value = Number(state.analysisSettings.scratch_threshold_r ?? 0.15).toFixed(2);
-    toast(error.message || "Scratch 阈值保存失败");
+    toast(error.message || "打平阈值保存失败");
   }
 }
 
@@ -302,12 +304,11 @@ function renderRMetricSummary() {
   const metrics = state.analysis?.r_metrics || {};
   const sqn = metrics.sqn_status === "available" ? Number(metrics.sqn).toFixed(2) : "样本不足";
   const items = [
-    ["decisive_win_rate", "净胜率", formatPercent(metrics.decisive_win_rate)],
-    ["all_sample_win_rate", "全样本胜率", formatPercent(metrics.all_sample_win_rate)],
-    ["scratch", "Scratch 占比", formatPercent(metrics.scratch_rate)],
-    ["expectancy_r", "R 期望 E_R", formatRValue(metrics.expectancy_r)],
-    ["sqn", "SQN", sqn],
-    ["coverage", "R 数据覆盖率", formatPercent(metrics.coverage_rate)],
+    ["decisive_win_rate", "净胜率（剔除打平）", formatPercent(metrics.decisive_win_rate)],
+    ["all_sample_win_rate", "有效胜率", formatPercent(metrics.all_sample_win_rate)],
+    ["scratch", "打平占比", formatPercent(metrics.scratch_rate)],
+    ["expectancy_r", "平均数学期望（ER）", formatRValue(metrics.expectancy_r)],
+    ["sqn", "收益稳定度（SQN）", sqn],
   ];
   node.innerHTML = items
     .map(
@@ -315,7 +316,7 @@ function renderRMetricSummary() {
         <div class="r-metric-item">
           <span>${escapeHtml(label)} ${metricInfoButton(key, label, metrics)}</span>
           <strong>${escapeHtml(value)}</strong>
-          <small>${metrics.complete_count || 0} / ${metrics.sample_count || 0} 个 Campaign</small>
+          <small>R 完整 ${metrics.complete_count || 0} / 共 ${metrics.sample_count || 0} 个交易组合</small>
         </div>
       `,
     )
@@ -339,8 +340,6 @@ async function api(path, options = {}) {
 }
 
 function renderAll() {
-  renderSummary();
-  renderRMetricSummary();
   renderMarketClock();
   renderStatus();
   renderEquity();
@@ -373,8 +372,8 @@ function renderSummary() {
         <div class="metric">
           <span>${escapeHtml(label)}</span>
           <strong class="${profitClass(item.net_pnl)}">${escapeHtml(money.format(item.net_pnl))}</strong>
-          <em>${item.order_count} 笔现金记录 · 现金胜率 ${formatPercent(item.win_rate)} · PF ${formatRatio(item.profit_factor)}</em>
-          <em>R 期望 ${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "R 期望", r)} · 覆盖率 ${formatPercent(r.coverage_rate)} ${metricInfoButton("coverage", "R 数据覆盖率", r)}</em>
+          <em>${item.order_count} 笔交易 · 总胜率 ${formatPercent(item.win_rate)} ${metricInfoButton("cash_win_rate", "总胜率", r)} · 总盈亏比 ${formatRatio(item.profit_factor)} ${metricInfoButton("cash_profit_factor", "总盈亏比", r)}</em>
+          <em>平均数学期望 ${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "平均数学期望", r)} · 收益稳定度 ${r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "样本不足"} ${metricInfoButton("sqn", "收益稳定度", r)}</em>
           <em>最大 ${money.format(item.max_profit)} / ${money.format(item.max_loss)} · 均值 ${money.format(item.avg_trade)}</em>
         </div>
       `;
@@ -733,6 +732,7 @@ function renderSystemEvaluationSummary() {
     ["本日", periods.today],
     ["本周", periods.week],
     ["本月", periods.month],
+    ["本年", periods.year],
   ].filter(([, item]) => item);
   const node = document.getElementById("systemEvaluationSummary");
   if (!node) return;
@@ -745,16 +745,16 @@ function renderSystemEvaluationSummary() {
         <article class="evaluation-summary-card">
           <header><span>${escapeHtml(label)}</span><strong class="${profitClass(item.net_pnl)}">${escapeHtml(money.format(item.net_pnl))}</strong></header>
           <div class="evaluation-summary-grid-inner">
-            <span>Campaign 数<strong>${r.sample_count || 0}</strong></span>
-            <span>现金 PF<strong>${formatRatio(item.profit_factor)}</strong></span>
-            <span>现金胜率<strong>${formatPercent(item.cash_win_rate ?? item.win_rate)}</strong></span>
-            <span>净胜率 ${metricInfoButton("decisive_win_rate", "净胜率", r)}<strong>${formatPercent(r.decisive_win_rate)}</strong></span>
-            <span>全样本胜率 ${metricInfoButton("all_sample_win_rate", "全样本胜率", r)}<strong>${formatPercent(r.all_sample_win_rate)}</strong></span>
-            <span>Scratch ${metricInfoButton("scratch", "Scratch 占比", r)}<strong>${formatPercent(r.scratch_rate)}</strong></span>
-            <span>E_R ${metricInfoButton("expectancy_r", "R 期望", r)}<strong>${formatRValue(r.expectancy_r)}</strong></span>
-            <span>SQN ${metricInfoButton("sqn", "SQN", r)}<strong>${sqn}</strong></span>
-            <span>R 覆盖率 ${metricInfoButton("coverage", "R 数据覆盖率", r)}<strong>${formatPercent(r.coverage_rate)}</strong></span>
-            <span class="evaluation-z-row">R 版 Z 分数<strong>${escapeHtml(formatZScore(r.z_score || item.z_score))}</strong></span>
+            <span>交易笔数 ${metricInfoButton("campaign_count", "交易笔数", r)}<strong>${r.sample_count || 0}</strong>${metricQualityBadge("campaign_count", r.sample_count, r)}</span>
+            <span>总盈亏比 ${metricInfoButton("cash_profit_factor", "总盈亏比", r)}<strong>${formatRatio(item.profit_factor)}</strong>${metricQualityBadge("cash_profit_factor", item.profit_factor, r)}</span>
+            <span>净盈亏比 ${metricInfoButton("payoff_ratio", "净盈亏比", item)}<strong>${formatRatio(item.payoff_ratio)}</strong>${metricQualityBadge("payoff_ratio", item.payoff_ratio, item)}</span>
+            <span>总胜率 ${metricInfoButton("cash_win_rate", "总胜率", r)}<strong>${formatPercent(item.cash_win_rate ?? item.win_rate)}</strong>${metricQualityBadge("cash_win_rate", item.cash_win_rate ?? item.win_rate, r)}</span>
+            <span>净胜率（剔除打平） ${metricInfoButton("decisive_win_rate", "净胜率（剔除打平）", r)}<strong>${formatPercent(r.decisive_win_rate)}</strong>${metricQualityBadge("decisive_win_rate", r.decisive_win_rate, r)}</span>
+            <span>有效胜率 ${metricInfoButton("all_sample_win_rate", "有效胜率", r)}<strong>${formatPercent(r.all_sample_win_rate)}</strong>${metricQualityBadge("all_sample_win_rate", r.all_sample_win_rate, r)}</span>
+            <span>打平占比 ${metricInfoButton("scratch", "打平占比", r)}<strong>${formatPercent(r.scratch_rate)}</strong>${metricQualityBadge("scratch", r.scratch_rate, r)}</span>
+            <span>平均数学期望（ER） ${metricInfoButton("expectancy_r", "平均数学期望（ER）", r)}<strong>${formatRValue(r.expectancy_r)}</strong>${metricQualityBadge("expectancy_r", r.expectancy_r, r)}</span>
+            <span>收益稳定度（SQN） ${metricInfoButton("sqn", "收益稳定度（SQN）", r)}<strong>${sqn}</strong>${metricQualityBadge("sqn", r.sqn, r)}</span>
+            <span class="evaluation-z-row">交易结果连续性（Z 分数） ${metricInfoButton("z_score", "交易结果连续性（Z 分数）", r)}<strong>${escapeHtml(formatZScore(r.z_score || item.z_score))}</strong></span>
           </div>
         </article>
       `;
@@ -775,15 +775,18 @@ function renderSystemEvaluation() {
         <tr>
           <td><strong>${escapeHtml(row.date)}</strong></td>
           <td class="${profitClass(row.net_pnl)}">${money.format(row.net_pnl)}</td>
-          <td>${row.order_count}</td>
-          <td>${formatRatio(row.profit_factor)}</td>
-          <td>${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "R 期望", r)}</td>
-          <td>${sqn} ${metricInfoButton("sqn", "SQN", r)}</td>
-          <td>${formatPercent(r.coverage_rate)} ${metricInfoButton("coverage", "R 数据覆盖率", r)}</td>
+          <td>${row.order_count} ${metricInfoButton("campaign_count", "交易笔数", r)} ${metricQualityBadge("campaign_count", row.order_count, r)}</td>
+          <td>${formatRatio(row.profit_factor)} ${metricInfoButton("cash_profit_factor", "总盈亏比", r)} ${metricQualityBadge("cash_profit_factor", row.profit_factor, r)}</td>
+          <td>${formatRatio(row.payoff_ratio)} ${metricInfoButton("payoff_ratio", "净盈亏比", row)} ${metricQualityBadge("payoff_ratio", row.payoff_ratio, row)}</td>
+          <td>${formatPercent(row.cash_win_rate ?? row.win_rate)} ${metricInfoButton("cash_win_rate", "总胜率", row)} ${metricQualityBadge("cash_win_rate", row.cash_win_rate ?? row.win_rate, row)}</td>
+          <td>${formatPercent(r.decisive_win_rate)} ${metricInfoButton("decisive_win_rate", "净胜率", r)} ${metricQualityBadge("decisive_win_rate", r.decisive_win_rate, r)}</td>
+          <td>${formatPercent(r.scratch_rate)} ${metricInfoButton("scratch", "打平占比", r)} ${metricQualityBadge("scratch", r.scratch_rate, r)}</td>
+          <td>${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "平均数学期望", r)} ${metricQualityBadge("expectancy_r", r.expectancy_r, r)}</td>
+          <td>${sqn} ${metricInfoButton("sqn", "收益稳定度", r)} ${metricQualityBadge("sqn", r.sqn, r)}</td>
         </tr>
       `;
     })
-    .join("") || `<tr><td colspan="7">当前范围暂无交易</td></tr>`;
+    .join("") || `<tr><td colspan="10">当前范围暂无交易</td></tr>`;
   bindMetricInfoButtons();
 }
 
@@ -844,14 +847,13 @@ function renderModeEvaluation() {
               <article class="mode-card">
                 <header><strong>${escapeHtml(row.label || row.key)}</strong><span>${formatPercent(row.share)}</span></header>
                 <div class="${profitClass(row.net_pnl)}">${money.format(row.net_pnl)}</div>
-                <small>${row.order_count} 个 Campaign · 现金胜率 ${formatPercent(row.cash_win_rate ?? row.win_rate)} · 现金 PF ${formatRatio(row.profit_factor)}</small>
+                <small>${row.order_count} 笔交易 ${metricQualityBadge("campaign_count", row.order_count, row.r_metrics || {})} · 总胜率 ${formatPercent(row.cash_win_rate ?? row.win_rate)} ${metricInfoButton("cash_win_rate", "总胜率", row.r_metrics || {})} ${metricQualityBadge("cash_win_rate", row.cash_win_rate ?? row.win_rate, row.r_metrics || {})} · 总盈亏比 ${formatRatio(row.profit_factor)} ${metricInfoButton("cash_profit_factor", "总盈亏比", row.r_metrics || {})} ${metricQualityBadge("cash_profit_factor", row.profit_factor, row.r_metrics || {})}</small>
                 <dl class="mode-r-metrics">
-                  <div><dt>净胜率 ${metricInfoButton("decisive_win_rate", "净胜率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.decisive_win_rate)}</dd></div>
-                  <div><dt>全样本胜率 ${metricInfoButton("all_sample_win_rate", "全样本胜率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.all_sample_win_rate)}</dd></div>
-                  <div><dt>Scratch ${metricInfoButton("scratch", "Scratch 占比", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.scratch_rate)}</dd></div>
-                  <div><dt>E_R ${metricInfoButton("expectancy_r", "R 期望", row.r_metrics || {})}</dt><dd>${formatRValue(row.r_metrics?.expectancy_r)}</dd></div>
-                  <div><dt>SQN ${metricInfoButton("sqn", "SQN", row.r_metrics || {})}</dt><dd>${row.r_metrics?.sqn_status === "available" ? Number(row.r_metrics.sqn).toFixed(2) : "样本不足"}</dd></div>
-                  <div><dt>覆盖率 ${metricInfoButton("coverage", "R 数据覆盖率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.coverage_rate)}</dd></div>
+                  <div><dt>净胜率（剔除打平） ${metricInfoButton("decisive_win_rate", "净胜率（剔除打平）", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.decisive_win_rate)} ${metricQualityBadge("decisive_win_rate", row.r_metrics?.decisive_win_rate, row.r_metrics || {})}</dd></div>
+                  <div><dt>有效胜率 ${metricInfoButton("all_sample_win_rate", "有效胜率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.all_sample_win_rate)} ${metricQualityBadge("all_sample_win_rate", row.r_metrics?.all_sample_win_rate, row.r_metrics || {})}</dd></div>
+                  <div><dt>打平占比 ${metricInfoButton("scratch", "打平占比", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.scratch_rate)} ${metricQualityBadge("scratch", row.r_metrics?.scratch_rate, row.r_metrics || {})}</dd></div>
+                  <div><dt>平均数学期望（ER） ${metricInfoButton("expectancy_r", "平均数学期望（ER）", row.r_metrics || {})}</dt><dd>${formatRValue(row.r_metrics?.expectancy_r)} ${metricQualityBadge("expectancy_r", row.r_metrics?.expectancy_r, row.r_metrics || {})}</dd></div>
+                  <div><dt>收益稳定度（SQN） ${metricInfoButton("sqn", "收益稳定度（SQN）", row.r_metrics || {})}</dt><dd>${row.r_metrics?.sqn_status === "available" ? Number(row.r_metrics.sqn).toFixed(2) : "样本不足"} ${metricQualityBadge("sqn", row.r_metrics?.sqn, row.r_metrics || {})}</dd></div>
                 </dl>
               </article>
             `).join("") || `<div class="detail-empty">当前范围暂无数据</div>`}
@@ -963,6 +965,78 @@ async function archiveClassificationOption(optionId) {
   }
 }
 
+function scratchThresholdR() {
+  const value = Number(state.analysisSettings?.scratch_threshold_r ?? 0.15);
+  return Number.isFinite(value) ? Math.abs(value) : 0.15;
+}
+
+function isScratchCampaign(campaign = {}) {
+  const value = Number(campaign.campaign_r);
+  return campaign.risk_status === "complete" && Number.isFinite(value) && Math.abs(value) <= scratchThresholdR();
+}
+
+function formatHoldingTime(seconds) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds))) return "-";
+  const total = Math.max(0, Math.round(Number(seconds)));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainingSeconds = total % 60;
+  if (days) return `${days}天${hours}时`;
+  if (hours) return `${hours}时${minutes}分`;
+  if (minutes) return `${minutes}分${remainingSeconds}秒`;
+  return `${remainingSeconds}秒`;
+}
+
+function formatVolume(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "-";
+  return Number(value).toFixed(2);
+}
+
+function campaignPositionSummaries(campaign) {
+  return Array.isArray(campaign?.position_summaries) ? campaign.position_summaries : [];
+}
+
+async function hydrateCampaignPositionSummaries(campaigns) {
+  const values = Array.isArray(campaigns) ? campaigns : [];
+  const targets = values.filter((campaign) => {
+    const declaredCount = Number(campaign?.position_count || 0);
+    const summaries = campaign?.position_summaries;
+    return declaredCount > 0 && (!Array.isArray(summaries) || summaries.length === 0);
+  });
+  if (!targets.length) return values;
+
+  const details = await Promise.all(
+    targets.map(async (campaign) => {
+      try {
+        return [campaign.id, await api(`/api/campaigns/${encodeURIComponent(campaign.id)}`)];
+      } catch (error) {
+        return [campaign.id, null];
+      }
+    }),
+  );
+  const detailById = new Map(details);
+  return values.map((campaign) => {
+    const detail = detailById.get(campaign.id);
+    if (!detail) return campaign;
+    const positions = Array.isArray(detail.positions) ? detail.positions : [];
+    const { positions: _ignored, ...campaignFields } = detail;
+    return {
+      ...campaign,
+      ...campaignFields,
+      position_summaries: positions,
+    };
+  });
+}
+
+function stopEditorMarkup(position, scope = "table") {
+  const saveAttribute = scope === "table" ? "data-position-save-table" : "data-position-save";
+  return `<div class="inline-stop-editor ${position.risk_status === "complete" ? "" : "missing"}">
+    <input data-position-stop="${escapeAttr(position.id)}" data-position-editor="${scope}" type="number" step="any" inputmode="decimal" value="${escapeAttr(position.initial_stop_price ?? "")}" placeholder="请输入初始止损" aria-label="Position ${escapeAttr(position.display_position_id || position.position_id)} 初始止损" />
+    <button class="icon-btn" type="button" ${saveAttribute}="${escapeAttr(position.id)}" title="保存初始止损" aria-label="保存初始止损">✓</button>
+  </div>`;
+}
+
 function renderTradeHeader() {
   const customHeaders = customFields()
     .map((field) => `<th class="custom-col">${escapeHtml(field.name)}<span>${fieldTypeLabel(field.field_type)}</span></th>`)
@@ -971,10 +1045,9 @@ function renderTradeHeader() {
   document.getElementById("tradeHead").innerHTML = `
     <tr>
       <th>交易组合</th>
-      <th>品种</th>
-      <th>Position</th>
-      <th>北京时间</th>
-      <th>执行结构</th>
+      <th>品种 / 方向</th>
+      <th>交易数据<span>入场价 / 出场价 / 持仓时间</span></th>
+      <th>初始止损</th>
       <th class="r-col">R ${metricInfoButton("campaign_r", "组合 R", metrics)}</th>
       <th>组合盈亏</th>
       ${customHeaders}
@@ -995,27 +1068,42 @@ function renderTrades() {
       const trade = campaignSourceTrade(campaign);
       const active = campaign.id === state.selectedCampaignId ? "active" : "";
       const riskClass = campaign.risk_status === "complete" ? "risk-complete" : `risk-${campaign.risk_status || "missing"}`;
+      const scratch = isScratchCampaign(campaign);
+      const expanded = state.expandedCampaignIds.has(campaign.id);
+      const positions = campaignPositionSummaries(campaign);
       const shot = trade?.screenshot_url
         ? `<button class="shot-btn" data-shot="${escapeAttr(trade.screenshot_url)}" title="查看截图"><img src="${escapeAttr(trade.screenshot_url)}" alt="M5截图" /></button>`
         : `<span class="muted-mini">无</span>`;
       const customCells = customFields()
         .map(
           (field) => `
-            <td class="custom-value-cell">
+            <td data-label="${escapeAttr(field.name)}" class="custom-value-cell">
               ${trade ? renderCustomValueEditor(trade, field, "table") : `<span class="muted-mini">-</span>`}
             </td>
           `,
         )
         .join("");
-      return `
-        <tr class="campaign-row ${active} ${campaign.risk_status === "complete" ? "" : "has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}">
-          <td>
-            <div class="order-main">
-              <strong>${escapeHtml(campaign.display_order_no || campaign.id.slice(0, 8))}</strong>
-              <span>Campaign · ${escapeHtml(RMultipleUI.campaignActivityLabel(campaign))}</span>
+      const primaryPosition = positions.length === 1 ? positions[0] : null;
+      const stopCell = primaryPosition
+        ? stopEditorMarkup(primaryPosition)
+        : positions.length > 1
+          ? `<div class="stop-summary"><span>${positions.filter((position) => position.risk_status === "complete").length}/${positions.length} 已填</span><span class="muted-mini">展开后逐笔填写</span></div>`
+          : `<div class="stop-summary missing"><span>Position 数据待加载</span></div>`;
+      const expandControl = positions.length > 1
+        ? `<button class="campaign-expand icon-btn" type="button" data-campaign-expand="${escapeAttr(campaign.id)}" aria-expanded="${expanded ? "true" : "false"}" aria-label="${expanded ? "收起" : "展开"} Position">${expanded ? "−" : "+"}</button>`
+        : `<span class="campaign-expand-spacer" aria-hidden="true"></span>`;
+      const summaryRows = `
+        <tr class="campaign-row ${active} ${campaign.risk_status === "complete" ? "" : "has-risk-gap"} ${scratch ? "scratch" : ""}" data-campaign-id="${escapeAttr(campaign.id)}">
+          <td data-label="交易组合">
+            <div class="order-main campaign-order-cell">
+              ${expandControl}
+              <div>
+                <strong>${escapeHtml(campaign.display_order_no || campaign.id.slice(0, 8))}</strong>
+                <span>交易组合 · ${escapeHtml(RMultipleUI.campaignActivityLabel(campaign))}${scratch ? " · 打平" : ""}</span>
+              </div>
             </div>
           </td>
-          <td>
+          <td data-label="品种 / 方向">
             <div class="symbol-cell">
               <span class="side ${campaign.side}">${campaign.side === "long" ? "多" : "空"}</span>
               <div class="order-main">
@@ -1024,23 +1112,26 @@ function renderTrades() {
               </div>
             </div>
           </td>
-          <td>${campaign.position_count} 个</td>
-          <td>
-            <div class="time-stack">
-              <strong>${campaign.close_time_bj ? formatTime(campaign.close_time_bj) : "持仓中"}</strong>
-              <span>进 ${formatTime(campaign.open_time_bj)}</span>
+          <td data-label="交易数据">
+            <div class="trade-metrics-cell">
+              <span><b>入</b> ${formatPrice(campaign.weighted_entry_price)} <i>${formatVolume(campaign.entry_volume)}手</i></span>
+              <span><b>出</b> ${formatPrice(campaign.weighted_exit_price)} <i>${formatVolume(campaign.exit_volume)}手</i></span>
+              <span><b>持</b> ${escapeHtml(formatHoldingTime(campaign.holding_seconds))}</span>
             </div>
           </td>
-          <td>${escapeHtml(RMultipleUI.campaignActivityLabel(campaign))}</td>
-          <td class="campaign-r-cell ${riskClass}">${escapeHtml(RMultipleUI.formatCampaignR(campaign))}</td>
-          <td class="${profitClass(campaign.net_pnl)}">${money.format(campaign.net_pnl)}</td>
+          <td data-label="初始止损">${stopCell}</td>
+          <td data-label="组合 R" class="campaign-r-cell ${riskClass}">${escapeHtml(RMultipleUI.formatCampaignR(campaign))}${scratch ? '<span class="scratch-badge">打平</span>' : ""}</td>
+          <td data-label="组合盈亏" class="${profitClass(campaign.net_pnl)}">${money.format(campaign.net_pnl)}</td>
           ${customCells}
-          <td>${shot}</td>
+          <td data-label="截图">${shot}</td>
         </tr>
       `;
+      if (!expanded || positions.length <= 1) return summaryRows;
+      const childRows = positions.map((position, index) => renderCampaignPositionRow(campaign, position, index, fieldCount, scratch)).join("");
+      return summaryRows + childRows;
     })
     .join("");
-  document.getElementById("tradeRows").innerHTML = rows || `<tr><td colspan="${8 + fieldCount}">没有匹配的交易组合</td></tr>`;
+  document.getElementById("tradeRows").innerHTML = rows || `<tr><td colspan="${7 + fieldCount}">没有匹配的交易组合</td></tr>`;
   document.querySelectorAll("[data-shot]").forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1048,8 +1139,11 @@ function renderTrades() {
     });
   });
   document.querySelectorAll("tr[data-campaign-id]").forEach((row) => {
-    row.addEventListener("click", async () => {
+    row.addEventListener("click", async (event) => {
+      if (event?.target?.closest?.("button, input, select, textarea, a")) return;
       state.selectedCampaignId = row.dataset.campaignId;
+      state.selectedTradeId = row.dataset.tradeId || null;
+      state.selectedPositionId = row.dataset.positionId || null;
       renderTrades();
       try {
         await loadSelectedCampaignDetail();
@@ -1060,8 +1154,71 @@ function renderTrades() {
       if (state.riskMissingOnly) focusFirstMissingStop();
     });
   });
+  document.querySelectorAll("[data-campaign-expand]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const campaignId = button.dataset.campaignExpand;
+      if (state.expandedCampaignIds.has(campaignId)) state.expandedCampaignIds.delete(campaignId);
+      else state.expandedCampaignIds.add(campaignId);
+      renderTrades();
+    });
+  });
+  document.querySelectorAll("[data-position-save-table]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const input = button.closest(".inline-stop-editor")?.querySelector("[data-position-stop]");
+      savePositionInitialStop(button.dataset.positionSaveTable, input);
+    });
+  });
+  document.querySelectorAll("[data-position-stop][data-position-editor='table']").forEach((input) => {
+    input.addEventListener("click", (event) => event.stopPropagation());
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        savePositionInitialStop(input.dataset.positionStop, input);
+      }
+    });
+  });
   bindCustomValueInputs();
   bindChoiceTriggers();
+}
+
+function renderCampaignPositionRow(campaign, position, index, fieldCount, scratch) {
+  const sourceTrade = position.source_trade || null;
+  const editableTrade = sourceTrade ? (tradeById(sourceTrade.id) || sourceTrade) : null;
+  const customCells = customFields()
+    .map(
+      (field) => `
+        <td data-label="${escapeAttr(field.name)}" class="custom-value-cell">
+          ${editableTrade ? renderCustomValueEditor(editableTrade, field, "table") : `<span class="muted-mini">未填写</span>`}
+        </td>
+      `,
+    )
+    .join("");
+  const shot = sourceTrade?.screenshot_url
+    ? `<button class="shot-btn" data-shot="${escapeAttr(sourceTrade.screenshot_url)}" title="查看截图"><img src="${escapeAttr(sourceTrade.screenshot_url)}" alt="MT5截图" /></button>`
+    : `<span class="muted-mini">无</span>`;
+  const rValue = position.position_r === null || position.position_r === undefined
+    ? "R 缺失"
+    : formatRValue(position.position_r);
+  return `
+    <tr class="campaign-detail-row ${scratch ? "scratch" : ""} ${state.selectedPositionId === position.id ? "active" : ""}" data-campaign-id="${escapeAttr(campaign.id)}" data-position-id="${escapeAttr(position.id)}" data-trade-id="${escapeAttr(sourceTrade?.id || "")}">
+      <td data-label="交易组合"><div class="child-order-cell"><span class="child-branch">└</span><span>Position ${escapeHtml(position.display_position_id || position.position_id)}</span></div></td>
+      <td data-label="品种 / 方向"><div class="symbol-cell"><span class="side ${campaign.side}">${campaign.side === "long" ? "多" : "空"}</span><span class="child-label">第 ${index + 1} 笔</span></div></td>
+      <td data-label="交易数据">
+        <div class="trade-metrics-cell">
+          <span><b>入</b> ${formatPrice(position.weighted_entry_price)} <i>${formatVolume(position.entry_volume)}手</i></span>
+          <span><b>出</b> ${formatPrice(position.weighted_exit_price)} <i>${formatVolume(position.exit_volume)}手</i></span>
+          <span><b>持</b> ${escapeHtml(formatHoldingTime(position.holding_seconds))}</span>
+        </div>
+      </td>
+      <td data-label="初始止损">${stopEditorMarkup(position)}</td>
+      <td data-label="组合 R" class="campaign-r-cell ${position.risk_status === "complete" ? "risk-complete" : "risk-missing"}">${escapeHtml(rValue)}</td>
+      <td data-label="组合盈亏" class="${profitClass(position.position_pnl)}">${money.format(position.position_pnl ?? 0)}</td>
+      ${customCells}
+      <td data-label="截图">${shot}</td>
+    </tr>
+  `;
 }
 
 function renderTradeDetail() {
@@ -1075,6 +1232,13 @@ function renderTradeDetail() {
   }
   if (!detail) {
     node.innerHTML = `<div class="detail-empty">正在加载交易组合详情</div>`;
+    return;
+  }
+  const selectedPosition = state.selectedPositionId
+    ? (detail.positions || []).find((position) => position.id === state.selectedPositionId)
+    : null;
+  if (selectedPosition) {
+    renderPositionDetail(campaign, detail, selectedPosition);
     return;
   }
   const customFieldInputs = customFields()
@@ -1098,7 +1262,7 @@ function renderTradeDetail() {
         )
         .join("");
       const positionR = position.position_r === null || position.position_r === undefined
-        ? position.risk_missing_reason === "missing_initial_stop" ? "待补初始止损" : "R 不可用"
+        ? "R 缺失"
         : formatRValue(position.position_r);
       return `
         <section class="campaign-position ${position.risk_status === "complete" ? "" : "position-risk-gap"}">
@@ -1109,10 +1273,10 @@ function renderTradeDetail() {
             </div>
             <span class="position-r-status ${position.risk_status}">${escapeHtml(positionR)}</span>
           </div>
-          <div class="initial-stop-editor">
-            <label for="stop-${escapeAttr(position.id)}">初始计划止损</label>
-            <input id="stop-${escapeAttr(position.id)}" data-position-stop="${escapeAttr(position.id)}" type="number" step="any" inputmode="decimal" value="${escapeAttr(position.initial_stop_price ?? "")}" placeholder="填写入场时止损价" />
-            <button class="ghost-btn" type="button" data-position-save="${escapeAttr(position.id)}">保存</button>
+          <div class="position-plan-risk">
+            <span>初始计划止损</span>
+            <strong>${escapeHtml(formatPrice(position.initial_stop_price))}</strong>
+            <small>请在左侧订单流水表格中填写或修改</small>
           </div>
           <p class="position-risk-note">${escapeHtml(positionRiskMessage(position))}</p>
           <ul class="position-exits">${exits || `<li><span>尚未平仓</span></li>`}</ul>
@@ -1165,17 +1329,63 @@ function renderTradeDetail() {
     openImageModal(event.currentTarget.dataset.shot);
   });
   bindScreenshotEditor();
-  document.querySelectorAll("[data-position-save]").forEach((button) => {
-    button.addEventListener("click", () => savePositionInitialStop(button.dataset.positionSave));
-  });
-  document.querySelectorAll("[data-position-stop]").forEach((input) => {
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") savePositionInitialStop(input.dataset.positionStop);
-    });
-  });
   bindCustomValueInputs();
   bindChoiceTriggers();
   bindMetricInfoButtons();
+}
+
+function renderPositionDetail(campaign, detail, position) {
+  const node = document.getElementById("tradeDetail");
+  const trade = position.source_trade || state.data?.trades?.find((item) => item.id === state.selectedTradeId) || null;
+  const customFieldInputs = customFields()
+    .map(
+      (field) => `
+        <div class="field compact-field">
+          <label>${escapeHtml(field.name)}</label>
+          ${trade ? renderCustomValueEditor(trade, field, "detail") : `<span class="muted-mini">暂无来源订单</span>`}
+        </div>
+      `,
+    )
+    .join("");
+  const exits = (position.exit_deals || [])
+    .map((deal) => `<li><span>${formatBeijingDateTime(deal.time_utc)}</span><strong>${Number(deal.volume || 0).toFixed(2)} 手 @ ${formatPrice(deal.price)}</strong></li>`)
+    .join("");
+  const positionR = position.position_r === null || position.position_r === undefined ? "R 缺失" : formatRValue(position.position_r);
+  node.innerHTML = `
+    <div class="detail-body dense-detail position-detail">
+      <div class="detail-title">
+        <div>
+          <p class="eyebrow">${escapeHtml(campaign.symbol)} · Position ${escapeHtml(position.display_position_id || position.position_id)}</p>
+          <h2>${campaign.side === "long" ? "多单" : "空单"} · 单笔订单</h2>
+        </div>
+        <strong class="${profitClass(position.position_pnl)}">${money.format(position.position_pnl ?? 0)}</strong>
+      </div>
+      <div class="position-detail-metrics">
+        <span>入场 <strong>${formatPrice(position.weighted_entry_price)}</strong> · ${formatVolume(position.entry_volume)} 手</span>
+        <span>出场 <strong>${formatPrice(position.weighted_exit_price)}</strong> · ${formatVolume(position.exit_volume)} 手</span>
+        <span>持仓 <strong>${escapeHtml(formatHoldingTime(position.holding_seconds))}</strong></span>
+        <span>R <strong>${escapeHtml(positionR)}</strong></span>
+      </div>
+      <div class="position-plan-risk"><span>初始计划止损</span><strong>${escapeHtml(formatPrice(position.initial_stop_price))}</strong><small>在左侧订单流水中填写或修改</small></div>
+      ${trade ? renderScreenshotEditor(trade) : ""}
+      <div class="field-grid classification-grid">
+        <div class="field compact-field"><label>交易类型</label><select id="detailTradeType">${classificationSelectOptions("trade_type", trade?.trade_type || campaign.trade_type)}</select></div>
+        <div class="field compact-field"><label>交易策略</label><select id="detailStrategy">${classificationSelectOptions("strategy", trade?.strategy || campaign.strategy)}</select></div>
+      </div>
+      ${customFieldInputs ? `<div class="field-grid">${customFieldInputs}</div>` : ""}
+      <ul class="position-exits">${exits || "<li><span>尚未平仓</span></li>"}</ul>
+      <div class="field"><label>复盘</label><textarea id="detailReview" class="review-editor" maxlength="10000" placeholder="记录入场依据、执行过程、风险控制与改进计划">${escapeHtml(trade?.review_text || "")}</textarea></div>
+      <div class="detail-actions"><button id="saveReview" class="primary-btn">保存订单复盘</button></div>
+    </div>
+  `;
+  document.getElementById("saveReview").addEventListener("click", saveReview);
+  document.getElementById("detailShot")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openImageModal(event.currentTarget.dataset.shot);
+  });
+  bindScreenshotEditor();
+  bindCustomValueInputs();
+  bindChoiceTriggers();
 }
 
 function renderScreenshotEditor(trade) {
@@ -1469,19 +1679,26 @@ async function saveReview() {
     strategy: document.getElementById("detailStrategy").value,
     review_text: document.getElementById("detailReview").value,
   };
-  await api(`/api/campaigns/${encodeURIComponent(campaign.id)}/review`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  if (state.selectedTradeId && state.selectedPositionId) {
+    await api(`/api/trades/${encodeURIComponent(state.selectedTradeId)}/review`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  } else {
+    await api(`/api/campaigns/${encodeURIComponent(campaign.id)}/review`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  }
   await loadCampaigns();
   await loadSelectedCampaignDetail();
   renderTrades();
   renderTradeDetail();
-  toast("组合复盘已保存到本地");
+  toast(state.selectedPositionId ? "订单复盘已保存到本地" : "组合复盘已保存到本地");
 }
 
-async function savePositionInitialStop(positionId) {
-  const input = document.querySelector(`[data-position-stop="${CSS.escape(positionId)}"]`);
+async function savePositionInitialStop(positionId, sourceInput = null) {
+  const input = sourceInput || document.querySelector(`[data-position-stop="${CSS.escape(positionId)}"]`);
   if (!input) return;
   const raw = input.value.trim();
   const initialStop = raw === "" ? null : Number(raw);
@@ -2126,6 +2343,54 @@ function formatBeijingDateTime(value) {
 function formatRatio(value) {
   if (value === null || value === undefined) return "-";
   return Number(value).toFixed(2);
+}
+
+function metricQuality(metricKey, value, context = {}) {
+  const hasValue = value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+  const numeric = Number(value);
+  if (metricKey === "campaign_count") {
+    if (!Number.isFinite(numeric) || numeric < 30) return { label: "样本不足", tone: "insufficient" };
+    if (numeric < 100) return { label: "一般", tone: "average" };
+    return { label: "好", tone: "good" };
+  }
+  if (!hasValue) return { label: "样本不足", tone: "insufficient" };
+  const rMetricKeys = ["scratch", "decisive_win_rate", "all_sample_win_rate", "expectancy_r", "sqn"];
+  const rSampleSize = Number(context.completeCount ?? context.sampleCount);
+  if (rMetricKeys.includes(metricKey) && Number.isFinite(rSampleSize) && rSampleSize <= 0) {
+    return { label: "样本不足", tone: "insufficient" };
+  }
+  if (["cash_profit_factor", "payoff_ratio"].includes(metricKey)) {
+    if (numeric < 1) return { label: "差", tone: "bad" };
+    if (numeric < 1.5) return { label: "一般", tone: "average" };
+    return { label: "好", tone: "good" };
+  }
+  if (["cash_win_rate", "decisive_win_rate", "all_sample_win_rate"].includes(metricKey)) {
+    if (numeric < 0.4) return { label: "差", tone: "bad" };
+    if (numeric < 0.5) return { label: "一般", tone: "average" };
+    return { label: "好", tone: "good" };
+  }
+  if (metricKey === "expectancy_r") {
+    if (numeric < 0) return { label: "差", tone: "bad" };
+    if (numeric === 0) return { label: "一般", tone: "average" };
+    return { label: "好", tone: "good" };
+  }
+  if (metricKey === "sqn") {
+    if (context.sqn_status && context.sqn_status !== "available") return { label: "样本不足", tone: "insufficient" };
+    if (numeric < 1) return { label: "差", tone: "bad" };
+    if (numeric < 2) return { label: "一般", tone: "average" };
+    return { label: "好", tone: "good" };
+  }
+  if (metricKey === "scratch") {
+    if (numeric > 0.3) return { label: "差", tone: "bad" };
+    if (numeric > 0.15) return { label: "一般", tone: "average" };
+    return { label: "好", tone: "good" };
+  }
+  return { label: "一般", tone: "average" };
+}
+
+function metricQualityBadge(metricKey, value, context = {}) {
+  const result = metricQuality(metricKey, value, context);
+  return `<em class="metric-quality metric-quality-${result.tone}">${result.label}</em>`;
 }
 
 function zClassification(value) {

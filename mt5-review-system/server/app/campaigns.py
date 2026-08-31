@@ -21,6 +21,16 @@ def deal_sort_key(deal: dict[str, Any]) -> tuple[int, tuple[int, int | str]]:
     return (int(deal.get("time_msc") or 0), _ticket_sort_value(deal.get("deal_ticket")))
 
 
+def _weighted_price(deals: list[dict[str, Any]]) -> float | None:
+    volume = sum(float(deal.get("volume") or 0.0) for deal in deals)
+    if volume <= VOLUME_EPSILON:
+        return None
+    return sum(
+        float(deal.get("volume") or 0.0) * float(deal.get("price") or 0.0)
+        for deal in deals
+    ) / volume
+
+
 def _normalized_entry_kind(value: Any) -> str:
     text = str(value or "").strip().lower()
     aliases = {
@@ -100,6 +110,7 @@ def reconstruct_positions(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if entry_volume > VOLUME_EPSILON
             else None
         )
+        weighted_exit_price = _weighted_price(exits)
         if not entries or remaining < -VOLUME_EPSILON or reversal_seen:
             status = "incomplete"
         elif remaining > VOLUME_EPSILON:
@@ -128,6 +139,12 @@ def reconstruct_positions(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "exit_volume": round(exit_volume, 10),
             "remaining_volume": round(max(remaining, 0.0), 10),
             "weighted_entry_price": weighted_entry_price,
+            "weighted_exit_price": weighted_exit_price,
+            "holding_seconds": (
+                max(0, deal_sort_key(last_exit)[0] - deal_sort_key(opened_deal)[0]) // 1000
+                if status == "complete" and last_exit
+                else None
+            ),
             "partial_exit_count": max(0, len(exits) - 1),
             "reconstruction_status": status,
             "initial_stop_price": None,
@@ -159,6 +176,32 @@ def group_campaigns(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             if not current:
                 return
             closed = all(member.get("closed_sort_key") is not None for member in current)
+            total_entry_volume = sum(float(member.get("entry_volume") or 0.0) for member in current)
+            total_exit_volume = sum(float(member.get("exit_volume") or 0.0) for member in current)
+            weighted_entry_price = (
+                sum(
+                    float(member.get("weighted_entry_price") or 0.0)
+                    * float(member.get("entry_volume") or 0.0)
+                    for member in current
+                )
+                / total_entry_volume
+                if total_entry_volume > VOLUME_EPSILON
+                else None
+            )
+            weighted_exit_price = (
+                sum(
+                    float(member.get("weighted_exit_price") or 0.0)
+                    * float(member.get("exit_volume") or 0.0)
+                    for member in current
+                )
+                / total_exit_volume
+                if closed and total_exit_volume > VOLUME_EPSILON
+                else None
+            )
+            last_closed_key = max(
+                (member.get("closed_sort_key") for member in current if member.get("closed_sort_key")),
+                default=None,
+            )
             campaigns.append(
                 {
                     "account": account,
@@ -169,6 +212,15 @@ def group_campaigns(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "position_count": len(current),
                     "scale_in_count": max(0, len(current) - 1),
                     "partial_exit_count": sum(int(member.get("partial_exit_count") or 0) for member in current),
+                    "entry_volume": round(total_entry_volume, 10),
+                    "exit_volume": round(total_exit_volume, 10),
+                    "weighted_entry_price": weighted_entry_price,
+                    "weighted_exit_price": weighted_exit_price,
+                    "holding_seconds": (
+                        max(0, int(last_closed_key[0] - current[0]["opened_sort_key"][0])) // 1000
+                        if closed and last_closed_key
+                        else None
+                    ),
                     "opened_at_utc": current[0]["opened_at_utc"],
                     "closed_at_utc": max(
                         (str(member.get("closed_at_utc") or "") for member in current),

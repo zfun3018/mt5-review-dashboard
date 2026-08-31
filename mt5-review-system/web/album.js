@@ -223,12 +223,7 @@ function renderCard(trade, fields) {
 function renderReview(text) {
   if (!text) return '<div class="muted-mini">暂无复盘内容</div>';
   const review = String(text);
-  const lineCount = review.split(/\r?\n/).length;
-  const shouldCollapse = review.length > 260 || lineCount > 6;
-  if (!shouldCollapse) {
-    return `<div class="album-review album-review-expanded"><p>${escapeHtml(review)}</p></div>`;
-  }
-  return `<details class="album-review"><summary>查看复盘内容</summary><p>${escapeHtml(review)}</p></details>`;
+  return `<div class="album-review album-review-expanded"><span class="album-review-label">复盘内容</span><p>${escapeHtml(review)}</p></div>`;
 }
 
 function renderTag(tag) {

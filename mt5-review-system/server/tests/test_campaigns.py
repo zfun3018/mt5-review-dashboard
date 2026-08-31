@@ -53,6 +53,8 @@ class CampaignReconstructionTest(unittest.TestCase):
         self.assertEqual(positions[0]["reconstruction_status"], "complete")
         self.assertEqual(positions[0]["partial_exit_count"], 1)
         self.assertAlmostEqual(positions[0]["remaining_volume"], 0.0)
+        self.assertAlmostEqual(positions[0]["weighted_exit_price"], 102.6)
+        self.assertEqual(positions[0]["holding_seconds"], 2)
 
 
 class CampaignRiskTest(unittest.TestCase):
@@ -109,6 +111,21 @@ class CampaignRiskTest(unittest.TestCase):
         self.assertAlmostEqual(result["campaign_r"], 6.0 / 3.5)
         self.assertEqual(result["risk_positions_complete"], 2)
         self.assertEqual(result["risk_positions_total"], 2)
+
+    def test_campaign_summary_exposes_weighted_prices_and_holding_time(self):
+        positions = reconstruct_positions(
+            [
+                deal(1, "A", "in", "buy", 1.0, 100.0, 1000),
+                deal(2, "A", "out", "sell", 1.0, 104.0, 4000),
+                deal(3, "B", "in", "buy", 0.5, 102.0, 2000),
+                deal(4, "B", "out", "sell", 0.5, 106.0, 5000),
+            ]
+        )
+        campaign = group_campaigns(positions)[0]
+
+        self.assertAlmostEqual(campaign["weighted_entry_price"], 100.6666666667)
+        self.assertAlmostEqual(campaign["weighted_exit_price"], 104.6666666667)
+        self.assertEqual(campaign["holding_seconds"], 4)
 
     def test_missing_or_wrong_direction_stop_makes_campaign_r_unavailable(self):
         base = {

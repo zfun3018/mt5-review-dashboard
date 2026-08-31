@@ -34,12 +34,24 @@ test("dashboard exposes the album entry point", () => {
   assert.match(indexHtml, /href="\/album\.html"/);
 });
 
-test("album review text expands when short and collapses only for long content", () => {
+test("album review text stays visible in one scrollable block regardless of length", () => {
   assert.match(albumSource, /function renderReview\(text\)/);
-  assert.match(albumSource, /review\.length > 260 \|\| lineCount > 6/);
   assert.match(albumSource, /album-review-expanded/);
-  assert.match(albumSource, /details class="album-review"/);
-  assert.match(albumStyle, /\.album-review-expanded p\s*\{[\s\S]*max-height:\s*none/);
+  assert.doesNotMatch(albumSource, /details open class="album-review"/);
+  assert.match(albumStyle, /\.album-review p\s*\{[\s\S]*max-height:\s*none/);
+});
+
+test("album desktop cards allocate the screenshot's spare height to review content", () => {
+  assert.match(albumStyle, /\.album-card\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.65fr\) minmax\(360px, 0\.85fr\)/);
+  assert.match(albumStyle, /\.album-meta\s*\{[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column/);
+  assert.match(albumStyle, /\.album-review\s*\{[\s\S]*flex:\s*1 1 180px[\s\S]*min-height:\s*0/);
+});
+
+test("album review content keeps a bounded vertical scrollbar instead of clipping behind actions", () => {
+  assert.match(albumStyle, /\.album-card\s*\{[\s\S]*min-height:\s*0/);
+  assert.match(albumStyle, /\.album-meta\s*\{[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/);
+  assert.match(albumStyle, /\.album-review p\s*\{[\s\S]*overflow-y:\s*scroll/);
+  assert.match(albumStyle, /\.album-review p::-webkit-scrollbar\s*\{[\s\S]*width:\s*10px/);
 });
 
 test("dashboard and album share a top navigation with active page state", () => {

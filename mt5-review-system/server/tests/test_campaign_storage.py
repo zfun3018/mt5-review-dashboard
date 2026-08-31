@@ -107,6 +107,16 @@ class CampaignStorageTest(unittest.TestCase):
 
         first = storage.list_campaigns()
         first_id = first["campaigns"][0]["id"]
+        summary = first["campaigns"][0]["position_summaries"][0]
+        self.assertIn("id", summary)
+        self.assertIn("initial_stop_price", summary)
+        self.assertIn("weighted_exit_price", summary)
+        self.assertIn("holding_seconds", summary)
+        self.assertAlmostEqual(first["campaigns"][0]["weighted_entry_price"], 100.3333333333)
+        self.assertAlmostEqual(first["campaigns"][0]["weighted_exit_price"], 103.8)
+        self.assertEqual(first["campaigns"][0]["entry_volume"], 1.5)
+        self.assertEqual(first["campaigns"][0]["exit_volume"], 1.5)
+        self.assertEqual(summary["position_pnl"], 3.2)
         storage.init_db(seed=False)
         second = storage.list_campaigns()
 
@@ -295,6 +305,59 @@ class CampaignStorageTest(unittest.TestCase):
         storage.seed_demo_data()
 
         self.assertEqual(storage.list_campaigns()["total"], len(storage.list_trades()))
+
+    def test_campaign_reads_rebuild_missing_deal_events_before_serializing_positions(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            2.0,
+        )
+        with storage.db() as conn:
+            conn.execute("DELETE FROM deal_events")
+
+        campaign = storage.list_campaigns()["campaigns"][0]
+        self.assertEqual(campaign["position_count"], 1)
+        self.assertEqual(len(campaign["position_summaries"]), 1)
+        self.assertEqual(campaign["position_summaries"][0]["weighted_entry_price"], 100.0)
+        self.assertEqual(campaign["position_summaries"][0]["weighted_exit_price"], 102.0)
+
+    def test_position_summary_includes_source_trade_review_screenshot_and_custom_fields(self):
+        field = storage.create_custom_field({"name": "执行质量", "field_type": "text"})
+        storage.SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        (storage.SCREENSHOT_DIR / "position-source.png").write_bytes(b"png")
+        self._trade(
+            "P1-A",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            2.0,
+            review_text="子订单复盘",
+        )
+        with storage.db() as conn:
+            conn.execute(
+                "UPDATE trades SET screenshot_path = ? WHERE id = ?",
+                ("screenshots/position-source.png", "P1-A"),
+            )
+        storage.update_trade_custom_value("P1-A", field["id"], {"value": "按计划"})
+
+        campaign = storage.list_campaigns()["campaigns"][0]
+        source = campaign["position_summaries"][0]["source_trade"]
+
+        self.assertEqual(source["id"], "P1-A")
+        self.assertEqual(campaign["position_summaries"][0]["review_text"], "子订单复盘")
+        self.assertEqual(campaign["position_summaries"][0]["custom_fields"][str(field["id"])], "按计划")
+        self.assertEqual(campaign["position_summaries"][0]["screenshot_url"], "/media/screenshots/position-source.png")
+        self.assertEqual(source["review_text"], "子订单复盘")
+        self.assertEqual(source["custom_fields"][str(field["id"])], "按计划")
+        self.assertEqual(source["screenshot_url"], "/media/screenshots/position-source.png")
 
     def test_v4_migration_creates_one_local_sqlite_snapshot(self):
         with storage.db() as conn:

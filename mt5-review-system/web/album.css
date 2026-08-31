@@ -239,8 +239,9 @@
 
 .album-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(0, 1.65fr) minmax(360px, 0.85fr);
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -303,10 +304,12 @@
 }
 
 .album-meta {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 13px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   padding: 17px;
   border-left: 1px solid var(--line);
 }
@@ -403,31 +406,52 @@
 }
 
 .album-review {
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   border-top: 1px solid var(--line-soft);
   padding-top: 10px;
 }
 
-.album-review summary {
+.album-review-label {
   color: var(--album-accent);
-  cursor: pointer;
   font-size: 11px;
   font-weight: 700;
 }
 
 .album-review p {
-  max-height: 8.4em;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   margin: 7px 0 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-color: rgba(43, 212, 255, 0.75) rgba(37, 50, 47, 0.72);
+  scrollbar-width: thin;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.65;
   white-space: pre-wrap;
 }
 
+.album-review p::-webkit-scrollbar {
+  width: 10px;
+}
+
+.album-review p::-webkit-scrollbar-track {
+  background: rgba(37, 50, 47, 0.72);
+}
+
+.album-review p::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(37, 50, 47, 0.72);
+  border-radius: 999px;
+  background: rgba(43, 212, 255, 0.75);
+}
+
 .album-review-expanded p {
-  max-height: none;
   margin-top: 7px;
-  overflow: visible;
 }
 
 .album-card-actions {

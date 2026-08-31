@@ -83,7 +83,7 @@ test("analysis workspace exposes cumulative return, shared filters, and evaluati
   assert.match(indexSource, /id="timePreset"/);
   assert.doesNotMatch(indexSource, /id="equityPreset"/);
   assert.match(indexSource, /id="systemEvaluationSummary"/);
-  assert.match(indexSource, /Z 分数说明/);
+  assert.doesNotMatch(indexSource, /交易结果连续性说明（Z 分数）/);
   assert.match(appSource, /cumulative_return/);
   assert.match(appSource, /return_rate/);
   assert.match(appSource, /sampleCurvePoints\(sourcePoints, 140\)/);

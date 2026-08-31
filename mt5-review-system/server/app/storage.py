@@ -2535,6 +2535,10 @@ def rebuild_campaign_models() -> None:
 
 
 def _campaign_records_conn(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    # The service can stay running while legacy/native deal files are imported.
+    # Rebuild before reading so persisted Campaign rows cannot outlive their
+    # Position membership or show an empty Position summary in the UI.
+    _rebuild_campaign_models_conn(conn)
     campaigns = {
         row["id"]: dict(row)
         for row in conn.execute(
@@ -2583,6 +2587,28 @@ def _campaign_records_conn(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     ):
         source_ids.setdefault(row["campaign_id"], []).append(row["trade_id"])
 
+    # Keep the Position summary self-contained for the order-flow table. A
+    # Position is reconstructed from deals, while its review fields live on
+    # the originating trade row, so attach the active source trade payload
+    # before serializing Campaigns. This avoids empty child rows when the
+    # source trade is not the Campaign's representative trade.
+    source_rows = [
+        dict(row)
+        for row in conn.execute(
+            "SELECT * FROM trades WHERE deleted_at IS NULL ORDER BY close_time_utc, id"
+        )
+    ]
+    source_by_position: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in source_rows:
+        key = (
+            str(row.get("account") or "MT5-LOCAL"),
+            str(row.get("position_id") or row.get("id") or ""),
+        )
+        source_by_position.setdefault(key, []).append(row)
+    source_custom_values = _custom_values_for_trade_ids(
+        conn, [str(row["id"]) for row in source_rows]
+    )
+
     records = []
     for campaign_id, campaign in campaigns.items():
         members = [
@@ -2590,7 +2616,53 @@ def _campaign_records_conn(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             for position_id in memberships.get(campaign_id, [])
             if position_id in position_domains
         ]
+        for member in members:
+            related_sources = source_by_position.get(
+                (str(member.get("account") or "MT5-LOCAL"), str(member.get("position_id") or "")),
+                [],
+            )
+            serialized_sources = [
+                _serialize_trade(row, source_custom_values)
+                for row in related_sources
+            ]
+            member["source_trades"] = serialized_sources
+            member["source_trade"] = serialized_sources[-1] if serialized_sources else None
+            if serialized_sources:
+                representative = serialized_sources[-1]
+                # Mirror the normal trade fields on the Position payload so
+                # clients can render child rows without a second lookup.
+                for key in ("review_text", "custom_fields", "screenshot_url", "trade_type", "strategy"):
+                    member[key] = representative.get(key)
         risk = calculate_campaign_r(campaign, members)
+        total_entry_volume = sum(float(member.get("entry_volume") or 0.0) for member in members)
+        total_exit_volume = sum(float(member.get("exit_volume") or 0.0) for member in members)
+        weighted_entry_price = (
+            sum(
+                float(member.get("weighted_entry_price") or 0.0)
+                * float(member.get("entry_volume") or 0.0)
+                for member in members
+            )
+            / total_entry_volume
+            if total_entry_volume > 0
+            else None
+        )
+        weighted_exit_price = (
+            sum(
+                float(member.get("weighted_exit_price") or 0.0)
+                * float(member.get("exit_volume") or 0.0)
+                for member in members
+            )
+            / total_exit_volume
+            if total_exit_volume > 0
+            else None
+        )
+        opened_sort = [member.get("opened_sort_key") for member in members if member.get("opened_sort_key")]
+        closed_sort = [member.get("closed_sort_key") for member in members if member.get("closed_sort_key")]
+        holding_seconds = (
+            max(0, max(item[0] for item in closed_sort) - min(item[0] for item in opened_sort)) // 1000
+            if opened_sort and len(closed_sort) == len(members)
+            else None
+        )
         record = {
             **campaign,
             **risk,
@@ -2603,6 +2675,11 @@ def _campaign_records_conn(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             "display_order_no": campaign_id[:8],
             "campaign_total_pnl": float(campaign.get("net_pnl") or 0.0),
             "net_pnl": float(campaign.get("net_pnl") or 0.0),
+            "entry_volume": round(total_entry_volume, 10),
+            "exit_volume": round(total_exit_volume, 10),
+            "weighted_entry_price": weighted_entry_price,
+            "weighted_exit_price": weighted_exit_price,
+            "holding_seconds": holding_seconds,
             "open_time_utc": campaign.get("opened_at_utc"),
             "close_time_utc": campaign.get("closed_at_utc"),
         }
@@ -2614,22 +2691,62 @@ def _serialize_position_for_campaign(position: dict[str, Any]) -> dict[str, Any]
     risk = calculate_position_risk(position)
     raw_id = str(position.get("position_id") or "")
     display_id = f"••••{raw_id[-4:]}" if len(raw_id) > 4 else raw_id
+    position_pnl = round(
+        sum(float(deal.get("profit") or 0.0) for deal in position.get("exit_deals") or []),
+        2,
+    )
     return {
         **position,
         **risk,
         "display_position_id": display_id,
+        "position_pnl": position_pnl,
     }
+
+
+def _serialize_position_summary_for_campaign(position: dict[str, Any]) -> dict[str, Any]:
+    serialized = _serialize_position_for_campaign(position)
+    keys = (
+        "id",
+        "position_id",
+        "display_position_id",
+        "side",
+        "entry_volume",
+        "exit_volume",
+        "weighted_entry_price",
+        "weighted_exit_price",
+        "holding_seconds",
+        "initial_stop_price",
+        "partial_exit_count",
+        "reconstruction_status",
+        "planned_risk",
+        "result",
+        "position_pnl",
+        "position_r",
+        "risk_status",
+        "risk_missing_reason",
+        "source_trade",
+        "review_text",
+        "custom_fields",
+        "screenshot_url",
+        "trade_type",
+        "strategy",
+    )
+    return {key: serialized.get(key) for key in keys}
 
 
 def _serialize_campaign_record(record: dict[str, Any], *, include_positions: bool) -> dict[str, Any]:
     serialized = {key: value for key, value in record.items() if key != "positions"}
+    serialized["position_summaries"] = [
+        _serialize_position_summary_for_campaign(position)
+        for position in record.get("positions", [])
+    ]
     if record.get("opened_at_utc"):
         serialized["open_time_bj"] = to_beijing(record["opened_at_utc"]).isoformat()
     if record.get("closed_at_utc"):
         serialized["close_time_bj"] = to_beijing(record["closed_at_utc"]).isoformat()
     serialized["risk_missing_label"] = {
         "complete": "",
-        "missing": "待补初始止损",
+        "missing": "R 缺失",
         "invalid": "止损方向无效",
         "incomplete": "成交数据不完整",
     }.get(str(record.get("risk_status")), "R 数据不完整")
