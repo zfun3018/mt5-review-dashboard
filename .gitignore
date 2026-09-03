@@ -28,6 +28,7 @@ __pycache__/
 venv/
 .idea/
 .vscode/
+.worktrees/
 
 # MT5 generated binaries and compiler output
 mt5-review-system/mt5-ea/*.ex5
