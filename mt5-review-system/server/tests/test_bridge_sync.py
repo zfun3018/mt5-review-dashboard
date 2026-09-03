@@ -18,6 +18,7 @@ class BridgeSyncTest(unittest.TestCase):
             "RAW_EVENTS_DIR": storage.RAW_EVENTS_DIR,
             "BACKUP_DIR": storage.BACKUP_DIR,
             "DB_PATH": storage.DB_PATH,
+            "CONFIG_FILE": storage.CONFIG_FILE,
         }
         storage.PROJECT_ROOT = self.root
         storage.DATA_DIR = self.root / "data"
@@ -25,6 +26,7 @@ class BridgeSyncTest(unittest.TestCase):
         storage.RAW_EVENTS_DIR = storage.DATA_DIR / "raw-events"
         storage.BACKUP_DIR = self.root / "backups"
         storage.DB_PATH = storage.DATA_DIR / "journal.sqlite"
+        storage.CONFIG_FILE = self.root / "config.local.json"
         storage.init_db(seed=False)
 
     def tearDown(self):

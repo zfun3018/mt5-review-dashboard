@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>复盘仪表盘 · MT5 复盘</title>
+    <link rel="stylesheet" href="../shared/css/tokens.css" />
+    <link rel="stylesheet" href="../shared/css/base.css" />
+    <link rel="stylesheet" href="../shared/css/shell.css" />
+    <link rel="stylesheet" href="../shared/css/components.css" />
+    <link rel="stylesheet" href="./dashboard.css" />
+  </head>
+  <body>
+    <div data-app-shell>
+      <section id="analysisRegion" class="region-anchor" aria-live="polite"></section>
+
+      <section id="marketClock" class="market-clock" aria-label="全球交易时段"></section>
+
+      <section class="filter-bar" aria-label="分析范围">
+        <div class="filter-bar__group">
+          <label for="timePreset">时间范围</label>
+          <select id="timePreset">
+            <option value="all">全部时间</option>
+            <option value="today">今天</option>
+            <option value="7d">近 7 天</option>
+            <option value="30d">近 30 天</option>
+            <option value="custom">自定义</option>
+          </select>
+        </div>
+        <div class="filter-bar__group">
+          <label for="startDateFilter">开始日期</label>
+          <input id="startDateFilter" type="date" title="开始日期" />
+        </div>
+        <div class="filter-bar__group">
+          <label for="endDateFilter">结束日期</label>
+          <input id="endDateFilter" type="date" title="结束日期" />
+        </div>
+      </section>
+
+      <section class="panel r-metric-panel" aria-label="R 指标概览">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">R SUMMARY</p>
+            <h2>R 指标概览</h2>
+          </div>
+        </div>
+        <div id="rMetricSummary" class="r-metric-grid"></div>
+      </section>
+
+      <div class="dashboard-grid">
+        <article class="panel equity-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">CUMULATIVE RETURN</p>
+              <h2>收益累计曲线</h2>
+            </div>
+            <div class="panel-actions">
+              <div class="chart-legend" aria-label="图表图例">
+                <span class="chart-key return-key">回报</span>
+                <span class="chart-key rate-key">收益率</span>
+              </div>
+              <span id="equityDelta" class="status-pill"></span>
+            </div>
+          </div>
+          <div id="equityChart" class="chart-frame"></div>
+        </article>
+
+        <article class="panel calendar-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">MONTHLY P/L</p>
+              <h2 id="calendarTitle">月度盈亏日历</h2>
+            </div>
+            <div class="month-nav">
+              <button id="prevMonth" class="app-icon-button" type="button" title="上月" aria-label="上月">&lt;</button>
+              <button id="nextMonth" class="app-icon-button" type="button" title="下月" aria-label="下月">&gt;</button>
+            </div>
+          </div>
+          <div id="calendarStats" class="calendar-stats"></div>
+          <div id="calendarGrid" class="calendar-grid"></div>
+        </article>
+
+        <article class="panel heatmap-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">WEEK x HOUR</p>
+              <h2>周期共振热力图</h2>
+            </div>
+            <div class="legend">
+              <span class="loss"></span><span>亏损</span>
+              <span class="profit"></span><span>盈利</span>
+            </div>
+          </div>
+          <div id="heatmap" class="heatmap"></div>
+        </article>
+
+        <article class="panel session-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">BEIJING TIME</p>
+              <h2>盘面胜率</h2>
+            </div>
+          </div>
+          <div id="sessions" class="session-list"></div>
+        </article>
+      </div>
+
+      <div class="evaluation-grid">
+        <article class="panel evaluation-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">DAILY SYSTEM EVALUATION</p>
+              <h2>交易系统评估</h2>
+            </div>
+          </div>
+          <div id="systemEvaluationSummary" class="system-summary-grid"></div>
+          <div class="table-wrap evaluation-table-wrap">
+            <table class="evaluation-table">
+              <thead>
+                <tr>
+                  <th>日期</th><th>总盈亏</th><th>交易笔数</th><th>总盈亏比</th><th>净盈亏比</th>
+                  <th>总胜率</th><th>净胜率</th><th>打平占比</th><th>平均数学期望 ER</th><th>收益稳定度 SQN</th>
+                </tr>
+              </thead>
+              <tbody id="systemEvaluationRows"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel evaluation-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">TRADE MODE EVALUATION</p>
+              <h2>交易模式评估</h2>
+            </div>
+          </div>
+          <div id="modeEvaluation" class="mode-evaluation"></div>
+        </article>
+      </div>
+    </div>
+
+    <div id="calendarTooltip" class="calendar-tooltip"></div>
+    <div
+      id="metricExplanationPopover"
+      class="metric-explanation-popover"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="metricExplanationTitle"
+      hidden
+    >
+      <div class="metric-explanation-head">
+        <strong id="metricExplanationTitle"></strong>
+        <button id="metricExplanationClose" class="app-icon-button" type="button" aria-label="关闭指标说明" title="关闭">×</button>
+      </div>
+      <div id="metricExplanationBody" class="metric-explanation-body"></div>
+    </div>
+
+    <script src="../vendor/lucide.min.js"></script>
+    <script src="../r-multiple.js"></script>
+    <script type="module">
+      import { createDashboardController } from "./dashboard.mjs";
+      import { requestJson } from "../shared/js/api.mjs";
+
+      const controller = createDashboardController({
+        api: { requestJson },
+        view: document,
+        location: window.location,
+        history: window.history,
+      });
+      controller.init();
+      controller.load();
+      window.addEventListener("beforeunload", () => controller.dispose());
+    </script>
+  </body>
+</html>

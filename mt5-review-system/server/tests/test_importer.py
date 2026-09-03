@@ -2,8 +2,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app import storage
+from app.data.campaign_repository import CampaignRepository
 from app.importer import import_bridge_dir
 
 
@@ -161,6 +163,43 @@ class ImporterTest(unittest.TestCase):
         self.assertEqual(result["screenshots_copied"], 1)
         self.assertTrue((storage.DATA_DIR / payload["screenshot_path"]).exists())
 
+    def test_duplicate_domain_event_import_rebuilds_once_after_replay(self):
+        bridge_dir = self.root / "bridge-duplicate-domain"
+        bridge_dir.mkdir()
+        payload = {
+            "type": "deal",
+            "account": "ACC",
+            "deal_ticket": "DUPLICATE-DEAL",
+            "position_id": "DUPLICATE-POSITION",
+            "order_ticket": "DUPLICATE-ORDER",
+            "entry_kind": "in",
+            "deal_type": "buy",
+            "symbol": "XAUUSD",
+            "volume": 1.0,
+            "price": 100.0,
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "time_msc": 1786678800000,
+            "profit": 0.0,
+        }
+        event_line = json.dumps(payload)
+        storage.ingest_mt5_event(payload, raw_event=event_line)
+        (bridge_dir / "events_duplicate.jsonl").write_text(
+            event_line + "\n", encoding="utf-8"
+        )
+        original = CampaignRepository.rebuild
+        with patch.object(
+            CampaignRepository,
+            "rebuild",
+            autospec=True,
+            side_effect=lambda repository, affected_accounts=None, conn=None: original(
+                repository, affected_accounts, conn=conn
+            ),
+        ) as rebuild:
+            result = import_bridge_dir(bridge_dir)
+
+        self.assertEqual(result["duplicates"], 1)
+        rebuild.assert_called_once()
+
     def test_import_repairs_screenshot_that_arrives_after_cursor_advances(self):
         bridge_dir = self.root / "bridge-late-file"
         screenshot_dir = bridge_dir / "screenshots"
@@ -275,6 +314,139 @@ class ImporterTest(unittest.TestCase):
 
         self.assertEqual(before["positions"][0]["reconstruction_status"], "incomplete")
         self.assertEqual(after["positions"][0]["reconstruction_status"], "complete")
+
+    def test_multi_event_import_rebuilds_campaigns_once(self):
+        bridge_dir = self.root / "bridge-batch"
+        bridge_dir.mkdir()
+        entry = {
+            "type": "deal",
+            "account": "ACC",
+            "deal_ticket": "BATCH-ENTRY",
+            "position_id": "BATCH-POSITION",
+            "order_ticket": "BATCH-ORDER-1",
+            "entry_kind": "in",
+            "deal_type": "buy",
+            "symbol": "XAUUSD",
+            "volume": 1.0,
+            "price": 100.0,
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "time_msc": 1786678800000,
+            "profit": 0.0,
+        }
+        exit_deal = {
+            **entry,
+            "deal_ticket": "BATCH-EXIT",
+            "order_ticket": "BATCH-ORDER-2",
+            "entry_kind": "out",
+            "deal_type": "sell",
+            "price": 104.0,
+            "time_utc": "2026-08-14T01:30:00+00:00",
+            "time_msc": 1786680600000,
+            "profit": 4.0,
+        }
+        (bridge_dir / "events_batch.jsonl").write_text(
+            "\n".join(json.dumps(item) for item in (entry, exit_deal)) + "\n",
+            encoding="utf-8",
+        )
+        original = CampaignRepository.rebuild
+        with patch.object(
+            CampaignRepository,
+            "rebuild",
+            autospec=True,
+            side_effect=lambda repository, affected_accounts=None, conn=None: original(
+                repository, affected_accounts, conn=conn
+            ),
+        ) as rebuild:
+            result = import_bridge_dir(bridge_dir)
+
+        self.assertEqual(result["events"], 2)
+        rebuild.assert_called_once()
+        self.assertEqual(storage.list_campaigns()["campaigns"][0]["status"], "closed")
+
+    def test_equity_only_import_does_not_rebuild_campaigns(self):
+        bridge_dir = self.root / "bridge-equity"
+        bridge_dir.mkdir()
+        payload = {
+            "type": "equity_snapshot",
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "balance": 1000.0,
+            "equity": 1001.0,
+        }
+        (bridge_dir / "events_equity.jsonl").write_text(
+            json.dumps(payload) + "\n", encoding="utf-8"
+        )
+
+        with patch.object(CampaignRepository, "rebuild", autospec=True) as rebuild:
+            result = import_bridge_dir(bridge_dir)
+
+        self.assertEqual(result["events"], 1)
+        rebuild.assert_not_called()
+
+    def test_direct_deal_ingestion_rebuilds_immediately(self):
+        payload = {
+            "type": "deal",
+            "account": "ACC",
+            "deal_ticket": "DIRECT-ENTRY",
+            "position_id": "DIRECT-POSITION",
+            "order_ticket": "DIRECT-ORDER",
+            "entry_kind": "in",
+            "deal_type": "buy",
+            "symbol": "XAUUSD",
+            "volume": 1.0,
+            "price": 100.0,
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "time_msc": 1786678800000,
+            "profit": 0.0,
+        }
+        original = CampaignRepository.rebuild_in_transaction
+        with patch.object(
+            CampaignRepository,
+            "rebuild_in_transaction",
+            autospec=True,
+            side_effect=lambda repository, conn, affected_accounts=None: original(
+                repository, conn, affected_accounts
+            ),
+        ) as rebuild:
+            storage.ingest_mt5_event(payload)
+
+        rebuild.assert_called_once()
+
+    def test_direct_ingestion_rolls_back_event_when_rebuild_fails(self):
+        payload = {
+            "type": "deal",
+            "account": "ACC",
+            "deal_ticket": "ROLLBACK-DEAL",
+            "position_id": "ROLLBACK-POSITION",
+            "order_ticket": "ROLLBACK-ORDER",
+            "entry_kind": "in",
+            "deal_type": "buy",
+            "symbol": "XAUUSD",
+            "volume": 1.0,
+            "price": 100.0,
+            "time_utc": "2026-08-14T01:00:00+00:00",
+            "time_msc": 1786678800000,
+            "profit": 0.0,
+        }
+
+        with patch.object(
+            CampaignRepository,
+            "rebuild",
+            autospec=True,
+            side_effect=RuntimeError("injected rebuild failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected rebuild failure"):
+                storage.ingest_mt5_event(payload)
+
+        with storage.db() as conn:
+            raw_count = conn.execute(
+                "SELECT COUNT(*) AS value FROM raw_events"
+            ).fetchone()["value"]
+            deal_count = conn.execute(
+                "SELECT COUNT(*) AS value FROM deal_events WHERE deal_ticket = ?",
+                (payload["deal_ticket"],),
+            ).fetchone()["value"]
+        self.assertEqual(raw_count, 0)
+        self.assertEqual(deal_count, 0)
 
 
 if __name__ == "__main__":

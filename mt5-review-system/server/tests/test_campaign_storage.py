@@ -1,34 +1,12 @@
-import tempfile
 import unittest
-from pathlib import Path
+from unittest.mock import patch
 
 from app import storage
+from app.data.campaign_repository import CAMPAIGN_MODEL_REVISION, CampaignRepository
+from tests.support import TemporaryStorageCase, insert_trade
 
 
-class CampaignStorageTest(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.originals = {
-            "PROJECT_ROOT": storage.PROJECT_ROOT,
-            "DATA_DIR": storage.DATA_DIR,
-            "SCREENSHOT_DIR": storage.SCREENSHOT_DIR,
-            "RAW_EVENTS_DIR": storage.RAW_EVENTS_DIR,
-            "BACKUP_DIR": storage.BACKUP_DIR,
-            "DB_PATH": storage.DB_PATH,
-        }
-        storage.PROJECT_ROOT = self.root
-        storage.DATA_DIR = self.root / "data"
-        storage.SCREENSHOT_DIR = storage.DATA_DIR / "screenshots"
-        storage.RAW_EVENTS_DIR = storage.DATA_DIR / "raw-events"
-        storage.BACKUP_DIR = self.root / "backups"
-        storage.DB_PATH = storage.DATA_DIR / "journal.sqlite"
-        storage.init_db(seed=False)
-
-    def tearDown(self):
-        for name, value in self.originals.items():
-            setattr(storage, name, value)
-        self.tmp.cleanup()
+class CampaignStorageTest(TemporaryStorageCase):
 
     def _trade(
         self,
@@ -44,30 +22,17 @@ class CampaignStorageTest(unittest.TestCase):
         review_text="",
         deleted=False,
     ):
-        storage.upsert_trade(
-            {
-                "id": trade_id,
-                "account": "ACC",
-                "order_no": trade_id,
-                "position_id": position_id,
-                "order_ticket": f"O-{trade_id}",
-                "deal_ticket": f"D-{trade_id}",
-                "symbol": "XAUUSD",
-                "side": "long",
-                "lots": lots,
-                "open_time_utc": open_time,
-                "close_time_utc": close_time,
-                "entry_price": entry_price,
-                "exit_price": exit_price,
-                "pnl": pnl,
-                "commission": 0.0,
-                "swap": 0.0,
-                "fee": 0.0,
-                "screenshot_path": "",
-                "review_text": review_text,
-                "trade_type": "follow",
-                "strategy": "breakout",
-            }
+        insert_trade(
+            storage,
+            id=trade_id,
+            position_id=position_id,
+            lots=lots,
+            open_time_utc=open_time,
+            close_time_utc=close_time,
+            entry_price=entry_price,
+            exit_price=exit_price,
+            pnl=pnl,
+            review_text=review_text,
         )
         if deleted:
             storage.delete_trade(trade_id)
@@ -301,12 +266,35 @@ class CampaignStorageTest(unittest.TestCase):
         self.assertEqual(restored["total"], 1)
         self.assertEqual(restored["campaigns"][0]["id"], campaign_id)
 
+    def test_delete_rolls_back_when_campaign_rebuild_fails(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            104.0,
+            4.0,
+        )
+
+        with patch.object(
+            CampaignRepository,
+            "rebuild",
+            autospec=True,
+            side_effect=RuntimeError("injected rebuild failure"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected rebuild failure"):
+                storage.delete_trade("P1")
+
+        self.assertIsNotNone(storage.get_trade("P1"))
+
     def test_demo_seed_builds_campaigns_for_first_launch(self):
         storage.seed_demo_data()
 
         self.assertEqual(storage.list_campaigns()["total"], len(storage.list_trades()))
 
-    def test_campaign_reads_rebuild_missing_deal_events_before_serializing_positions(self):
+    def test_stale_model_revision_is_repaired_once_at_startup(self):
         self._trade(
             "P1",
             "P1",
@@ -319,12 +307,118 @@ class CampaignStorageTest(unittest.TestCase):
         )
         with storage.db() as conn:
             conn.execute("DELETE FROM deal_events")
+            conn.execute("DELETE FROM positions")
+            conn.execute(
+                "UPDATE schema_meta SET value = 'stale' WHERE key = 'model_revision'"
+            )
 
+        original = CampaignRepository.rebuild_in_transaction
+        with patch.object(
+            CampaignRepository,
+            "rebuild_in_transaction",
+            autospec=True,
+            side_effect=lambda repository, conn, affected_accounts=None: original(
+                repository, conn, affected_accounts
+            ),
+        ) as rebuild:
+            storage.init_db(seed=False)
+
+        rebuild.assert_called_once()
         campaign = storage.list_campaigns()["campaigns"][0]
         self.assertEqual(campaign["position_count"], 1)
         self.assertEqual(len(campaign["position_summaries"]), 1)
         self.assertEqual(campaign["position_summaries"][0]["weighted_entry_price"], 100.0)
         self.assertEqual(campaign["position_summaries"][0]["weighted_exit_price"], 102.0)
+        with storage.db() as conn:
+            revision = conn.execute(
+                "SELECT value FROM schema_meta WHERE key = 'model_revision'"
+            ).fetchone()["value"]
+        self.assertEqual(revision, CAMPAIGN_MODEL_REVISION)
+
+        with patch.object(CampaignRepository, "rebuild_in_transaction", autospec=True) as rebuild:
+            storage.init_db(seed=False)
+        rebuild.assert_not_called()
+
+    def test_initial_stop_update_recalculates_r_without_topology_rebuild(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            2.0,
+        )
+        detail = storage.get_campaign(storage.list_campaigns()["campaigns"][0]["id"])
+
+        with patch.object(CampaignRepository, "rebuild", autospec=True) as rebuild:
+            result = storage.update_position_initial_stop(detail["positions"][0]["id"], 98.0)
+
+        rebuild.assert_not_called()
+        self.assertEqual(result["campaign"]["campaign_r"], 1.0)
+
+    def test_initial_stop_reads_only_the_affected_campaign(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            2.0,
+        )
+        self._trade(
+            "P2",
+            "P2",
+            1.0,
+            "2026-08-01T01:00:00+00:00",
+            "2026-08-01T01:10:00+00:00",
+            110.0,
+            112.0,
+            2.0,
+        )
+        first = storage.list_campaigns()["campaigns"][0]
+        detail = storage.get_campaign(first["id"])
+        position_id = detail["positions"][0]["id"]
+        original_get = CampaignRepository.get
+        with patch.object(
+            storage,
+            "_campaign_records_conn",
+            side_effect=AssertionError("unscoped Campaign read"),
+        ), patch.object(
+            CampaignRepository,
+            "get",
+            autospec=True,
+            side_effect=lambda repository, campaign_id, **kwargs: original_get(
+                repository, campaign_id, **kwargs
+            ),
+        ) as get, patch.object(CampaignRepository, "rebuild", autospec=True) as rebuild:
+            result = storage.update_position_initial_stop(position_id, 98.0)
+
+        self.assertGreaterEqual(get.call_count, 1)
+        self.assertTrue(all(call.args[1] == first["id"] for call in get.call_args_list))
+        self.assertEqual(result["campaign"]["id"], first["id"])
+        rebuild.assert_not_called()
+
+    def test_trade_review_write_updates_campaign_detail_without_read_side_rebuild(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            2.0,
+        )
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
+
+        storage.update_trade_review("P1", {"review_text": "write-side synchronized"})
+        detail = storage.get_campaign(campaign_id)
+
+        self.assertIn("write-side synchronized", detail["review_text"])
 
     def test_position_summary_includes_source_trade_review_screenshot_and_custom_fields(self):
         field = storage.create_custom_field({"name": "执行质量", "field_type": "text"})

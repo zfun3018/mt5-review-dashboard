@@ -8,6 +8,8 @@ MT5ReviewBridge-EA备份/
 
 # Runtime data and generated artefacts in any project subdirectory
 **/data/
+!mt5-review-system/server/app/data/
+!mt5-review-system/server/app/data/*.py
 **/backups/
 **/raw-events/
 **/screenshots/
@@ -28,6 +30,7 @@ __pycache__/
 venv/
 .idea/
 .vscode/
+.worktrees/
 
 # MT5 generated binaries and compiler output
 mt5-review-system/mt5-ea/*.ex5

@@ -58,6 +58,7 @@ class ScreenshotManagementTest(unittest.TestCase):
 
     def test_replace_screenshot_keeps_only_new_file_and_updates_path_references(self):
         encoded = base64.b64encode(b"new-image").decode("ascii")
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
 
         trade = storage.replace_trade_screenshot(
             "T-1",
@@ -74,6 +75,8 @@ class ScreenshotManagementTest(unittest.TestCase):
             row = conn.execute("SELECT screenshot_path, raw_json FROM trades WHERE id = 'T-1'").fetchone()
         self.assertEqual(row["screenshot_path"], new_path)
         self.assertEqual(json.loads(row["raw_json"])["screenshot_path"], new_path)
+        campaign = storage.get_campaign(campaign_id)
+        self.assertEqual(campaign["screenshot_path"], new_path)
 
     def test_delete_screenshot_clears_path_and_removes_file(self):
         storage.delete_trade_screenshot("T-1")

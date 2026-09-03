@@ -1,0 +1,316 @@
+/* Settings workspace — tabbed configuration, classification & field schema
+   editing, scratch threshold, local status, and backups. Shared colors and
+   controls come from tokens.css / components.css; only settings-specific
+   layout lives here. */
+
+.settings-shell {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.settings-tab {
+  min-height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  color: var(--color-text);
+}
+
+.settings-tab.is-active {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.settings-panel {
+  padding: var(--space-6);
+}
+
+.settings-panel[hidden] {
+  display: none;
+}
+
+.settings-section {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings-section + .settings-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.settings-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.settings-section-head h2 {
+  margin: 0;
+  font-size: var(--font-size-title);
+}
+
+.settings-hint {
+  max-width: 640px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Classification manager */
+
+.classification-manager {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.classification-group {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.classification-group h4 {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.classification-option-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.classification-option-row {
+  display: grid;
+  grid-template-columns: var(--space-4) 1fr auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.classification-option-row.archived {
+  opacity: 0.55;
+}
+
+.classification-color {
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: 50%;
+  background: var(--option-color, var(--color-accent));
+}
+
+.classification-state {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.classification-add-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.classification-add-row input {
+  flex: 1;
+  max-width: 360px;
+}
+
+/* Custom-field schema */
+
+.settings-field-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.settings-field-create input {
+  flex: 1;
+  max-width: 320px;
+}
+
+.custom-field-schema {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.custom-field-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.custom-field-main input[type="text"] {
+  flex: 1;
+  min-width: 160px;
+}
+
+.option-editor {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+}
+
+.option-editor.hidden {
+  display: none;
+}
+
+.option-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.option-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.option-row input[type="color"] {
+  width: var(--control-height);
+  padding: 2px;
+}
+
+/* Scratch threshold */
+
+.settings-threshold-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-threshold-row label {
+  color: var(--color-muted);
+}
+
+.settings-threshold-row input {
+  width: 120px;
+}
+
+/* Status */
+
+.settings-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2);
+}
+
+.status-item {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.status-item span {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.status-item strong {
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-sm);
+}
+
+/* Backups */
+
+.settings-backups {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.backup-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.backup-item__name {
+  overflow-wrap: anywhere;
+}
+
+.backup-item__meta {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.detail-empty {
+  padding: var(--space-4);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .settings-panel {
+    padding: var(--space-4);
+  }
+
+  .classification-option-row {
+    grid-template-columns: var(--space-4) 1fr auto;
+  }
+
+  .classification-option-row .classification-state {
+    display: none;
+  }
+
+  .settings-threshold-row {
+    align-items: stretch;
+  }
+
+  .settings-threshold-row input {
+    flex: 1;
+    width: auto;
+  }
+}

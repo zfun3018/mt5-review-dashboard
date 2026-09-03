@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>复盘画册 · MT5 复盘</title>
+    <link rel="stylesheet" href="../shared/css/tokens.css" />
+    <link rel="stylesheet" href="../shared/css/base.css" />
+    <link rel="stylesheet" href="../shared/css/shell.css" />
+    <link rel="stylesheet" href="../shared/css/components.css" />
+    <link rel="stylesheet" href="./album.css" />
+  </head>
+  <body>
+    <div data-app-shell>
+      <section class="panel album-toolbar" aria-label="画册筛选">
+        <div class="album-toolbar-head">
+          <div>
+            <p class="eyebrow">CURATE THE EVIDENCE</p>
+            <h2>筛选画册</h2>
+          </div>
+          <div class="album-toolbar-actions">
+            <span id="albumFilterNote" class="album-filter-note">标签组内任选，跨组同时满足</span>
+            <button id="albumClear" class="button" type="button">清空条件</button>
+            <button id="albumRefresh" class="button-primary" type="button">刷新画册</button>
+          </div>
+        </div>
+        <div class="album-basic-filters">
+          <label>
+            <span>品种</span>
+            <select id="albumSymbol">
+              <option value="">全部品种</option>
+            </select>
+          </label>
+          <label>
+            <span>开始日期</span>
+            <input id="albumStart" type="date" />
+          </label>
+          <label>
+            <span>结束日期</span>
+            <input id="albumEnd" type="date" />
+          </label>
+          <label>
+            <span>时间顺序</span>
+            <select id="albumSort">
+              <option value="desc">最新优先</option>
+              <option value="asc">最早优先</option>
+            </select>
+          </label>
+        </div>
+        <div id="albumTagGroups" class="album-tag-groups" aria-label="标签筛选"></div>
+      </section>
+
+      <section class="album-summary-row" aria-live="polite">
+        <div>
+          <span class="eyebrow">CURRENT VIEW</span>
+          <strong id="albumResultCount">读取中</strong>
+        </div>
+        <div>
+          <span class="eyebrow">TRADING DAYS</span>
+          <strong id="albumDayCount">-</strong>
+        </div>
+        <div>
+          <span class="eyebrow">NET P/L</span>
+          <strong id="albumNetPnl">-</strong>
+        </div>
+        <div id="albumError" class="album-error" role="alert" hidden></div>
+      </section>
+
+      <section id="albumDays" class="album-days" aria-live="polite"></section>
+      <div id="albumEmpty" class="album-empty" hidden>
+        <strong>当前条件没有交易</strong>
+        <span>清空筛选后查看全部有效订单。</span>
+        <button id="albumEmptyClear" class="button-primary" type="button">清空筛选</button>
+      </div>
+      <div id="albumLoading" class="album-loading" hidden>正在读取交易截图...</div>
+    </div>
+
+    <div id="albumImageModal" class="album-image-modal" role="dialog" aria-modal="true" aria-label="截图大图" aria-hidden="true">
+      <button id="albumImageClose" class="app-icon-button" type="button" title="关闭大图" aria-label="关闭大图">×</button>
+      <figure>
+        <img id="albumModalImage" alt="交易截图大图" />
+        <figcaption id="albumModalCaption"></figcaption>
+      </figure>
+    </div>
+
+    <script src="../vendor/lucide.min.js"></script>
+    <script type="module">
+      import { createAlbumController } from "./album.mjs";
+      import { requestJson } from "../shared/js/api.mjs";
+
+      const controller = createAlbumController({
+        api: { requestJson },
+        view: document,
+        location: window.location,
+        history: window.history,
+      });
+      controller.init();
+      controller.load();
+      window.addEventListener("beforeunload", () => controller.dispose());
+    </script>
+  </body>
+</html>
