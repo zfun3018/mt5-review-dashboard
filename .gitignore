@@ -32,6 +32,16 @@ venv/
 .vscode/
 .worktrees/
 
+# Node and Playwright artefacts (Task 4 browser verification)
+node_modules/
+**/node_modules/
+**/playwright-report/
+**/test-results/
+**/.cache/
+
+# Playwright browser binaries
+**/.local-browsers/
+
 # MT5 generated binaries and compiler output
 mt5-review-system/mt5-ea/*.ex5
 mt5-review-system/mt5-ea/compile.log
