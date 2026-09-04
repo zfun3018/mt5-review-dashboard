@@ -23,7 +23,10 @@ def _raise_failure() -> None:
 
 class DataCompatibilityTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        # SQLite on Windows occasionally holds a brief lock on backup or
+        # WAL files after the connection is closed. The retry-ignore flag
+        # lets the test pass without masking the real assertion outcome.
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.tmp.name)
         self.paths = RuntimePaths.from_root(self.root)
         self.paths.data.mkdir(parents=True, exist_ok=True)
@@ -102,6 +105,65 @@ class DataCompatibilityTest(unittest.TestCase):
             upgrade_with_backup(self.paths, migration_hook=_raise_failure)
         after_hash = hashlib.sha256(self.paths.database.read_bytes()).hexdigest()
         self.assertEqual(after_hash, before_hash)
+
+    def test_rollback_drill_recovers_after_injected_failure(self):
+        # End-to-end rollback drill (Task 5, plan Step 4). A v3 fixture is
+        # fingerprinted, an injected migration failure is survived without
+        # touching the database, the upgrade is then run successfully, and
+        # the pre-upgrade backup is verified to open cleanly via SQLite's
+        # ``PRAGMA integrity_check``.
+        self._load_fixture("schema_v3.sql")
+        before_hash = hashlib.sha256(self.paths.database.read_bytes()).hexdigest()
+        before_fingerprint = build_data_fingerprint(self.paths)
+        self.assertEqual(before_fingerprint.schema_version, 3)
+        self.assertEqual(before_fingerprint.active_trades, 1)
+        self.assertEqual(before_fingerprint.deleted_trades, 1)
+        self.assertEqual(before_fingerprint.custom_values, 1)
+
+        # 1) Inject a failure during migration. The original database bytes
+        # and the data fingerprint must both be untouched.
+        with self.assertRaises(MigrationError):
+            upgrade_with_backup(self.paths, migration_hook=_raise_failure)
+        failed_hash = hashlib.sha256(self.paths.database.read_bytes()).hexdigest()
+        self.assertEqual(failed_hash, before_hash, "Failed upgrade must leave db bytes unchanged")
+        failed_fingerprint = build_data_fingerprint(self.paths)
+        self.assertEqual(failed_fingerprint, before_fingerprint)
+
+        # 2) Run the upgrade successfully. A backup of the pre-upgrade v3
+        # database must exist on disk; the live database must now report
+        # schema v4 with the same business counts as the original v3.
+        result = upgrade_with_backup(self.paths)
+        self.assertTrue(result.backup_created, "Upgrade of v3 should snapshot first")
+        self.assertIsNotNone(result.backup_path)
+        backup_path = result.backup_path
+        self.assertTrue(backup_path.exists())
+        self.assertGreater(backup_path.stat().st_size, 0)
+
+        after_fingerprint = build_data_fingerprint(self.paths)
+        self.assertEqual(after_fingerprint.schema_version, 4)
+        self.assertEqual(after_fingerprint.active_trades, before_fingerprint.active_trades)
+        self.assertEqual(after_fingerprint.deleted_trades, before_fingerprint.deleted_trades)
+        self.assertEqual(after_fingerprint.custom_values, before_fingerprint.custom_values)
+        self.assertEqual(after_fingerprint.reviews, before_fingerprint.reviews)
+        self.assertAlmostEqual(after_fingerprint.net_pnl, before_fingerprint.net_pnl, places=2)
+
+        # 3) The backup itself must open cleanly: ``PRAGMA integrity_check``
+        # returns ``"ok"`` for a healthy SQLite file. This is the
+        # acceptance criterion that lets us actually restore from it.
+        with sqlite3.connect(backup_path) as backup_conn:
+            integrity = backup_conn.execute("PRAGMA integrity_check").fetchone()
+            self.assertEqual(integrity, ("ok",), f"Backup failed integrity check: {integrity}")
+            backup_version_row = backup_conn.execute(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).fetchone()
+            self.assertIsNotNone(backup_version_row)
+            self.assertEqual(backup_version_row[0], "3", "Backup must reflect pre-upgrade v3")
+
+            # Counts inside the backup must match the original v3 fingerprint.
+            backup_trades = backup_conn.execute(
+                "SELECT COUNT(*) FROM trades WHERE deleted_at IS NULL"
+            ).fetchone()[0]
+            self.assertEqual(backup_trades, before_fingerprint.active_trades)
 
 
 if __name__ == "__main__":
