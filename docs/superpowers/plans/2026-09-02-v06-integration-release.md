@@ -295,7 +295,7 @@ The benchmark JSON remains under the ignored `artifacts/` directory. Include its
 - Produces: `npm run test:ui` and Playwright projects `desktop-chromium` and `mobile-390`.
 - Consumes: a server started with a temporary synthetic database; never the default project database.
 
-- [ ] **Step 1: Define development-only browser dependencies**
+- [x] **Step 1: Define development-only browser dependencies**
 
 ```json
 {
@@ -312,11 +312,11 @@ The benchmark JSON remains under the ignored `artifacts/` directory. Include its
 
 Generate and commit the lockfile. Ignore `node_modules/`, `test-results/`, `playwright-report/`, and browser binaries.
 
-- [ ] **Step 2: Add a synthetic Playwright server fixture**
+- [x] **Step 2: Add a synthetic Playwright server fixture**
 
 The fixture creates a temporary runtime root, seeds synthetic trades and placeholder PNGs, starts `run.py` on an available loopback port, waits for `/api/health`, and terminates the child process in teardown. It exposes only the temporary server URL.
 
-- [ ] **Step 3: Write workspace workflow tests**
+- [x] **Step 3: Write workspace workflow tests**
 
 Cover:
 
@@ -333,7 +333,7 @@ test("desktop navigation and workspaces remain isolated", async ({page}) => {
 
 Also test filter URL restoration, order selection/edit, screenshot placeholder, album-to-order link, settings threshold validation, regional retry, modal Escape, and mobile drawer focus return.
 
-- [ ] **Step 4: Add overflow and console assertions**
+- [x] **Step 4: Add overflow and console assertions**
 
 For every page in both projects:
 
@@ -345,7 +345,7 @@ expect(pageErrors).toEqual([]);
 
 Capture screenshots for dashboard, orders list/detail, album, and settings at 1440x1000 and 390x844. Store only synthetic screenshots under ignored `test-results/`; do not commit them.
 
-- [ ] **Step 5: Install the pinned browser tooling**
+- [x] **Step 5: Install the pinned browser tooling**
 
 Run: `npm install`
 
@@ -353,7 +353,7 @@ Run: `npx playwright install chromium`
 
 Expected: lockfile remains unchanged after the second `npm install`.
 
-- [ ] **Step 6: Run unit and browser tests**
+- [x] **Step 6: Run unit and browser tests**
 
 Run: `npm run test:unit`
 
@@ -361,7 +361,7 @@ Run: `npm run test:ui`
 
 Expected: PASS in desktop and mobile projects with no console errors or overflow.
 
-- [ ] **Step 7: Commit browser verification**
+- [x] **Step 7: Commit browser verification**
 
 ```powershell
 git add .gitignore mt5-review-system/package.json mt5-review-system/package-lock.json mt5-review-system/playwright.config.mjs mt5-review-system/web/tests/browser
