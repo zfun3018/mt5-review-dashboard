@@ -2,7 +2,7 @@
 
 这是一个 local-first 的 MT5 交易复盘系统。项目代码开源，但订单数据库、截图、原始事件和本机配置默认只保存在当前电脑，不上传云端。
 
-当前版本：`v0.4.1`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
+当前版本：`v0.6.0`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
 
 GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等 AI 工具的项目规则见 [`AGENTS.md`](../AGENTS.md)。
 
