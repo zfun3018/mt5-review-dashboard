@@ -424,54 +424,33 @@ Commit `6dffbdf` — "ci: add one-command release check + rollback drill" — st
 - Produces: v0.6.0 user and maintainer documentation with exact run, test, migration, rollback, and page ownership instructions.
 - Consumes: accepted implementation and measured verification output.
 
-- [ ] **Step 1: Update version metadata consistently**
+- [x] **Step 1: Update version metadata consistently**
 
-Set `VERSION` to `0.6.0`. Update both README files and the version route to state the same current version and the four workspace URLs.
+`VERSION` set to `0.6.0`; both README files and `docs/VERSION-ROUTE.md` now state v0.6.0 and list the four workspace URLs (`/dashboard/`, `/orders/`, `/album/`, `/settings/`).
 
-- [ ] **Step 2: Document user-visible changes**
+- [x] **Step 2: Document user-visible changes**
 
-Explain in ordinary Chinese:
+`docs/VERSION-ROUTE.md` gained a `## v0.6.0 架构重构版本` section and both README files document the new left navigation, the four separate pages, faster page-specific loading, unchanged historical data/metrics, loopback-only default with explicit LAN opt-in, old link redirection, and that Windows desktop packaging remains the next phase — all in ordinary Chinese.
 
-- the new left navigation;
-- separate dashboard, orders, album, and settings pages;
-- faster page-specific loading;
-- unchanged historical data and metrics;
-- loopback-only default and explicit LAN opt-in;
-- old link redirection;
-- Windows desktop packaging remains the next phase.
+- [x] **Step 3: Extract accepted ADRs from the design spec**
 
-- [ ] **Step 3: Extract accepted ADRs from the design spec**
+Created four ADRs under `docs/adr/`: `0001-use-modular-monolith.md` (ADR-001), `0002-use-native-multi-page-ui.md` (ADR-002), `0003-preserve-sqlite-v4-data.md` (ADR-003), `0004-defer-windows-wrapper.md` (ADR-005). Each states status, context, decision, positive/negative consequences, rejected alternatives, and links back to the v0.6.0 design spec.
 
-Use the four decisions listed in the file map. Each ADR states status, context, decision, positive/negative consequences, rejected alternatives, and links back to the v0.6.0 design.
+- [x] **Step 4: Run all verification from a clean process**
 
-- [ ] **Step 4: Run all verification from a clean process**
+`python tools/check_release.py` (full, browser included) ran 6/6 gates green in 83.9s: python (165 tests), node (80 tests), syntax, compatibility (5 rollback-drill tests), benchmark (`/api/analysis` p95 = 60.7ms ≤ 200ms), browser (16/16 Playwright across desktop-chromium + mobile-390).
 
-Run: `.\.venv\Scripts\python.exe .\tools\check_release.py`
+- [x] **Step 5: Inspect the final diff for sensitive or generated data**
 
-Expected: all gates pass.
+`git diff --check` reported no whitespace errors; `git diff --name-only` listed only `README.md`, `VERSION`, `docs/VERSION-ROUTE.md`, `mt5-review-system/README.md`, and `docs/adr/*`. No `data/`, `backups/`, `config.local.json`, screenshots, raw JSONL, browser output, absolute paths, SQLite files, logs, or binaries.
 
-- [ ] **Step 5: Inspect the final diff for sensitive or generated data**
+- [x] **Step 6: Create the focused v0.6.0 release commit**
 
-Run:
+Commit `e1f1945` — "release: prepare v0.6.0 architecture redesign" — staged `VERSION`, `README.md`, `mt5-review-system/README.md`, `docs/VERSION-ROUTE.md`, and `docs/adr/` (8 files, 206 insertions, 8 deletions).
 
-```powershell
-git status --short
-git diff --check
-git diff --name-only
-```
+- [x] **Step 7: Record final acceptance results**
 
-Expected: no `data/`, `backups/`, `config.local.json`, screenshots, raw JSONL, browser output, local absolute paths, SQLite files, logs, or generated binaries.
-
-- [ ] **Step 6: Create the focused v0.6.0 release commit**
-
-```powershell
-git add VERSION README.md mt5-review-system/README.md docs/VERSION-ROUTE.md docs/adr
-git commit -m "release: prepare v0.6.0 architecture redesign"
-```
-
-- [ ] **Step 7: Record final acceptance results**
-
-In the handoff, report exact Python test count, Node test count, Playwright project count, performance p95 values, schema fixtures verified, desktop/mobile overflow result, and any residual risk. Do not report or display real data counts or private paths.
+Python 165 tests OK, Node 80 tests OK, Playwright 16 tests across 2 projects (desktop-chromium 1440×1000 + mobile-390 390×844), benchmark `/api/analysis` p95 = 60.7ms (budget 200ms), v2/v3/v4 schema fixtures + injected-failure rollback verified, desktop/mobile overflow-free with no console errors. Residual risk: none blocking; the 30 pre-snapshot commits remain compressed into a single recovery snapshot, and Windows desktop packaging is deferred to the next phase.
 
 ## v0.6.0 Release Completion Gate
 
