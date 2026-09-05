@@ -111,6 +111,7 @@ class HttpRouterTest(unittest.TestCase):
 
         def auto_import():
             self.import_calls += 1
+            return {"imported": True}
 
         self.router = build_router(self.storage, auto_import)
 
@@ -144,6 +145,13 @@ class HttpRouterTest(unittest.TestCase):
             response.status = HTTPStatus.CREATED
 
         self.assertEqual(response.headers["Content-Type"], "application/json; charset=utf-8")
+
+    def test_sync_route_runs_incremental_import(self):
+        response = self.router.dispatch("POST", "/api/sync", {}, None)
+
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(response.payload, {"imported": True})
+        self.assertEqual(self.import_calls, 1)
 
     def test_every_legacy_get_route_preserves_query_call_status_and_payload(self):
         analysis = {
@@ -762,6 +770,13 @@ class HttpRouterTest(unittest.TestCase):
                 "Field not found",
                 None,
             ),
+            (
+                "DELETE",
+                "/api/custom-fields/404/purge",
+                "purge_custom_field",
+                "Field not found",
+                None,
+            ),
         )
 
         for method, path, storage_method, message, body in cases:
@@ -835,6 +850,7 @@ class HttpRouterTest(unittest.TestCase):
             ("GET", "/api/backups"),
             ("GET", "/api/status"),
             ("GET", "/api/health"),
+            ("POST", "/api/sync"),
             ("POST", "/api/trades/T-1/restore"),
             ("POST", "/api/backups"),
             ("DELETE", "/api/classification-options/follow"),
@@ -842,9 +858,10 @@ class HttpRouterTest(unittest.TestCase):
             ("DELETE", "/api/trades/T-1"),
             ("DELETE", "/api/trends/2"),
             ("DELETE", "/api/custom-fields/7"),
+            ("DELETE", "/api/custom-fields/7/purge"),
         }
 
-        self.assertEqual(len(requires_body | does_not_require_body), 35)
+        self.assertEqual(len(requires_body | does_not_require_body), 37)
         for method, path in requires_body:
             with self.subTest(method=method, path=path, expected=True):
                 self.assertTrue(self.router.route_requires_body(method, path))

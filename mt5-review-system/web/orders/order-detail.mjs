@@ -233,6 +233,7 @@ export function createOrderDetailModule({
           <div>
             <p class="eyebrow">${escapeHtml(campaign.symbol)} · Campaign ${escapeHtml(campaign.display_order_no || campaign.id.slice(0, 8))}</p>
             <h2>${campaign.side === "long" ? "多单" : "空单"} · ${campaign.position_count} 个 Position</h2>
+            <span class="detail-time">${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} → ${escapeHtml(formatBeijingDateTime(campaign.closed_at_utc))}</span>
           </div>
           <strong class="${profitClass(campaign.net_pnl)}">${formatMoney(campaign.net_pnl)}</strong>
         </div>
@@ -244,7 +245,7 @@ export function createOrderDetailModule({
         ${trade ? renderScreenshotEditor(trade) : ""}
         <div class="field-grid classification-grid">
           <div class="field compact-field">
-            <label>交易类型</label>
+            <label>交易场景</label>
             <select id="detailTradeType">${classificationSelectOptions("trade_type", campaign.trade_type)}</select>
           </div>
           <div class="field compact-field">
@@ -289,6 +290,7 @@ export function createOrderDetailModule({
           <div>
             <p class="eyebrow">${escapeHtml(campaign.symbol)} · Position ${escapeHtml(position.display_position_id || position.position_id)}</p>
             <h2>${campaign.side === "long" ? "多单" : "空单"} · 单笔订单</h2>
+            <span class="detail-time">${escapeHtml(formatBeijingDateTime(position.opened_at_utc))} → ${escapeHtml(formatBeijingDateTime(position.closed_at_utc))}</span>
           </div>
           <strong class="${profitClass(position.position_pnl)}">${formatMoney(position.position_pnl ?? 0)}</strong>
         </div>
@@ -301,7 +303,7 @@ export function createOrderDetailModule({
         <div class="position-plan-risk"><span>初始计划止损</span><strong>${escapeHtml(formatPrice(position.initial_stop_price))}</strong><small>在左侧订单流水中填写或修改</small></div>
         ${trade ? renderScreenshotEditor(trade) : ""}
         <div class="field-grid classification-grid">
-          <div class="field compact-field"><label>交易类型</label><select id="detailTradeType">${classificationSelectOptions("trade_type", trade?.trade_type || campaign.trade_type)}</select></div>
+          <div class="field compact-field"><label>交易场景</label><select id="detailTradeType">${classificationSelectOptions("trade_type", trade?.trade_type || campaign.trade_type)}</select></div>
           <div class="field compact-field"><label>交易策略</label><select id="detailStrategy">${classificationSelectOptions("strategy", trade?.strategy || campaign.strategy)}</select></div>
         </div>
         ${customFieldInputs ? `<div class="field-grid">${customFieldInputs}</div>` : ""}

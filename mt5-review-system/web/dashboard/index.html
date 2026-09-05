@@ -118,13 +118,14 @@
             <table class="evaluation-table">
               <thead>
                 <tr>
-                  <th>日期</th><th>总盈亏</th><th>交易笔数</th><th>总盈亏比</th><th>净盈亏比</th>
-                  <th>总胜率</th><th>净胜率</th><th>打平占比</th><th>平均数学期望 ER</th><th>收益稳定度 SQN</th>
+                  <th>日期</th><th>总盈亏</th><th>交易笔数 <button class="metric-info-btn" type="button" data-metric-info="campaign_count" data-metric-context="{}" aria-label="解释交易笔数">i</button></th><th>总盈亏比 <button class="metric-info-btn" type="button" data-metric-info="cash_profit_factor" data-metric-context="{}" aria-label="解释总盈亏比">i</button></th><th>净盈亏比 <button class="metric-info-btn" type="button" data-metric-info="payoff_ratio" data-metric-context="{}" aria-label="解释净盈亏比">i</button></th>
+                  <th>总胜率 <button class="metric-info-btn" type="button" data-metric-info="cash_win_rate" data-metric-context="{}" aria-label="解释总胜率">i</button></th><th>净胜率 <button class="metric-info-btn" type="button" data-metric-info="decisive_win_rate" data-metric-context="{}" aria-label="解释净胜率">i</button></th><th>打平占比 <button class="metric-info-btn" type="button" data-metric-info="scratch" data-metric-context="{}" aria-label="解释打平占比">i</button></th><th>平均数学期望 ER <button class="metric-info-btn" type="button" data-metric-info="expectancy_r" data-metric-context="{}" aria-label="解释平均数学期望">i</button></th><th>收益稳定度 SQN <button class="metric-info-btn" type="button" data-metric-info="sqn" data-metric-context="{}" aria-label="解释收益稳定度">i</button></th>
                 </tr>
               </thead>
               <tbody id="systemEvaluationRows"></tbody>
             </table>
           </div>
+          <div id="systemEvaluationPagination" class="evaluation-pagination" aria-label="交易系统评估分页"></div>
         </article>
 
         <article class="panel evaluation-panel">
@@ -166,6 +167,10 @@
         view: document,
         location: window.location,
         history: window.history,
+        onRefresh: async () => {
+          await requestJson("/api/sync", { method: "POST" });
+          window.location.reload();
+        },
       });
       controller.init();
       controller.load();

@@ -312,8 +312,11 @@ def list_classification_options(
     return _application_services().settings.get_classifications(dimension, active_only)
 
 
-def list_custom_fields() -> list[dict[str, Any]]:
-    return _application_services().settings.get_custom_fields()
+def list_custom_fields(active_only: bool = False) -> list[dict[str, Any]]:
+    service = _application_services().settings
+    if active_only:
+        return service.get_custom_fields(active_only=True)
+    return service.get_custom_fields()
 
 
 def get_analysis_settings() -> dict[str, Any]:
@@ -380,6 +383,7 @@ _upsert_trade_conn = trade_commands._upsert_trade_conn
 create_classification_option = _synchronized_owner(catalog_commands.create_classification_option)
 update_classification_option = _synchronized_owner(catalog_commands.update_classification_option)
 delete_classification_option = _synchronized_owner(catalog_commands.delete_classification_option)
+restore_classification_option = _synchronized_owner(catalog_commands.restore_classification_option)
 list_trends = _synchronized_owner(catalog_commands.list_trends)
 create_trend = _synchronized_owner(catalog_commands.create_trend)
 update_trend = _synchronized_owner(catalog_commands.update_trend)
@@ -387,6 +391,8 @@ delete_trend = _synchronized_owner(catalog_commands.delete_trend)
 create_custom_field = _synchronized_owner(catalog_commands.create_custom_field)
 update_custom_field = _synchronized_owner(catalog_commands.update_custom_field)
 delete_custom_field = _synchronized_owner(catalog_commands.delete_custom_field)
+purge_custom_field = _synchronized_owner(catalog_commands.purge_custom_field)
+restore_custom_field = _synchronized_owner(catalog_commands.restore_custom_field)
 update_trade_custom_value = _synchronized_owner(catalog_commands.update_trade_custom_value)
 
 list_equity_snapshots = _synchronized_owner(ingestion_repository.list_equity_snapshots)

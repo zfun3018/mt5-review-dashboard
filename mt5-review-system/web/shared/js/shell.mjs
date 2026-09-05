@@ -1,3 +1,5 @@
+import { showToast } from "./feedback.mjs";
+
 // Icons are rendered by the locally vendored Lucide v1.8.0 UMD release.
 export const NAV_ITEMS = Object.freeze([
   {href: "/dashboard/", label: "复盘仪表盘", icon: "chart-no-axes-combined"},
@@ -8,6 +10,23 @@ export const NAV_ITEMS = Object.freeze([
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let mountedShell = null;
+const NAV_COLLAPSED_STORAGE_KEY = "mt5-review-navigation-collapsed";
+
+function readCollapsedPreference() {
+  try {
+    return globalThis.localStorage?.getItem(NAV_COLLAPSED_STORAGE_KEY) === "true";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function writeCollapsedPreference(collapsed) {
+  try {
+    globalThis.localStorage?.setItem(NAV_COLLAPSED_STORAGE_KEY, String(collapsed));
+  } catch (_error) {
+    // Private browsing or restricted storage should not block navigation.
+  }
+}
 
 function createElement(tagName, {className, text, attributes} = {}) {
   const node = document.createElement(tagName);
@@ -140,14 +159,15 @@ function handleNavigationKeys(event) {
   }
 }
 
-export function mountShell({activeRoute = "/dashboard/", title = "", actions = []} = {}) {
+export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null} = {}) {
   mountedShell?.cleanup();
   const root = document.querySelector("[data-app-shell]");
   if (!root) throw new Error("Missing [data-app-shell] mount point");
   const originalNodes = [...root.children];
   root.replaceChildren();
   root.classList.add("app-shell");
-  root.setAttribute("data-navigation-collapsed", "false");
+  const collapsedPreference = readCollapsedPreference();
+  root.setAttribute("data-navigation-collapsed", String(collapsedPreference));
   root.setAttribute("data-navigation-open", "false");
 
   const mobileViewport = isMobileViewport();
@@ -185,8 +205,13 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   }
 
   const footer = createElement("div", {className: "app-navigation__footer"});
+  const refreshButton = createElement("button", {
+    className: "app-navigation__refresh app-navigation__link",
+    attributes: {type: "button", title: "刷新数据", "aria-label": "刷新数据"},
+  });
+  refreshButton.append(icon("refresh-cw"), createElement("span", {className: "app-navigation__label", text: "刷新数据"}));
   const environment = createElement("div", {className: "app-navigation__environment"});
-  environment.append(createElement("span", {text: "v0.6.0"}));
+  environment.append(createElement("span", {text: "v0.6.1"}));
   const collapseButton = iconButton({
     label: "折叠导航",
     iconName: "panel-left-close",
@@ -194,7 +219,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   });
   collapseButton.setAttribute("aria-controls", "appNavigation");
   collapseButton.setAttribute("aria-expanded", "true");
-  footer.append(environment, collapseButton);
+  footer.append(refreshButton, environment, collapseButton);
   navigation.append(brand, links, footer);
 
   const backdrop = iconButton({
@@ -229,7 +254,22 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   const onMenuClick = () => openNavigation();
   const onBackdropClick = () => closeNavigation();
   const onCollapseClick = () => {
-    setCollapsed(root.getAttribute("data-navigation-collapsed") !== "true");
+    const collapsed = root.getAttribute("data-navigation-collapsed") !== "true";
+    setCollapsed(collapsed);
+    writeCollapsedPreference(collapsed);
+  };
+  const onRefreshClick = async () => {
+    if (!onRefresh || refreshButton.disabled) return;
+    refreshButton.disabled = true;
+    refreshButton.setAttribute("aria-busy", "true");
+    try {
+      await onRefresh();
+    } catch (error) {
+      showToast(error?.message || "刷新数据失败", {tone: "error"});
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.removeAttribute("aria-busy");
+    }
   };
   const mediaQuery = globalThis.window?.matchMedia?.("(max-width: 720px)");
   const onViewportChange = (event) => {
@@ -239,6 +279,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   menuButton.addEventListener("click", onMenuClick);
   backdrop.addEventListener("click", onBackdropClick);
   collapseButton.addEventListener("click", onCollapseClick);
+  refreshButton.addEventListener("click", onRefreshClick);
   document.addEventListener("keydown", handleNavigationKeys);
   mediaQuery?.addEventListener?.("change", onViewportChange);
 
@@ -246,6 +287,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     menuButton.removeEventListener("click", onMenuClick);
     backdrop.removeEventListener("click", onBackdropClick);
     collapseButton.removeEventListener("click", onCollapseClick);
+    refreshButton.removeEventListener("click", onRefreshClick);
     document.removeEventListener("keydown", handleNavigationKeys);
     mediaQuery?.removeEventListener?.("change", onViewportChange);
     document.body.classList.remove("navigation-open");
@@ -255,7 +297,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     root.replaceChildren(...originalNodes);
     if (mountedShell?.root === root) mountedShell = null;
   };
-  mountedShell = {root, navigation, menuButton, collapseButton, backdrop, cleanup};
-  renderIcons();
+  mountedShell = {root, navigation, menuButton, collapseButton, backdrop, refreshButton, cleanup};
+  setCollapsed(collapsedPreference);
   return cleanup;
 }

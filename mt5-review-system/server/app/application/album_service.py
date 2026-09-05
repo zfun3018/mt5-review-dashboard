@@ -35,9 +35,9 @@ class AlbumService:
         symbol_values = _values(values.get("symbols") or values.get("symbol"))
         tag_values = _values(values.get("tags") or values.get("tag"))
         catalog = _build_catalog(
-            self.catalogs.list_classifications(),
             self.catalogs.list_classifications(active_only=True),
-            self.catalogs.list_custom_fields(),
+            self.catalogs.list_classifications(active_only=True),
+            _active_custom_fields(self.catalogs),
         )
         selected_groups = _tag_groups(tag_values, catalog)
         repository_filters: dict[str, Any] = {
@@ -98,6 +98,14 @@ def _values(value: list[str] | str | None) -> list[str]:
     return [item.strip() for item in split_values if item.strip()]
 
 
+def _active_custom_fields(catalogs) -> list[dict[str, Any]]:
+    """Read active fields while keeping small legacy test adapters usable."""
+    try:
+        return catalogs.list_custom_fields(active_only=True)
+    except TypeError:
+        return [field for field in catalogs.list_custom_fields() if field.get("active", True)]
+
+
 def _build_catalog(
     all_options: list[dict[str, Any]],
     active_options: list[dict[str, Any]],
@@ -115,7 +123,7 @@ def _build_catalog(
     available_tags = []
     for option in active_options:
         dimension_label = (
-            "交易类型" if option["dimension"] == "trade_type" else "交易策略"
+            "交易场景" if option["dimension"] == "trade_type" else "交易策略"
         )
         available_tags.append(
             {
@@ -177,7 +185,7 @@ def _tags_for_trade(
         option_id = str(trade.get(dimension) or "")
         option = catalog["classifications"].get((dimension, option_id))
         if option:
-            dimension_label = "交易类型" if dimension == "trade_type" else "交易策略"
+            dimension_label = "交易场景" if dimension == "trade_type" else "交易策略"
             tags.append(
                 {
                     "key": f"{dimension}:{option_id}",

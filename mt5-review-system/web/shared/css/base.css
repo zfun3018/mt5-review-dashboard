@@ -8,7 +8,7 @@ html {
   min-width: 320px;
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: "Bahnschrift", "Microsoft YaHei UI", sans-serif;
+  font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
   font-size: var(--font-size-body);
   letter-spacing: 0;
 }

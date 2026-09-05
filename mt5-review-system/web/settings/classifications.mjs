@@ -1,7 +1,7 @@
 import { escapeAttr, escapeHtml } from "../shared/js/formatters.mjs";
 
 const DIMENSIONS = [
-  ["trade_type", "交易类型", "新增类型"],
+  ["trade_type", "交易场景", "新增场景"],
   ["strategy", "交易策略", "新增策略"],
 ];
 
@@ -44,7 +44,7 @@ export function createClassificationsModule({
               <input type="text" value="${escapeAttr(option.label)}" data-classification-label="${escapeAttr(option.id)}" />
               <span class="classification-state">${option.active ? "使用中" : "已停用"}</span>
               <button class="button" type="button" data-classification-save="${escapeAttr(option.id)}">保存</button>
-              ${option.active ? `<button class="button-danger" type="button" data-classification-archive="${escapeAttr(option.id)}">停用</button>` : ""}
+              ${option.active ? `<button class="button-danger" type="button" data-classification-archive="${escapeAttr(option.id)}">停用</button>` : `<button class="button" type="button" data-classification-restore="${escapeAttr(option.id)}">恢复</button>`}
             </div>
           `,
         )
@@ -73,6 +73,9 @@ export function createClassificationsModule({
     });
     node.querySelectorAll("[data-classification-archive]").forEach((button) => {
       button.addEventListener("click", () => archive(button.dataset.classificationArchive));
+    });
+    node.querySelectorAll("[data-classification-restore]").forEach((button) => {
+      button.addEventListener("click", () => restore(button.dataset.classificationRestore));
     });
     node.querySelectorAll("[data-classification-new]").forEach((input) => {
       input.addEventListener("keydown", (event) => {
@@ -123,5 +126,12 @@ export function createClassificationsModule({
     return { ok: true };
   }
 
-  return { render, create, rename, archive };
+  async function restore(optionId) {
+    await api.requestJson(`/api/classification-options/${encodeURIComponent(optionId)}/restore`, { method: "POST" });
+    await afterMutation();
+    toast("交易场景已恢复");
+    return optionId;
+  }
+
+  return { render, create, rename, archive, restore };
 }

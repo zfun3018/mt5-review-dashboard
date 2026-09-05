@@ -33,6 +33,7 @@ class CatalogRepository:
             FROM trade_custom_values
             JOIN custom_fields ON custom_fields.id = trade_custom_values.field_id
             WHERE trade_custom_values.trade_id IN ({placeholders})
+              AND custom_fields.active = 1
             """,
             trade_ids,
         ).fetchall()
@@ -81,13 +82,20 @@ class CatalogRepository:
             row["active"] = bool(row["active"])
         return result
 
-    def list_custom_fields(self) -> list[dict[str, Any]]:
-        with closing(connect(self.paths)) as conn:
+    def list_custom_fields(
+        self,
+        active_only: bool = False,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> list[dict[str, Any]]:
+        where_clause = "WHERE active = 1" if active_only else ""
+        context = nullcontext(conn) if conn is not None else closing(connect(self.paths))
+        with context as active_conn:
             rows = [
                 dict(row)
-                for row in conn.execute(
-                    "SELECT id, name, field_type, sort_order "
-                    "FROM custom_fields ORDER BY sort_order, id"
+                for row in active_conn.execute(
+                    f"SELECT id, name, field_type, sort_order, active "
+                    f"FROM custom_fields {where_clause} ORDER BY sort_order, id"
                 ).fetchall()
             ]
             field_ids = [int(row["id"]) for row in rows]
@@ -96,7 +104,7 @@ class CatalogRepository:
             }
             if field_ids:
                 placeholders = ",".join("?" for _ in field_ids)
-                for option in conn.execute(
+                for option in active_conn.execute(
                     f"""
                     SELECT id, field_id, label, color, sort_order
                     FROM custom_field_options
@@ -109,6 +117,7 @@ class CatalogRepository:
         for row in rows:
             row["field_type"] = row.get("field_type") or "text"
             row["options"] = options.get(int(row["id"]), [])
+            row["active"] = bool(row.get("active", 1))
         return rows
 
     def get_analysis_settings(self, *, conn: sqlite3.Connection | None = None) -> dict[str, Any]:

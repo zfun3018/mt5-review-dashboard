@@ -103,6 +103,25 @@ def delete_classification_option(option_id: str) -> None:
             raise KeyError(option_id)
 
 
+def restore_classification_option(option_id: str) -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id, dimension, label, color, sort_order, active FROM classification_options WHERE id = ?",
+            (option_id,),
+        ).fetchone()
+        if not row:
+            raise KeyError(option_id)
+        conn.execute(
+            "UPDATE classification_options SET active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (option_id,),
+        )
+        restored = conn.execute(
+            "SELECT id, dimension, label, color, sort_order, active FROM classification_options WHERE id = ?",
+            (option_id,),
+        ).fetchone()
+    return _serialize_classification_option(restored)
+
+
 def _validate_classification_assignment(
     conn: sqlite3.Connection,
     dimension: str,
@@ -220,6 +239,7 @@ def _serialize_custom_field(
     field = dict(row)
     field["field_type"] = field.get("field_type") or "text"
     field["options"] = options_by_field.get(int(field["id"]), [])
+    field["active"] = bool(field.get("active", 1))
     return field
 
 
@@ -370,7 +390,7 @@ def update_custom_field(field_id: int, payload: dict[str, Any]) -> dict[str, Any
         raise ValueError("Field name is required")
     with db() as conn:
         current = conn.execute(
-            "SELECT id, name, field_type, sort_order FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         if not current:
@@ -378,28 +398,67 @@ def update_custom_field(field_id: int, payload: dict[str, Any]) -> dict[str, Any
         current_options = _custom_options_for_field_ids(conn, [field_id]).get(field_id, [])
         field_type = _normalize_field_type(payload.get("field_type", current["field_type"] or "text"))
         options = payload["options"] if "options" in payload else current_options
+        if "active" in payload:
+            active_value = 1 if bool(payload.get("active")) else 0
+        else:
+            active_value = int(current["active"])
         conn.execute(
             """
             UPDATE custom_fields
-            SET name = ?, field_type = ?, updated_at = CURRENT_TIMESTAMP
+            SET name = ?, field_type = ?, active = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (name, field_type, field_id),
+            (name, field_type, active_value, field_id),
         )
         _replace_custom_options(conn, field_id, options, field_type)
         row = conn.execute(
-            "SELECT id, name, field_type, sort_order FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         updated_options = _custom_options_for_field_ids(conn, [field_id])
-    return _serialize_custom_field(row, updated_options)
+    serialized = _serialize_custom_field(row, updated_options)
+    serialized["active"] = bool(serialized.get("active", 1))
+    return serialized
 
 
 def delete_custom_field(field_id: int) -> None:
     with db() as conn:
+        cursor = conn.execute(
+            "UPDATE custom_fields SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND active = 1",
+            (field_id,),
+        )
+        if cursor.rowcount == 0:
+            raise KeyError(field_id)
+
+
+def purge_custom_field(field_id: int) -> None:
+    """Permanently remove a custom field and its values/options."""
+    with db() as conn:
         cursor = conn.execute("DELETE FROM custom_fields WHERE id = ?", (field_id,))
         if cursor.rowcount == 0:
             raise KeyError(field_id)
+
+
+def restore_custom_field(field_id: int) -> dict[str, Any]:
+    with db() as conn:
+        current = conn.execute(
+            "SELECT id, name, field_type, sort_order FROM custom_fields WHERE id = ?",
+            (field_id,),
+        ).fetchone()
+        if not current:
+            raise KeyError(field_id)
+        conn.execute(
+            "UPDATE custom_fields SET active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (field_id,),
+        )
+        row = conn.execute(
+            "SELECT id, name, field_type, sort_order, active FROM custom_fields WHERE id = ?",
+            (field_id,),
+        ).fetchone()
+        options = _custom_options_for_field_ids(conn, [field_id])
+    serialized = _serialize_custom_field(row, options)
+    serialized["active"] = bool(serialized.get("active", 1))
+    return serialized
 
 
 def update_trade_custom_value(

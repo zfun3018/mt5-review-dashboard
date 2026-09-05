@@ -103,14 +103,14 @@ test("dashboard exposes accessible shared metric explanation", () => {
   assert.match(app, /交易笔数/);
   assert.match(app, /\["本年", periods\.year\]/);
   assert.match(app, /净盈亏比/);
-  assert.match(app, /metricInfoButton\("z_score"/);
+  assert.match(app, /\["z_score", "Z 分数"/);
   assert.match(html, /净盈亏比/);
   assert.match(html, /总胜率.*净胜率.*打平占比/);
   assert.doesNotMatch(html, /class="z-score-guide"/);
   assert.match(app, /metricQualityBadge\(/);
   assert.doesNotMatch(html, /id="summary"/);
   assert.match(html, /id="rMetricSummary"/);
-  assert.match(css, /\.evaluation-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 2fr\)/);
+  assert.match(css, /\.evaluation-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
 });
 
 test("order flow exposes Scratch state and inline initial-stop editing", () => {
@@ -126,8 +126,12 @@ test("order flow exposes Scratch state and inline initial-stop editing", () => {
   assert.doesNotMatch(ordersSource, /placeholder="初始止损"/);
   assert.match(ordersCss, /\.campaign-row\.scratch/);
   assert.match(ordersCss, /\.campaign-detail-row/);
-  assert.match(ordersCss, /\.inline-stop-editor\s*\{[\s\S]*grid-template-columns:\s*minmax\(120px,\s*1fr\)\s+30px/);
-  assert.match(ordersCss, /\.orders-table td:nth-child\(4\)\s*\{[^}]*min-width:\s*165px/);
+  assert.match(ordersCss, /\.inline-stop-editor\s*\{[\s\S]*display:\s*block/);
+  assert.match(ordersCss, /\.orders-table td:nth-child\(5\)\s*\{[^}]*min-width:\s*165px/);
+  assert.match(ordersSource, /<th>交易场景<\/th>/);
+  assert.match(ordersSource, /<th>交易策略<\/th>/);
+  assert.match(ordersSource, /data-label="交易场景"/);
+  assert.match(ordersSource, /data-label="交易策略"/);
   assert.match(ordersSource, /position\.source_trade/);
   assert.match(ordersSource, /trade-metrics-cell/);
   assert.doesNotMatch(ordersSource, /<th>复盘<\/th>/);

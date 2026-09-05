@@ -63,7 +63,8 @@ class CustomFieldsTest(unittest.TestCase):
 
         storage.delete_custom_field(field["id"])
 
-        self.assertEqual(storage.list_custom_fields(), [])
+        self.assertEqual(storage.list_custom_fields(active_only=True), [])
+        self.assertFalse(storage.list_custom_fields()[0]["active"])
 
     def test_trade_custom_field_values_are_returned_with_trades(self):
         field = storage.create_custom_field({"name": "错误类型"})
@@ -73,6 +74,11 @@ class CustomFieldsTest(unittest.TestCase):
         trade = storage.get_trade("T-1")
 
         self.assertEqual(trade["custom_fields"][str(field["id"])], "追单")
+
+    def test_custom_field_can_be_purged_explicitly(self):
+        field = storage.create_custom_field({"name": "临时字段"})
+        storage.purge_custom_field(field["id"])
+        self.assertEqual(storage.list_custom_fields(), [])
 
     def test_select_fields_include_clickable_options(self):
         field = storage.create_custom_field(

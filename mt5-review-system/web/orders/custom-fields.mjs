@@ -17,17 +17,32 @@ export function createCustomFieldsModule({
   getFields,
   resolveTrade,
   setTradeCustomValue,
+  getChoiceField,
+  getChoiceValue,
+  setChoiceValue,
+  saveChoiceValue,
   rerender,
   applyFieldUpdate,
 }) {
   let choiceEditor = null;
+  const pendingChoiceValues = new Map();
+  const choiceSaveChains = new Map();
 
   function fieldById(id) {
     return getFields().find((field) => Number(field.id) === Number(id));
   }
 
+  function classificationField(dimension) {
+    return typeof getChoiceField === "function" ? getChoiceField(dimension) : null;
+  }
+
   function selectedOptionIds(trade, field) {
-    const value = trade?.custom_fields?.[String(field.id)];
+    const key = `${trade?.id || ""}:${field?.classification_dimension || field?.id || ""}`;
+    const value = pendingChoiceValues.has(key)
+      ? pendingChoiceValues.get(key)
+      : field?.classification_dimension
+      ? getChoiceValue?.(trade, field.classification_dimension)
+      : trade?.custom_fields?.[String(field.id)];
     if (field.field_type === "multi") return Array.isArray(value) ? value.map(String) : [];
     return value ? [String(value)] : [];
   }
@@ -37,7 +52,9 @@ export function createCustomFieldsModule({
   }
 
   function renderCustomValueEditor(trade, field, mode) {
-    const value = trade?.custom_fields?.[String(field.id)];
+    const value = field?.classification_dimension
+      ? getChoiceValue?.(trade, field.classification_dimension)
+      : trade?.custom_fields?.[String(field.id)];
     if (field.field_type === "text") {
       const textValue = String(value || "");
       return `
@@ -68,7 +85,7 @@ export function createCustomFieldsModule({
         class="choice-cell ${mode === "table" ? "table-choice" : "detail-choice"}"
         data-choice-trigger
         data-trade-id="${escapeAttr(trade.id)}"
-        data-field-id="${field.id}"
+        ${field.classification_dimension ? `data-choice-dimension="${escapeAttr(field.classification_dimension)}"` : `data-field-id="${field.id}"`}
         type="button"
         title="选择${escapeAttr(field.name)}"
       >
@@ -132,7 +149,8 @@ export function createCustomFieldsModule({
       : { top: 0, bottom: 0, left: 0, width: 0 };
     choiceEditor = {
       tradeId: trigger.dataset.tradeId,
-      fieldId: Number(trigger.dataset.fieldId),
+      fieldId: trigger.dataset.fieldId ? Number(trigger.dataset.fieldId) : null,
+      dimension: trigger.dataset.choiceDimension || null,
       query: "",
       rect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
     };
@@ -151,6 +169,34 @@ export function createCustomFieldsModule({
     return node;
   }
 
+  function renderChoiceOptions(node, field, trade) {
+    const query = choiceEditor?.query || "";
+    const selected = selectedOptionIds(trade, field);
+    const options = field.options || [];
+    const visibleOptions = options.filter((option) => option.label.toLowerCase().includes(query.toLowerCase()));
+    const hasExact = options.some((option) => option.label.toLowerCase() === query.trim().toLowerCase());
+    const createButton = !choiceEditor.dimension && query.trim() && !hasExact
+      ? `<button class="choice-create" data-choice-create type="button">创建 ${escapeHtml(query.trim())}</button>`
+      : "";
+    const clearButton = field.field_type === "single"
+      ? `<button class="choice-option muted-choice ${selected.length ? "" : "selected"}" data-choice-option="" type="button">未选</button>`
+      : `<button class="choice-option muted-choice" data-choice-option="" type="button">清空</button>`;
+    const optionButtons = visibleOptions.map((option) => `
+      <button class="choice-option ${selected.includes(String(option.id)) ? "selected" : ""}"
+        style="--choice:${escapeAttr(option.color || "#2bd4ff")};"
+        data-choice-option="${option.id}" type="button">
+        <span class="choice-option-dot"></span><span>${escapeHtml(option.label)}</span>
+      </button>
+    `).join("");
+    const optionsNode = node.querySelector?.("[data-choice-options]");
+    if (!optionsNode) return;
+    optionsNode.innerHTML = `${clearButton}${optionButtons || `<div class="choice-empty">没有匹配选项</div>`}${createButton}`;
+    for (const button of optionsNode.querySelectorAll("[data-choice-option]")) {
+      button.addEventListener("click", () => chooseCustomOption(choiceEditor.tradeId, choiceEditor.fieldId, button.dataset.choiceOption, choiceEditor.dimension));
+    }
+    optionsNode.querySelector("[data-choice-create]")?.addEventListener("click", createOptionAndSelect);
+  }
+
   function renderChoicePopover() {
     const node = choicePopoverNode();
     if (!node) return;
@@ -158,61 +204,28 @@ export function createCustomFieldsModule({
       node.classList.add("hidden");
       return;
     }
-    const field = fieldById(choiceEditor.fieldId);
+    const field = choiceEditor.dimension ? classificationField(choiceEditor.dimension) : fieldById(choiceEditor.fieldId);
     const trade = resolveTrade(choiceEditor.tradeId);
     if (!field || !trade) {
       closeChoicePopover();
       return;
     }
     const query = choiceEditor.query || "";
-    const selected = selectedOptionIds(trade, field);
-    const options = field.options || [];
-    const visibleOptions = options.filter((option) => option.label.toLowerCase().includes(query.toLowerCase()));
-    const hasExact = options.some((option) => option.label.toLowerCase() === query.trim().toLowerCase());
-    const createButton = query.trim() && !hasExact
-      ? `<button class="choice-create" data-choice-create type="button">创建 ${escapeHtml(query.trim())}</button>`
-      : "";
-    const clearButton = field.field_type === "single"
-      ? `<button class="choice-option muted-choice ${selected.length ? "" : "selected"}" data-choice-option="" type="button">未选</button>`
-      : `<button class="choice-option muted-choice" data-choice-option="" type="button">清空</button>`;
-    const optionButtons = visibleOptions
-      .map((option) => {
-        const isSelected = selected.includes(String(option.id));
-        return `
-          <button
-            class="choice-option ${isSelected ? "selected" : ""}"
-            style="--choice:${escapeAttr(option.color || "#2bd4ff")};"
-            data-choice-option="${option.id}"
-            type="button"
-          >
-            <span class="choice-option-dot"></span>
-            <span>${escapeHtml(option.label)}</span>
-          </button>
-        `;
-      })
-      .join("");
     node.innerHTML = `
       <div class="choice-popover-title">
         <strong>${escapeHtml(field.name)}</strong>
         <span>${fieldTypeLabel(field.field_type)}</span>
       </div>
       <input class="choice-search" data-choice-search type="search" value="${escapeAttr(query)}" placeholder="查找或创建选项" />
-      <div class="choice-options">
-        ${clearButton}
-        ${optionButtons || `<div class="choice-empty">没有匹配选项</div>`}
-        ${createButton}
-      </div>
+      <div class="choice-options" data-choice-options></div>
     `;
+    renderChoiceOptions(node, field, trade);
     positionChoicePopover(node, choiceEditor.rect);
     node.classList.remove("hidden");
-    for (const button of node.querySelectorAll("[data-choice-option]")) {
-      button.addEventListener("click", () => chooseCustomOption(choiceEditor.tradeId, choiceEditor.fieldId, button.dataset.choiceOption));
-    }
-    node.querySelector("[data-choice-create]")?.addEventListener("click", createOptionAndSelect);
     const search = node.querySelector("[data-choice-search]");
     search.addEventListener("input", (event) => {
       choiceEditor.query = event.target.value;
-      renderChoicePopover();
+      renderChoiceOptions(node, field, trade);
     });
     search.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -220,13 +233,8 @@ export function createCustomFieldsModule({
         createOptionAndSelect();
       }
     });
-    if (typeof globalThis.requestAnimationFrame === "function") {
-      globalThis.requestAnimationFrame(() => {
-        const input = node.querySelector("[data-choice-search]");
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
-      });
-    }
+    search.focus();
+    search.setSelectionRange(search.value.length, search.value.length);
   }
 
   function positionChoicePopover(node, rect) {
@@ -246,10 +254,12 @@ export function createCustomFieldsModule({
     if (node) node.classList?.add?.("hidden");
   }
 
-  async function chooseCustomOption(tradeId, fieldId, optionId) {
-    const field = fieldById(fieldId);
+  async function chooseCustomOption(tradeId, fieldId, optionId, dimension = null) {
+    const field = dimension ? classificationField(dimension) : fieldById(fieldId);
     const trade = resolveTrade(tradeId);
     if (!field || !trade) return;
+    const key = `${tradeId}:${dimension || fieldId}`;
+    const previousValue = field.field_type === "multi" ? selectedOptionIds(trade, field) : (selectedOptionIds(trade, field)[0] || "");
     let value = optionId || "";
     let keepOpen = false;
     if (field.field_type === "multi") {
@@ -263,28 +273,51 @@ export function createCustomFieldsModule({
       }
       keepOpen = true;
     }
-    await saveCustomChoiceValue(tradeId, fieldId, value, keepOpen);
+    pendingChoiceValues.set(key, value);
+    rerender();
+    await saveCustomChoiceValue(tradeId, fieldId, value, keepOpen, dimension, key, previousValue);
   }
 
-  async function saveCustomChoiceValue(tradeId, fieldId, value, keepOpen) {
-    const result = await api.requestJson(`/api/trades/${encodeURIComponent(tradeId)}/custom-fields/${fieldId}`, {
-      method: "PATCH",
-      body: { value },
+  async function saveCustomChoiceValue(tradeId, fieldId, value, keepOpen, dimension = null, key = `${tradeId}:${dimension || fieldId}`, previousValue = "") {
+    const save = async () => {
+      if (dimension && typeof saveChoiceValue === "function") {
+        await saveChoiceValue(tradeId, dimension, value);
+      } else {
+        await api.requestJson(`/api/trades/${encodeURIComponent(tradeId)}/custom-fields/${fieldId}`, {
+          method: "PATCH",
+          body: { value },
+        });
+        setTradeCustomValue(tradeId, fieldId, value);
+      }
+      if (pendingChoiceValues.get(key) === value) pendingChoiceValues.delete(key);
+      rerender();
+      if (keepOpen && choiceEditor) renderChoicePopover();
+      else closeChoicePopover();
+      toast("字段内容已保存");
+    };
+    const queued = (choiceSaveChains.get(key) || Promise.resolve())
+      .catch(() => {})
+      .then(save)
+      .catch((error) => {
+        if (pendingChoiceValues.get(key) === value) {
+          pendingChoiceValues.delete(key);
+          if (dimension) setChoiceValue?.(tradeId, dimension, previousValue);
+          else setTradeCustomValue(tradeId, fieldId, previousValue);
+          rerender();
+        }
+        toast(error?.message || "字段保存失败", { tone: "error" });
+      });
+    const chain = queued.finally(() => {
+      if (choiceSaveChains.get(key) === chain) choiceSaveChains.delete(key);
     });
-    setTradeCustomValue(tradeId, fieldId, result.value);
-    rerender();
-    if (keepOpen && choiceEditor) {
-      renderChoicePopover();
-    } else {
-      closeChoicePopover();
-    }
-    toast("字段内容已保存");
+    choiceSaveChains.set(key, chain);
+    return queued;
   }
 
   async function createOptionAndSelect() {
     const editor = choiceEditor;
     if (!editor) return;
-    const field = fieldById(editor.fieldId);
+    const field = editor.dimension ? classificationField(editor.dimension) : fieldById(editor.fieldId);
     if (!field || field.field_type === "text") return;
     const label = editor.query.trim();
     if (!label) return;

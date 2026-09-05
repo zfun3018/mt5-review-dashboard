@@ -135,14 +135,19 @@ function metricQuality(metricKey, value, context = {}) {
 
 function metricQualityBadge(metricKey, value, context = {}) {
   const result = metricQuality(metricKey, value, context);
-  return `<em class="metric-quality metric-quality-${result.tone}">${result.label}</em>`;
+  const label = result.tone === "insufficient" ? "!" : result.label;
+  return `<em class="metric-quality metric-quality-${result.tone}" title="${result.label}">${label}</em>`;
+}
+
+function compactMetricText(value) {
+  return value === "样本不足" ? "!" : value;
 }
 
 function heatColor(pnl, maxAbs) {
-  if (!pnl || !maxAbs) return "#101413";
+  if (!pnl || !maxAbs) return "transparent";
   const strength = Math.min(Math.abs(pnl) / maxAbs, 1);
-  const alpha = 0.16 + strength * 0.7;
-  return pnl > 0 ? `rgba(43, 212, 255, ${alpha})` : `rgba(255, 92, 122, ${alpha})`;
+  const alpha = 0.3 + strength * 0.62;
+  return pnl > 0 ? `rgba(36, 190, 255, ${alpha})` : `rgba(255, 92, 122, ${alpha})`;
 }
 
 function calendarColor(pnl, monthNet) {
@@ -174,6 +179,7 @@ export function createDashboardController({
   view = globalThis.document,
   location = globalThis.location,
   history = globalThis.history,
+  onRefresh = null,
 } = {}) {
   const gate = new RequestGate();
   let state = readDashboardState(location.search);
@@ -181,6 +187,8 @@ export function createDashboardController({
   let metricExplanationTrigger = null;
   let calendarYear = null;
   let calendarMonth = null;
+  let systemPage = 1;
+  const systemPageSize = 12;
 
   function getElement(id) {
     return typeof view.getElementById === "function" ? view.getElementById(id) : null;
@@ -251,22 +259,25 @@ export function createDashboardController({
 
   function renderRMetricSummary() {
     const metrics = payload?.r_metrics || {};
-    const sqn = metrics.sqn_status === "available" ? Number(metrics.sqn).toFixed(2) : "样本不足";
+    const cash = payload?.metrics || payload || {};
+    const sqn = metrics.sqn_status === "available" ? Number(metrics.sqn).toFixed(2) : "!";
     const items = [
+      ["net_pnl", "总盈利", formatMoney(cash.net_pnl), profitClass(cash.net_pnl)],
+      ["campaign_count", "交易笔数", String(cash.order_count ?? metrics.sample_count ?? 0), ""],
+      ["payoff_ratio", "净盈亏比", formatRatio(cash.payoff_ratio), ""],
       ["decisive_win_rate", "净胜率（剔除打平）", formatPercent(metrics.decisive_win_rate)],
-      ["all_sample_win_rate", "有效胜率", formatPercent(metrics.all_sample_win_rate)],
-      ["scratch", "打平占比", formatPercent(metrics.scratch_rate)],
       ["expectancy_r", "平均数学期望（ER）", formatRValue(metrics.expectancy_r)],
       ["sqn", "收益稳定度（SQN）", sqn],
+      ["z_score", "Z 分数", compactMetricText(formatZScore(metrics.z_score))],
     ];
     setHtml(
       "rMetricSummary",
       items
         .map(
-          ([key, label, value]) => `
+          ([key, label, value, tone = ""]) => `
             <div class="r-metric-item">
               <span>${escapeHtml(label)} ${metricInfoButton(key, label, metrics)}</span>
-              <strong>${escapeHtml(value)}</strong>
+              <strong class="${tone}">${escapeHtml(value)}</strong>
               <small>R 完整 ${metrics.complete_count || 0} / 共 ${metrics.sample_count || 0} 个交易组合</small>
             </div>
           `,
@@ -295,7 +306,7 @@ export function createDashboardController({
 
     const chartNode = getElement("equityChart");
     if (!chartNode) return;
-    const width = Math.max(360, Math.min(1200, chartNode.clientWidth || 1200));
+    const width = Math.max(360, Math.min(2400, chartNode.clientWidth || 1200));
     const height = width < 520 ? 330 : 360;
     const padding = { top: 30, right: 84, bottom: 44, left: 106 };
     const plotWidth = width - padding.left - padding.right;
@@ -316,7 +327,7 @@ export function createDashboardController({
     const returnLine = smoothPath(coords);
     const rateLine = smoothPath(rateCoords);
     const areaPath = `${returnLine} L ${coords.at(-1).x.toFixed(1)} ${yFor(0, amountMin, amountMax).toFixed(1)} L ${coords[0].x.toFixed(1)} ${yFor(0, amountMin, amountMax).toFixed(1)} Z`;
-    const grid = [0, 0.25, 0.5, 0.75, 1]
+    const grid = Array.from({ length: 7 }, (_, index) => index / 6)
       .map((ratio) => {
         const y = padding.top + ratio * plotHeight;
         const amountTick = amountMax - ratio * (amountMax - amountMin);
@@ -327,21 +338,20 @@ export function createDashboardController({
     const first = points[0];
     const middle = points[Math.floor(points.length / 2)];
     const last = points[points.length - 1];
+    const timeTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => points[Math.round(ratio * (points.length - 1))]);
     const lastCoord = coords.at(-1);
 
     chartNode.innerHTML = `
       <svg class="equity-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="收益累计曲线，左轴为回报，右轴为收益率">
-        <g stroke="#25322f" stroke-width="1">${grid}</g>
-        <line x1="${padding.left}" y1="${yFor(0, amountMin, amountMax).toFixed(1)}" x2="${width - padding.right}" y2="${yFor(0, amountMin, amountMax).toFixed(1)}" stroke="#f4c95d" stroke-width="1" stroke-dasharray="5 6" opacity="0.75" />
-        <path d="${areaPath}" fill="rgba(43, 212, 255, 0.12)"></path>
-        <path d="${returnLine}" fill="none" stroke="#2bd4ff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
-        <path d="${rateLine}" fill="none" stroke="#f4c95d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5"></path>
-        <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="6" fill="#f4c95d"></circle>
+        <g stroke="#2b4560" stroke-width="1">${grid}</g>
+        <line x1="${padding.left}" y1="${yFor(0, amountMin, amountMax).toFixed(1)}" x2="${width - padding.right}" y2="${yFor(0, amountMin, amountMax).toFixed(1)}" stroke="#f2b84b" stroke-width="1.5" stroke-dasharray="5 6" opacity="0.95" />
+        <path d="${areaPath}" fill="rgba(32, 199, 160, 0.13)"></path>
+        <path d="${returnLine}" fill="none" stroke="#20c7a0" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="${rateLine}" fill="none" stroke="#f2b84b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5"></path>
+        <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="6" fill="#f2b84b"></circle>
         <text x="18" y="${height / 2}" transform="rotate(-90 18 ${height / 2})" class="axis-title left-axis-title">回报</text>
         <text x="${width - 18}" y="${height / 2}" transform="rotate(90 ${width - 18} ${height / 2})" class="axis-title right-axis-title">收益率</text>
-        <text x="${padding.left}" y="${height - 8}" class="time-label">${escapeHtml(formatCurveTime(first.time_bj))}</text>
-        <text x="${width / 2 - 28}" y="${height - 8}" class="time-label">${escapeHtml(formatCurveTime(middle.time_bj))}</text>
-        <text x="${width - padding.right - 48}" y="${height - 8}" class="time-label">${escapeHtml(formatCurveTime(last.time_bj))}</text>
+        ${timeTicks.map((point, index) => `<text x="${(padding.left + (index / 4) * plotWidth).toFixed(1)}" y="${height - 8}" text-anchor="${index === 0 ? "start" : index === 4 ? "end" : "middle"}" class="time-label">${escapeHtml(formatCurveTime(point.time_bj))}</text>`).join("")}
       </svg>
     `;
   }
@@ -359,21 +369,19 @@ export function createDashboardController({
       items
         .map(([label, item]) => {
           const r = item.r_metrics || {};
-          const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "样本不足";
+          const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "!";
           return `
             <article class="evaluation-summary-card">
               <header><span>${escapeHtml(label)}</span><strong class="${profitClass(item.net_pnl)}">${escapeHtml(formatMoney(item.net_pnl))}</strong></header>
               <div class="evaluation-summary-grid-inner">
-                <span>交易笔数 ${metricInfoButton("campaign_count", "交易笔数", r)}<strong>${r.sample_count || 0}</strong>${metricQualityBadge("campaign_count", r.sample_count, r)}</span>
-                <span>总盈亏比 ${metricInfoButton("cash_profit_factor", "总盈亏比", r)}<strong>${formatRatio(item.profit_factor)}</strong>${metricQualityBadge("cash_profit_factor", item.profit_factor, r)}</span>
-                <span>净盈亏比 ${metricInfoButton("payoff_ratio", "净盈亏比", item)}<strong>${formatRatio(item.payoff_ratio)}</strong>${metricQualityBadge("payoff_ratio", item.payoff_ratio, item)}</span>
-                <span>总胜率 ${metricInfoButton("cash_win_rate", "总胜率", r)}<strong>${formatPercent(item.cash_win_rate ?? item.win_rate)}</strong>${metricQualityBadge("cash_win_rate", item.cash_win_rate ?? item.win_rate, r)}</span>
-                <span>净胜率（剔除打平） ${metricInfoButton("decisive_win_rate", "净胜率（剔除打平）", r)}<strong>${formatPercent(r.decisive_win_rate)}</strong>${metricQualityBadge("decisive_win_rate", r.decisive_win_rate, r)}</span>
-                <span>有效胜率 ${metricInfoButton("all_sample_win_rate", "有效胜率", r)}<strong>${formatPercent(r.all_sample_win_rate)}</strong>${metricQualityBadge("all_sample_win_rate", r.all_sample_win_rate, r)}</span>
-                <span>打平占比 ${metricInfoButton("scratch", "打平占比", r)}<strong>${formatPercent(r.scratch_rate)}</strong>${metricQualityBadge("scratch", r.scratch_rate, r)}</span>
-                <span>平均数学期望（ER） ${metricInfoButton("expectancy_r", "平均数学期望（ER）", r)}<strong>${formatRValue(r.expectancy_r)}</strong>${metricQualityBadge("expectancy_r", r.expectancy_r, r)}</span>
-                <span>收益稳定度（SQN） ${metricInfoButton("sqn", "收益稳定度（SQN）", r)}<strong>${sqn}</strong>${metricQualityBadge("sqn", r.sqn, r)}</span>
-                <span class="evaluation-z-row">交易结果连续性（Z 分数） ${metricInfoButton("z_score", "交易结果连续性（Z 分数）", r)}<strong>${escapeHtml(formatZScore(r.z_score || item.z_score))}</strong></span>
+                <span>交易笔数<strong>${r.sample_count || 0}</strong></span>
+                <span>总盈亏比<strong>${formatRatio(item.profit_factor)}</strong></span>
+                <span>净盈亏比<strong>${formatRatio(item.payoff_ratio)}</strong></span>
+                <span>总胜率<strong>${formatPercent(item.cash_win_rate ?? item.win_rate)}</strong></span>
+                <span>净胜率（剔除打平）<strong>${formatPercent(r.decisive_win_rate)}</strong></span>
+                <span>平均数学期望（ER）<strong>${compactMetricText(formatRValue(r.expectancy_r))}</strong></span>
+                <span>收益稳定度（SQN）<strong>${sqn}</strong></span>
+                <span class="evaluation-z-row"><span>交易结果连续性（Z 分数） ${metricInfoButton("z_score", "交易结果连续性（Z 分数）", r)}</span><strong>${escapeHtml(compactMetricText(formatZScore(r.z_score || item.z_score)))}</strong></span>
               </div>
             </article>
           `;
@@ -384,35 +392,57 @@ export function createDashboardController({
 
   function renderSystemEvaluation() {
     const rows = [...(payload?.system_evaluation || [])].reverse();
+    const pageCount = Math.max(1, Math.ceil(rows.length / systemPageSize));
+    systemPage = Math.min(systemPage, pageCount);
+    const pageRows = rows.slice((systemPage - 1) * systemPageSize, systemPage * systemPageSize);
     setHtml(
       "systemEvaluationRows",
-      rows
+      pageRows
         .map((row) => {
           const r = row.r_metrics || {};
-          const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "样本不足";
+          const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "!";
           return `
             <tr>
               <td><strong>${escapeHtml(row.date)}</strong></td>
               <td class="${profitClass(row.net_pnl)}">${formatMoney(row.net_pnl)}</td>
-              <td>${row.order_count} ${metricInfoButton("campaign_count", "交易笔数", r)} ${metricQualityBadge("campaign_count", row.order_count, r)}</td>
-              <td>${formatRatio(row.profit_factor)} ${metricInfoButton("cash_profit_factor", "总盈亏比", r)} ${metricQualityBadge("cash_profit_factor", row.profit_factor, r)}</td>
-              <td>${formatRatio(row.payoff_ratio)} ${metricInfoButton("payoff_ratio", "净盈亏比", row)} ${metricQualityBadge("payoff_ratio", row.payoff_ratio, row)}</td>
-              <td>${formatPercent(row.cash_win_rate ?? row.win_rate)} ${metricInfoButton("cash_win_rate", "总胜率", row)} ${metricQualityBadge("cash_win_rate", row.cash_win_rate ?? row.win_rate, row)}</td>
-              <td>${formatPercent(r.decisive_win_rate)} ${metricInfoButton("decisive_win_rate", "净胜率", r)} ${metricQualityBadge("decisive_win_rate", r.decisive_win_rate, r)}</td>
-              <td>${formatPercent(r.scratch_rate)} ${metricInfoButton("scratch", "打平占比", r)} ${metricQualityBadge("scratch", r.scratch_rate, r)}</td>
-              <td>${formatRValue(r.expectancy_r)} ${metricInfoButton("expectancy_r", "平均数学期望", r)} ${metricQualityBadge("expectancy_r", r.expectancy_r, r)}</td>
-              <td>${sqn} ${metricInfoButton("sqn", "收益稳定度", r)} ${metricQualityBadge("sqn", r.sqn, r)}</td>
+              <td>${row.order_count} ${metricQualityBadge("campaign_count", row.order_count, r)}</td>
+              <td>${formatRatio(row.profit_factor)} ${metricQualityBadge("cash_profit_factor", row.profit_factor, r)}</td>
+              <td>${formatRatio(row.payoff_ratio)} ${metricQualityBadge("payoff_ratio", row.payoff_ratio, row)}</td>
+              <td>${formatPercent(row.cash_win_rate ?? row.win_rate)} ${metricQualityBadge("cash_win_rate", row.cash_win_rate ?? row.win_rate, row)}</td>
+              <td>${formatPercent(r.decisive_win_rate)} ${metricQualityBadge("decisive_win_rate", r.decisive_win_rate, r)}</td>
+              <td>${formatPercent(r.scratch_rate)} ${metricQualityBadge("scratch", r.scratch_rate, r)}</td>
+              <td>${compactMetricText(formatRValue(r.expectancy_r))} ${metricQualityBadge("expectancy_r", r.expectancy_r, r)}</td>
+              <td>${sqn} ${metricQualityBadge("sqn", r.sqn, r)}</td>
             </tr>
           `;
         })
         .join("") || `<tr><td colspan="10">当前范围暂无交易</td></tr>`,
     );
+    setHtml(
+      "systemEvaluationPagination",
+      rows.length > systemPageSize
+        ? `<span>第 ${systemPage} / ${pageCount} 页 · 共 ${rows.length} 天</span><div><button class="button" type="button" data-system-page="prev" ${systemPage <= 1 ? "disabled" : ""}>上一页</button><button class="button" type="button" data-system-page="next" ${systemPage >= pageCount ? "disabled" : ""}>下一页</button></div>`
+        : "",
+    );
+    bindSystemPagination();
+  }
+
+  function bindSystemPagination() {
+    if (typeof view.querySelectorAll !== "function") return;
+    for (const button of view.querySelectorAll("[data-system-page]")) {
+      if (button.dataset.pageBound) continue;
+      button.dataset.pageBound = "1";
+      button.addEventListener("click", () => {
+        systemPage += button.dataset.systemPage === "next" ? 1 : -1;
+        renderSystemEvaluation();
+      });
+    }
   }
 
   function renderModeEvaluation() {
     const evaluation = payload?.mode_evaluation || { trade_type: [], strategy: [] };
     const groups = [
-      ["交易类型", evaluation.trade_type || []],
+      ["交易场景", evaluation.trade_type || []],
       ["交易策略", evaluation.strategy || []],
     ];
     setHtml(
@@ -422,18 +452,18 @@ export function createDashboardController({
           ([title, rows]) => `
             <section class="mode-group">
               <h3>${title}</h3>
-              <div class="mode-card-grid">
+              <div class="mode-card-grid mode-card-grid--${rows.length}">
                 ${rows.map((row) => `
                   <article class="mode-card">
                     <header><strong>${escapeHtml(row.label || row.key)}</strong><span>${formatPercent(row.share)}</span></header>
                     <div class="${profitClass(row.net_pnl)}">${formatMoney(row.net_pnl)}</div>
-                    <small>${row.order_count} 笔交易 ${metricQualityBadge("campaign_count", row.order_count, row.r_metrics || {})} · 总胜率 ${formatPercent(row.cash_win_rate ?? row.win_rate)} ${metricInfoButton("cash_win_rate", "总胜率", row.r_metrics || {})} ${metricQualityBadge("cash_win_rate", row.cash_win_rate ?? row.win_rate, row.r_metrics || {})} · 总盈亏比 ${formatRatio(row.profit_factor)} ${metricInfoButton("cash_profit_factor", "总盈亏比", row.r_metrics || {})} ${metricQualityBadge("cash_profit_factor", row.profit_factor, row.r_metrics || {})}</small>
+                    <small>${row.order_count} 笔交易 · 总胜率 ${formatPercent(row.cash_win_rate ?? row.win_rate)} · 总盈亏比 ${formatRatio(row.profit_factor)}</small>
                     <dl class="mode-r-metrics">
-                      <div><dt>净胜率（剔除打平） ${metricInfoButton("decisive_win_rate", "净胜率（剔除打平）", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.decisive_win_rate)} ${metricQualityBadge("decisive_win_rate", row.r_metrics?.decisive_win_rate, row.r_metrics || {})}</dd></div>
-                      <div><dt>有效胜率 ${metricInfoButton("all_sample_win_rate", "有效胜率", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.all_sample_win_rate)} ${metricQualityBadge("all_sample_win_rate", row.r_metrics?.all_sample_win_rate, row.r_metrics || {})}</dd></div>
-                      <div><dt>打平占比 ${metricInfoButton("scratch", "打平占比", row.r_metrics || {})}</dt><dd>${formatPercent(row.r_metrics?.scratch_rate)} ${metricQualityBadge("scratch", row.r_metrics?.scratch_rate, row.r_metrics || {})}</dd></div>
-                      <div><dt>平均数学期望（ER） ${metricInfoButton("expectancy_r", "平均数学期望（ER）", row.r_metrics || {})}</dt><dd>${formatRValue(row.r_metrics?.expectancy_r)} ${metricQualityBadge("expectancy_r", row.r_metrics?.expectancy_r, row.r_metrics || {})}</dd></div>
-                      <div><dt>收益稳定度（SQN） ${metricInfoButton("sqn", "收益稳定度（SQN）", row.r_metrics || {})}</dt><dd>${row.r_metrics?.sqn_status === "available" ? Number(row.r_metrics.sqn).toFixed(2) : "样本不足"} ${metricQualityBadge("sqn", row.r_metrics?.sqn, row.r_metrics || {})}</dd></div>
+                      <div><dt>净胜率（剔除打平）</dt><dd>${formatPercent(row.r_metrics?.decisive_win_rate)}</dd></div>
+                      <div><dt>有效胜率</dt><dd>${formatPercent(row.r_metrics?.all_sample_win_rate)}</dd></div>
+                      <div><dt>打平占比</dt><dd>${formatPercent(row.r_metrics?.scratch_rate)}</dd></div>
+                      <div><dt>平均数学期望（ER）</dt><dd>${compactMetricText(formatRValue(row.r_metrics?.expectancy_r))}</dd></div>
+                      <div><dt>收益稳定度（SQN）</dt><dd>${row.r_metrics?.sqn_status === "available" ? Number(row.r_metrics.sqn).toFixed(2) : "!"}</dd></div>
                     </dl>
                   </article>
                 `).join("") || `<div class="detail-empty">当前范围暂无数据</div>`}
@@ -448,7 +478,7 @@ export function createDashboardController({
   function renderCalendar() {
     const calendar = payload?.calendar;
     if (!calendar) return;
-    setText("calendarTitle", `${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
+    setText("calendarTitle", `日历 · ${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
     setHtml(
       "calendarStats",
       [
@@ -698,6 +728,7 @@ export function createDashboardController({
     renderRegion("analysisRegion", { state: "loading", message: "正在读取分析数据" });
     try {
       payload = await gate.run("analysis", (signal) => api.requestJson(`/api/analysis?${query}`, { signal }));
+      systemPage = 1;
       calendarYear = payload?.calendar?.year ?? null;
       calendarMonth = payload?.calendar?.month ?? null;
       renderAll();
@@ -729,7 +760,7 @@ export function createDashboardController({
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘" })
+      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh })
       : null;
 
     const timePreset = getElement("timePreset");

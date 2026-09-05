@@ -269,7 +269,8 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
     assert.equal(document.activeElement, focusable[0]);
 
     collapseButton.hiddenFromLayout = true;
-    links.at(-1).focus();
+    const refreshButton = navigation.querySelector('[aria-label="刷新数据"]');
+    refreshButton.focus();
     const mobileTab = document.dispatch("keydown", {key: "Tab", shiftKey: false});
     assert.equal(mobileTab.defaultPrevented, true);
     assert.equal(document.activeElement, links[0]);

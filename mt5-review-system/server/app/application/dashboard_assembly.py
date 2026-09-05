@@ -42,12 +42,12 @@ def _campaign_repository() -> CampaignRepository:
     )
 
 
-def list_classification_options():
-    return CatalogRepository(get_runtime_paths()).list_classifications()
+def list_classification_options(active_only: bool = True) -> list[dict[str, Any]]:
+    return CatalogRepository(get_runtime_paths()).list_classifications(active_only=active_only)
 
 
-def list_custom_fields():
-    return CatalogRepository(get_runtime_paths()).list_custom_fields()
+def list_custom_fields(active_only: bool = True) -> list[dict[str, Any]]:
+    return CatalogRepository(get_runtime_paths()).list_custom_fields(active_only=active_only)
 
 
 def get_analysis_settings():
@@ -77,7 +77,11 @@ def get_dashboard(
     serialize_trade = trade_serializer or dict
     serialize_campaign = campaign_serializer or CampaignResponseSerializer(serialize_trade)
     snapshots = list_equity_snapshots()
-    classification_options = list_classification_options()
+    # Surface only active classifications + custom fields across all downstream
+    # surfaces (filters, dashboards, mode evaluation, custom field columns).
+    # Inactive entries are kept for label lookups and historical aggregation.
+    classification_options = list_classification_options(active_only=True)
+    custom_fields = list_custom_fields(active_only=True)
     with db() as conn:
         campaigns = [record for record in _campaign_records_conn(conn) if record.get("status") == "closed"]
     threshold = get_analysis_settings()["scratch_threshold_r"]
@@ -94,7 +98,7 @@ def get_dashboard(
         "summary": build_summary(trades, snapshots, anchor),
         "status": get_local_status(),
         "trends": list_trends(),
-        "custom_fields": list_custom_fields(),
+        "custom_fields": custom_fields,
         "classification_options": classification_options,
         "trades": [serialize_trade(trade) for trade in trades],
         "campaigns": [

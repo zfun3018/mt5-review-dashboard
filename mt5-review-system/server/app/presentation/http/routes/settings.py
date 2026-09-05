@@ -39,7 +39,9 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
         return ok({"ok": True})
 
     def custom_fields(path: str, query: Query, body: Body):
-        return ok({"custom_fields": storage.list_custom_fields()})
+        active_only = (first(query, "active_only", "0") or "0") in {"1", "true"}
+        fields = storage.list_custom_fields(active_only=True) if active_only else storage.list_custom_fields()
+        return ok({"custom_fields": fields})
 
     def create_custom_field(path: str, query: Query, body: Body):
         return created(storage.create_custom_field(request_body(body)))
@@ -55,6 +57,21 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
         field_id = int(path_part(path, 3))
         try:
             storage.delete_custom_field(field_id)
+        except KeyError:
+            return not_found("Field not found")
+        return ok({"ok": True})
+
+    def custom_field_restore(path: str, query: Query, body: Body):
+        field_id = int(path_part(path, 3))
+        try:
+            return ok(storage.restore_custom_field(field_id))
+        except KeyError:
+            return not_found("Field not found")
+
+    def custom_field_purge(path: str, query: Query, body: Body):
+        field_id = int(path_part(path, 3))
+        try:
+            storage.purge_custom_field(field_id)
         except KeyError:
             return not_found("Field not found")
         return ok({"ok": True})
@@ -91,6 +108,13 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
             return not_found("Option not found")
         return ok({"ok": True})
 
+    def classification_restore(path: str, query: Query, body: Body):
+        option_id = unquote(path_part(path, 3))
+        try:
+            return ok(storage.restore_classification_option(option_id))
+        except KeyError:
+            return not_found("Option not found")
+
     def backups(path: str, query: Query, body: Body):
         return ok({"backups": storage.list_backups()})
 
@@ -100,6 +124,9 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
     def status(path: str, query: Query, body: Body):
         auto_import()
         return ok(storage.get_local_status())
+
+    def sync(path: str, query: Query, body: Body):
+        return ok(auto_import())
 
     router.add("GET", "/api/analysis-settings", analysis_settings)
     router.add(
@@ -117,7 +144,10 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
     router.add_prefix(
         "PUT", "/api/custom-fields/", custom_field_put, reads_body=True
     )
+    # Register the more specific suffix route before the generic field route.
+    router.add_prefix("DELETE", "/api/custom-fields/", custom_field_purge, suffix="/purge")
     router.add_prefix("DELETE", "/api/custom-fields/", custom_field_delete)
+    router.add_prefix("POST", "/api/custom-fields/", custom_field_restore, suffix="/restore")
     router.add("GET", "/api/classification-options", classification_options)
     router.add(
         "POST",
@@ -132,6 +162,8 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
         reads_body=True,
     )
     router.add_prefix("DELETE", "/api/classification-options/", classification_delete)
+    router.add_prefix("POST", "/api/classification-options/", classification_restore, suffix="/restore")
     router.add("GET", "/api/backups", backups)
     router.add("POST", "/api/backups", create_backup)
     router.add("GET", "/api/status", status)
+    router.add("POST", "/api/sync", sync)

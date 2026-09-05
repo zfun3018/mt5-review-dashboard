@@ -29,18 +29,39 @@ test("custom select fields use the choice popover in table and detail views", ()
   assert.match(customFieldsSource, /\u67e5\u627e\u6216\u521b\u5efa\u9009\u9879/);
 });
 
+test("multi-select saves use optimistic state and serialize per-field requests", () => {
+  assert.match(customFieldsSource, /pendingChoiceValues/);
+  assert.match(customFieldsSource, /choiceSaveChains/);
+  assert.match(customFieldsSource, /pendingChoiceValues\.set\(key, value\)/);
+  assert.match(customFieldsSource, /choiceSaveChains\.get\(key\) \|\| Promise\.resolve\(\)/);
+  assert.match(customFieldsSource, /字段保存失败/);
+  assert.match(customFieldsSource, /setTradeCustomValue\(tradeId, fieldId, value\)/);
+});
+
+test("choice search updates options without replacing the IME input", () => {
+  assert.match(customFieldsSource, /function renderChoiceOptions\(/);
+  assert.match(customFieldsSource, /renderChoiceOptions\(node, field, trade\)/);
+  assert.doesNotMatch(customFieldsSource, /choiceEditor\.query = event\.target\.value;\s*renderChoicePopover\(\)/);
+});
+
 test("cumulative return chart has an independent grid row and readable axis reserves", () => {
-  assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-row:\s*span 2/s);
+  assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-column:\s*1 \/ -1/s);
   assert.match(dashboardJs, /const padding = \{ top: 30, right: 84, bottom: 44, left: 106 \}/);
-  assert.match(dashboardJs, /Math\.min\(1200, chartNode\.clientWidth/);
+  assert.match(dashboardJs, /Math\.min\(2400, chartNode\.clientWidth/);
   assert.match(dashboardCss, /\.axis-label\s*\{[^}]*fill:\s*var\(--color-muted\)/s);
   assert.match(dashboardCss, /\.time-label\s*\{[^}]*fill:\s*var\(--color-muted\)/s);
+  assert.match(dashboardJs, /Array\.from\(\{ length: 7 \}/);
+  assert.match(dashboardJs, /timeTicks = \[0, 0\.25, 0\.5, 0\.75, 1\]/);
 });
 
 test("custom field type and options are sent when fields are added or saved", () => {
   assert.match(settingsHtml, /newCustomFieldType/);
   assert.match(schemaSource, /field_type:\s*fieldType/);
   assert.match(schemaSource, /collectOptions/);
+  assert.match(schemaSource, /data-custom-field-restore/);
+  assert.match(schemaSource, /custom-fields\/\$\{fieldId\}\/restore/);
+  assert.match(schemaSource, /data-custom-field-purge/);
+  assert.match(schemaSource, /custom-fields\/\$\{fieldId\}\/purge/);
 });
 
 test("classification manager supports data-driven create, rename, and archive", () => {
@@ -110,8 +131,8 @@ test("analysis workspace exposes cumulative return, shared filters, and evaluati
   assert.match(dashboardJs, /chartNode\.clientWidth/);
   assert.match(dashboardJs, /z_score/);
   assert.match(dashboardJs, /renderSystemEvaluationSummary/);
-  assert.match(dashboardCss, /\.r-metric-grid\s*\{[^}]*repeat\(5,/s);
+  assert.match(dashboardCss, /\.r-metric-grid\s*\{[^}]*repeat\(7,/s);
   assert.match(dashboardCss, /\.evaluation-table-wrap\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(dashboardCss, /\.evaluation-table\s*\{[^}]*min-width:\s*860px/s);
-  assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-row:\s*span 2/s);
+  assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-column:\s*1 \/ -1/s);
 });

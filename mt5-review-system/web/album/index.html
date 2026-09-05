@@ -93,6 +93,10 @@
         view: document,
         location: window.location,
         history: window.history,
+        onRefresh: async () => {
+          await requestJson("/api/sync", { method: "POST" });
+          window.location.reload();
+        },
       });
       controller.init();
       controller.load();

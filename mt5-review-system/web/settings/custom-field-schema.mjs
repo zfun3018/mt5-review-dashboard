@@ -65,7 +65,8 @@ export function createCustomFieldSchemaModule({
           <input type="text" value="${escapeAttr(field.name)}" data-custom-field-name="${field.id}" />
           <select data-custom-field-type="${field.id}" title="字段类型">${typeOptions}</select>
           <button class="button" data-custom-field-save="${field.id}">保存</button>
-          <button class="button-danger" data-custom-field-delete="${field.id}">删除</button>
+          ${field.active ? `<button class="button" data-custom-field-delete="${field.id}">停用</button>` : `<button class="button" data-custom-field-restore="${field.id}">恢复</button>`}
+          <button class="button-danger" data-custom-field-purge="${field.id}">删除字段</button>
         </div>
         <div class="option-editor ${field.field_type === "text" ? "hidden" : ""}" data-option-editor="${field.id}">
           <div class="option-list" data-option-list="${field.id}">
@@ -94,6 +95,12 @@ export function createCustomFieldSchemaModule({
     });
     node.querySelectorAll("[data-custom-field-delete]").forEach((button) => {
       button.addEventListener("click", () => remove(Number(button.dataset.customFieldDelete)));
+    });
+    node.querySelectorAll("[data-custom-field-restore]").forEach((button) => {
+      button.addEventListener("click", () => restore(Number(button.dataset.customFieldRestore)));
+    });
+    node.querySelectorAll("[data-custom-field-purge]").forEach((button) => {
+      button.addEventListener("click", () => purge(Number(button.dataset.customFieldPurge)));
     });
     node.querySelectorAll("[data-option-add]").forEach((button) => {
       button.addEventListener("click", () => addOptionRow(Number(button.dataset.optionAdd)));
@@ -181,9 +188,34 @@ export function createCustomFieldSchemaModule({
     if (!confirm("删除这个自定义字段？该字段在所有订单里的填写内容也会删除。")) return null;
     await api.requestJson(`/api/custom-fields/${fieldId}`, { method: "DELETE" });
     await afterMutation();
-    toast("字段已删除");
+    toast("字段已停用，可在此恢复");
     return { ok: true };
   }
 
-  return { render, create, update, remove };
+  async function purge(fieldId) {
+    if (!confirm("永久删除这个字段及其所有订单填写内容？此操作不可恢复。")) return null;
+    try {
+      await api.requestJson(`/api/custom-fields/${fieldId}/purge`, { method: "DELETE" });
+      await afterMutation();
+      toast("字段已永久删除");
+      return { ok: true };
+    } catch (error) {
+      toast(error?.message || "字段删除失败", { tone: "error" });
+      return null;
+    }
+  }
+
+  async function restore(fieldId) {
+    try {
+      const restored = await api.requestJson(`/api/custom-fields/${fieldId}/restore`, { method: "POST" });
+      await afterMutation();
+      toast("字段已恢复");
+      return restored || fieldId;
+    } catch (error) {
+      toast(error?.message || "字段恢复失败", { tone: "error" });
+      return null;
+    }
+  }
+
+  return { render, create, update, remove, restore, purge };
 }

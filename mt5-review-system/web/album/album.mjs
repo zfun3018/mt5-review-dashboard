@@ -31,6 +31,7 @@ export function createAlbumController({
   view = globalThis.document,
   location = globalThis.location,
   history = globalThis.history,
+  onRefresh = null,
 } = {}) {
   const gate = new RequestGate();
   let state = readAlbumState(location.search);
@@ -325,7 +326,7 @@ export function createAlbumController({
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/album/", title: "复盘画册" })
+      ? mountShell({ activeRoute: "/album/", title: "复盘画册", onRefresh })
       : null;
 
     getElement("albumRefresh")?.addEventListener("click", () => load());

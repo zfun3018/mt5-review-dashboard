@@ -159,8 +159,11 @@ class ReviewAlbumTest(unittest.TestCase):
         self.assertNotIn("trade_type:follow", tag_keys)
         self.assertTrue(any(key.startswith(f"field:{self.single['id']}:") for key in tag_keys))
         self.assertFalse(any(key.startswith(f"field:{self.text['id']}:") for key in tag_keys))
-        historical = next(tag for trade in result["trades"] for tag in trade["album_tags"] if tag["key"] == "trade_type:follow")
-        self.assertEqual(historical["label"], "交易类型 / 跟随")
+        self.assertFalse(any(
+            tag["key"] == "trade_type:follow"
+            for trade in result["trades"]
+            for tag in trade["album_tags"]
+        ))
 
     def test_invalid_date_and_unknown_tag_are_rejected(self):
         with self.assertRaises(ValueError):

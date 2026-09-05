@@ -1,8 +1,8 @@
 {
   "name": "mt5-review-system",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
-  "description": "MT5 trading review dashboard (v0.6.0). Node packages below are dev-only and do not ship with the runtime.",
+  "description": "MT5 trading review dashboard (v0.6.1). Node packages below are dev-only and do not ship with the runtime.",
   "scripts": {
     "test:unit": "node scripts/run-unit-tests.mjs",
     "test:ui": "playwright test"

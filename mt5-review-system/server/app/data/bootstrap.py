@@ -92,6 +92,9 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     }
     if "field_type" not in custom_columns:
         conn.execute("ALTER TABLE custom_fields ADD COLUMN field_type TEXT NOT NULL DEFAULT 'text'")
+    if "active" not in custom_columns:
+        conn.execute("ALTER TABLE custom_fields ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_custom_fields_active ON custom_fields(active)")
 
     conn.execute(
         """

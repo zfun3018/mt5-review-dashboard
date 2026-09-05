@@ -26,7 +26,7 @@
                 <p class="eyebrow">CLASSIFICATIONS</p>
                 <h2>分类管理</h2>
               </div>
-              <p class="settings-hint">停用分类只隐藏新录入选项，历史订单与统计保持不变。</p>
+                <p class="settings-hint">停用后会从订单、仪表盘和画册中隐藏，历史数据仍保留，可随时恢复。</p>
             </div>
             <div id="classificationManager" class="classification-manager"></div>
           </div>
@@ -104,6 +104,10 @@
         view: document,
         location: window.location,
         history: window.history,
+        onRefresh: async () => {
+          await requestJson("/api/sync", { method: "POST" });
+          window.location.reload();
+        },
       });
       controller.init();
       controller.load().catch((error) => console.error("设置加载失败", error));

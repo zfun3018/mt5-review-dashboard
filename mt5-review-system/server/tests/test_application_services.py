@@ -321,7 +321,7 @@ class AlbumServiceTest(unittest.TestCase):
             {"7": {"field_type": "single", "option_ids": ["70"]}},
         )
         self.assertEqual(trades.symbol_calls, 1)
-        self.assertEqual(catalogs.classification_calls, [(None, False), (None, True)])
+        self.assertEqual(catalogs.classification_calls, [(None, True), (None, True)])
         self.assertEqual(catalogs.custom_field_calls, 1)
 
 

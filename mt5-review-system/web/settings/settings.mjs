@@ -21,6 +21,7 @@ export function createSettingsController({
   view = globalThis.document,
   location = globalThis.location,
   history = globalThis.history,
+  onRefresh = null,
   confirm = (message) => (globalThis.confirm ? globalThis.confirm(message) : true),
 } = {}) {
   const gate = new RequestGate();
@@ -228,7 +229,7 @@ export function createSettingsController({
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/settings/", title: "设置" })
+      ? mountShell({ activeRoute: "/settings/", title: "设置", onRefresh })
       : null;
 
     if (typeof view.querySelectorAll === "function") {
@@ -262,6 +263,7 @@ export function createSettingsController({
     createCustomField: customFieldModule.create,
     updateCustomField: customFieldModule.update,
     deleteCustomField: customFieldModule.remove,
+    restoreCustomField: customFieldModule.restore,
     switchTab,
     dispose,
     getState: () => state,

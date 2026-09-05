@@ -2,7 +2,7 @@
 
 这是一个 local-first 的 MT5 交易复盘系统。项目代码开源，但订单数据库、截图、原始事件和本机配置默认只保存在当前电脑，不上传云端。
 
-当前版本：`v0.6.0`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
+当前版本：`v0.6.1`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
 
 GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等 AI 工具的项目规则见 [`AGENTS.md`](../AGENTS.md)。
 
@@ -13,8 +13,10 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 - 已检测到的 MT5 数据目录配置：`config.local.json`
 - 示例订单和示例 5 分钟图表截图
 - 订单流水、K 线截图、500 字以上复盘文本和自定义字段
+- 左侧导航提供统一的“刷新数据”操作，会先执行一次 JSONL 增量同步，再刷新当前页面
 - K 线截图支持直接粘贴、本地上传替换和删除，替换时自动清理旧文件
 - 可新增、改名和停用的交易类型/交易策略，历史统计使用稳定标识
+- 自定义字段支持停用、恢复和永久删除；永久删除会清除该字段的历史填写内容，并要求二次确认
 - 默认 30 天、可切换 3/7/30 天的资金曲线
 - 月度盈亏日历
 - 一周 x 24 小时盈亏热力图
@@ -171,6 +173,7 @@ v0.4.1 增加画册短/长复盘自适应展开策略、统一顶部导航和深
 ## 统计与接口
 
 - `GET /api/analysis?equity_days=30`：日期范围分析、资金曲线、系统评估和模式评估。
+- `POST /api/sync`：执行一次 JSONL 增量同步，供页面刷新数据使用。
 - `GET /api/review-album?symbol=XAUUSDc&tag=strategy:breakout`：按交易日返回画册卡片和标签目录。
 - `GET /api/system-evaluation?start=YYYY-MM-DD&end=YYYY-MM-DD`：按日评估与 Z 分数。
 - `GET /api/mode-evaluation?dimension=trade_type|strategy`：按交易类型或策略聚合。
@@ -178,6 +181,8 @@ v0.4.1 增加画册短/长复盘自适应展开策略、统一顶部导航和深
 - `PUT/DELETE /api/classification-options/{id}`：改名或停用分类，稳定标识不变。
 - `GET /api/trades?page=1&page_size=50&side=long`：订单分页与筛选。
 - `DELETE /api/trades/{id}` 与 `POST /api/trades/{id}/restore`：软删除和恢复。
+- `DELETE /api/custom-fields/{id}`：停用自定义字段；`POST /api/custom-fields/{id}/restore`：恢复字段。
+- `DELETE /api/custom-fields/{id}/purge`：永久删除字段、选项及历史填写内容。
 
 统计中的净盈亏为利润 + 手续费 + 隔夜利息 + 费用；盈亏平衡交易不进入 Z 分数的胜负序列。
 
