@@ -9,6 +9,11 @@ set "DASHBOARD_URL=http://127.0.0.1:8787"
 if "%MT5_REVIEW_HOST%"=="" set "MT5_REVIEW_HOST=127.0.0.1"
 if "%MT5_REVIEW_PORT%"=="" set "MT5_REVIEW_PORT=8787"
 
+rem v0.6.0: route data + config to the canonical main-folder locations
+rem (these paths are ignored by git, so they survive rebuilds).
+set "MT5_REVIEW_DATA_DIR=%PROJECT_DIR%\data"
+set "MT5_REVIEW_CONFIG_FILE=%PROJECT_DIR%\config.local.json"
+
 if not exist "%PROJECT_DIR%\start.ps1" (
   echo [ERROR] Cannot find the project startup file:
   echo "%PROJECT_DIR%\start.ps1"
