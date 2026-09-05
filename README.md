@@ -1,6 +1,6 @@
 # MT5 复盘仪表盘
 
-当前稳定开发版本为 `v0.5.8`，主项目位于 `mt5-review-system/`。
+当前稳定开发版本为 `v0.6.0`，主项目位于 `mt5-review-system/`。
 
 - 项目说明：`mt5-review-system/README.md`
 - 版本路线：`docs/VERSION-ROUTE.md`
@@ -11,10 +11,9 @@
 `mt5-review-system/` 后运行 `start.ps1`。默认访问地址为
 `http://127.0.0.1:8787`。
 
-一键启动脚本默认同时监听可信局域网。电脑浏览器使用
-`http://127.0.0.1:8787`，手机或其他局域网设备使用启动窗口显示的
-`http://<电脑局域网IP>:8787`。如果 Windows 防火墙拦截，请仅在“专用网络”中放行 TCP 8787，
-不要将端口转发到公网。
+服务默认只监听本机 `127.0.0.1`，不会主动暴露到局域网。确实需要在可信局域网用手机访问时，
+必须显式设置 `MT5_REVIEW_HOST`（见下方「手机和局域网访问」）。如果 Windows 防火墙拦截，
+请仅在“专用网络”中放行 TCP 8787，不要将端口转发到公网。
 
 本地数据库、交易事件、截图、备份和机器配置不纳入版本控制。
 
@@ -136,11 +135,23 @@ $env:MT5_REVIEW_PYTHON = "C:\Path\To\python.exe"
 
 ## 手机和局域网访问
 
-一键启动脚本默认监听可信局域网。手机与电脑连接同一 Wi-Fi 后：
+服务默认只监听本机 `127.0.0.1`，不向局域网开放。确实需要在可信局域网用手机访问时，
+必须显式开启监听地址：
+
+```powershell
+$env:MT5_REVIEW_HOST = "0.0.0.0"  # 仅在可信局域网中显式开启
+$env:MT5_REVIEW_PORT = "8787"
+Set-Location .\mt5-review-system
+.\start.ps1
+```
+
+手机与电脑连接同一 Wi-Fi 后：
 
 1. 在电脑上运行 `ipconfig`；
 2. 找到 Wi-Fi 适配器的 IPv4 地址，例如 `192.168.10.73`；
 3. 手机打开 `http://192.168.10.73:8787`。
+
+关闭窗口或清除 `MT5_REVIEW_HOST` 环境变量后，下次启动恢复为仅本机访问。
 
 手机不能使用 `127.0.0.1`，因为它代表手机自己。如果 Windows 防火墙拦截，在管理员 PowerShell 中仅对专用网络放行：
 
@@ -239,9 +250,28 @@ node --check web/app.js
 node --check web/album.js
 ```
 
+一键运行完整发布检查（Python、Node、语法、数据兼容、基准测试，可选浏览器）：
+
+```powershell
+Set-Location .\mt5-review-system
+python .\tools\check_release.py             # 本地完整检查
+python .\tools\check_release.py --skip-browser  # 不含浏览器
+```
+
 GitHub Actions 会在 `main` 推送和 Pull Request 时自动运行这些检查。
 
 ## 最近更新
+
+### v0.6.0
+
+- 前端拆分为四个独立工作区：分析仪表盘 `/dashboard/`、订单流水 `/orders/`、复盘画册 `/album/`、设置与系统 `/settings/`，共享统一左侧导航。
+- 后端重组为数据、领域分析、应用调度、表现四层，依赖只从外层指向内层。
+- 每个页面只读取自身数据，仪表盘不再加载订单详情或完整 Campaign 列表，减少首屏等待。
+- Campaign 重建从读取路径移到写入或显式修复路径，读取接口不再隐式写入数据库。
+- 服务默认只监听 `127.0.0.1`，局域网访问需显式设置 `MT5_REVIEW_HOST`。
+- 旧地址自动重定向到对应新页面，历史订单、截图、复盘、分类、自定义字段和统计口径保持不变。
+- 新增 10,000 笔合成订单基准测试、数据兼容/回滚演练和一键发布检查 `tools/check_release.py`。
+- Windows 桌面封装留待下一阶段，本次已完成程序目录与数据目录解耦等兼容边界。
 
 ### v0.5.0
 

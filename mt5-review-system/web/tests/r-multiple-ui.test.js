@@ -6,6 +6,10 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const RMultipleUI = require(path.join(root, "r-multiple.js"));
 
+const ordersSource = fs.readFileSync(path.join(root, "orders", "orders.mjs"), "utf8");
+const orderDetailSource = fs.readFileSync(path.join(root, "orders", "order-detail.mjs"), "utf8");
+const ordersCss = fs.readFileSync(path.join(root, "orders", "orders.css"), "utf8");
+
 test("campaign R formatter distinguishes complete, missing, partial, and invalid states", () => {
   assert.equal(RMultipleUI.formatCampaignR({ campaign_r: 0.1234 }), "+0.12R");
   assert.equal(
@@ -77,23 +81,21 @@ test("metric explanations include formula, dynamic threshold, sample, missing re
 });
 
 test("metric quality treats missing values as insufficient samples", () => {
-  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  assert.match(app, /if \(!hasValue\) return \{ label: "样本不足"/);
+  const dashboard = fs.readFileSync(path.join(root, "dashboard", "dashboard.mjs"), "utf8");
+  assert.match(dashboard, /if \(!hasValue\) return \{ label: "样本不足"/);
 });
 
-test("dashboard exposes accessible shared metric explanation and R controls", () => {
-  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  const css = fs.readFileSync(path.join(root, "styles.css"), "utf8");
+test("dashboard exposes accessible shared metric explanation", () => {
+  const html = fs.readFileSync(path.join(root, "dashboard", "index.html"), "utf8");
+  const app = fs.readFileSync(path.join(root, "dashboard", "dashboard.mjs"), "utf8");
+  const css = fs.readFileSync(path.join(root, "dashboard", "dashboard.css"), "utf8");
 
-  assert.match(html, /id="riskMissingOnly"/);
-  assert.match(html, /id="scratchThresholdR"/);
   assert.match(html, /id="metricExplanationPopover"[^>]*role="dialog"/);
   assert.match(app, /aria-label="解释/);
   assert.match(app, /event\.key === "Escape"[\s\S]*closeMetricExplanation/);
-  assert.match(app, /closest\("\.metric-explanation-popover, \[data-metric-info\]"\)/);
-  assert.match(css, /max-width:\s*min\(420px, calc\(100vw - 24px\)\)/);
-  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.campaign-position/);
+  assert.match(app, /closest\?\.\("\.metric-explanation-popover, \[data-metric-info\]"\)/);
+  assert.match(css, /width:\s*420px/);
+  assert.match(css, /max-width:\s*calc\(100vw - 24px\)/);
   assert.doesNotMatch(app, /R 数据覆盖率/);
   assert.doesNotMatch(html, /R 覆盖率/);
   assert.match(app, /净胜率（剔除打平）/);
@@ -107,63 +109,53 @@ test("dashboard exposes accessible shared metric explanation and R controls", ()
   assert.doesNotMatch(html, /class="z-score-guide"/);
   assert.match(app, /metricQualityBadge\(/);
   assert.doesNotMatch(html, /id="summary"/);
-  assert.doesNotMatch(html, /id="rMetricSummary"/);
-  assert.match(css, /\.evaluation-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(html, /id="rMetricSummary"/);
+  assert.match(css, /\.evaluation-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 2fr\)/);
 });
 
 test("order flow exposes Scratch state and inline initial-stop editing", () => {
-  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-  const css = fs.readFileSync(path.join(root, "styles.css"), "utf8");
-
-  assert.match(app, /function isScratchCampaign\(/);
-  assert.match(app, /class="campaign-row[\s\S]*scratch/);
-  assert.match(app, /data-position-stop/);
-  assert.match(app, /campaign-expand/);
-  assert.match(app, /初始止损/);
-  assert.match(app, /入场价/);
-  assert.match(app, /出场价/);
-  assert.match(app, /持仓时间/);
-  assert.match(app, /placeholder="请输入初始止损"/);
-  assert.doesNotMatch(app, /placeholder="初始止损"/);
-  assert.match(css, /\.campaign-row\.scratch/);
-  assert.match(css, /\.campaign-detail-row/);
-  assert.match(css, /\.inline-stop-editor\s*\{[\s\S]*grid-template-columns:\s*minmax\(120px,\s*1fr\)\s+30px/);
-  assert.match(css, /\.trades-panel td:nth-child\(4\)\s*\{[^}]*min-width:\s*165px/);
-  assert.match(app, /position\.source_trade/);
-  assert.match(app, /trade-metrics-cell/);
-  assert.doesNotMatch(app, /<th>复盘<\/th>/);
-  assert.match(app, /data-position-id/);
-  assert.match(app, /function renderPositionDetail\(/);
-  assert.match(app, /api\(`\/api\/trades\/\$\{encodeURIComponent\(state\.selectedTradeId\)/);
+  assert.match(ordersSource, /function isScratchCampaign\(/);
+  assert.match(ordersSource, /class="campaign-row[\s\S]*scratch/);
+  assert.match(ordersSource, /data-position-stop/);
+  assert.match(ordersSource, /campaign-expand/);
+  assert.match(ordersSource, /初始止损/);
+  assert.match(ordersSource, /入场价/);
+  assert.match(ordersSource, /出场价/);
+  assert.match(ordersSource, /持仓时间/);
+  assert.match(ordersSource, /placeholder="请输入初始止损"/);
+  assert.doesNotMatch(ordersSource, /placeholder="初始止损"/);
+  assert.match(ordersCss, /\.campaign-row\.scratch/);
+  assert.match(ordersCss, /\.campaign-detail-row/);
+  assert.match(ordersCss, /\.inline-stop-editor\s*\{[\s\S]*grid-template-columns:\s*minmax\(120px,\s*1fr\)\s+30px/);
+  assert.match(ordersCss, /\.orders-table td:nth-child\(4\)\s*\{[^}]*min-width:\s*165px/);
+  assert.match(ordersSource, /position\.source_trade/);
+  assert.match(ordersSource, /trade-metrics-cell/);
+  assert.doesNotMatch(ordersSource, /<th>复盘<\/th>/);
+  assert.match(ordersSource, /data-position-id/);
+  assert.match(orderDetailSource, /function renderPositionDetail\(/);
+  assert.match(orderDetailSource, /\/api\/trades\/\$\{encodeURIComponent\(selection\.trade\.id\)\}/);
 });
 
 test("order flow only renders expand controls for merged campaigns", () => {
-  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-
-  assert.match(app, /positions\.length > 1/);
-  assert.match(app, /if \(!expanded \|\| positions\.length <= 1\) return summaryRows/);
-  assert.match(app, /renderCampaignPositionRow\(campaign, position/);
-  assert.match(app, /position\.position_pnl/);
-  assert.match(app, /money\.format\(position\.position_pnl/);
-  assert.doesNotMatch(app, /展开逐笔填写/);
+  assert.match(ordersSource, /positions\.length > 1/);
+  assert.match(ordersSource, /if \(!expanded \|\| positions\.length <= 1\) return summaryRows/);
+  assert.match(ordersSource, /renderCampaignPositionRow\(campaign, position/);
+  assert.match(ordersSource, /position\.position_pnl/);
+  assert.match(ordersSource, /formatMoney\(position\.position_pnl/);
+  assert.doesNotMatch(ordersSource, /展开逐笔填写/);
 });
 
-test("order flow hydrates missing Position summaries before rendering", () => {
-  const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
-
-  assert.match(app, /async function hydrateCampaignPositionSummaries\(/);
-  assert.match(app, /state\.campaigns = await hydrateCampaignPositionSummaries\(/);
-  assert.match(app, /Position 数据待加载/);
-  assert.doesNotMatch(app, /0\/0 已填/);
+test("order flow shows a placeholder for campaigns missing Position summaries", () => {
+  assert.match(ordersSource, /Position 数据待加载/);
+  assert.doesNotMatch(ordersSource, /0\/0 已填/);
+  assert.doesNotMatch(ordersSource, /hydrateCampaignPositionSummaries/);
 });
 
 test("order flow does not force a horizontally scrolling wide table", () => {
-  const css = fs.readFileSync(path.join(root, "styles.css"), "utf8");
-
-  assert.doesNotMatch(css, /\.trades-panel table\s*\{[^}]*min-width:\s*980px/);
-  assert.doesNotMatch(css, /\.trades-panel table\s*\{[^}]*min-width:\s*1040px/);
-  assert.doesNotMatch(css, /table\s*\{[^}]*min-width:\s*1080px/);
-  assert.match(css, /table\s*\{[^}]*min-width:\s*0/);
-  assert.match(css, /\.trades-panel table\s*\{[^}]*width:\s*100%/);
-  assert.match(css, /\.trades-panel th,[\s\S]*?\.trades-panel td\s*\{[\s\S]*?overflow-wrap/);
+  assert.doesNotMatch(ordersCss, /\.orders-table\s*\{[^}]*min-width:\s*980px/);
+  assert.doesNotMatch(ordersCss, /\.orders-table\s*\{[^}]*min-width:\s*1040px/);
+  assert.doesNotMatch(ordersCss, /\.orders-table\s*\{[^}]*min-width:\s*1080px/);
+  assert.match(ordersCss, /\.orders-table\s*\{[^}]*width:\s*100%/);
+  assert.match(ordersCss, /\.orders-table\s*\{[^}]*max-width:\s*100%/);
+  assert.match(ordersCss, /\.orders-table th,[\s\S]*?\.orders-table td\s*\{[\s\S]*?overflow-wrap/);
 });

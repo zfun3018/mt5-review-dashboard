@@ -63,7 +63,7 @@ Retain `/styles.css`, `/app.js`, `/album.html`, `/album.css`, and `/album.js` on
 - Produces: `mountShell({activeRoute, title, actions})`, `openNavigation()`, `closeNavigation()`, `readQuery(schema)`, and `replaceQuery(values)`.
 - Produces routes `/dashboard/`, `/orders/`, `/album/`, and `/settings/` that resolve directory `index.html` files.
 
-- [ ] **Step 1: Add static-directory and shell contract tests**
+- [x] **Step 1: Add static-directory and shell contract tests**
 
 ```python
 def test_static_directory_resolves_index_html(self):
@@ -78,7 +78,7 @@ test("shell defines four left navigation destinations", () => {
 
 Assert CSS contains a 224px desktop navigation track, a 64px collapsed track, an overlay drawer at `max-width: 720px`, `:focus-visible`, and no `font-size: clamp(`.
 
-- [ ] **Step 2: Run tests and verify they fail**
+- [x] **Step 2: Run tests and verify they fail**
 
 Run from `mt5-review-system`: `node --test web/tests/app-shell-ui.test.js`
 
@@ -86,7 +86,7 @@ Run from `mt5-review-system/server`: `..\.venv\Scripts\python.exe -m unittest te
 
 Expected: FAIL because shell files and directory-index resolution do not exist.
 
-- [ ] **Step 3: Define design tokens**
+- [x] **Step 3: Define design tokens**
 
 Use exact token groups:
 
@@ -116,15 +116,15 @@ Use exact token groups:
 
 Add a fixed type scale from 12px to 28px, 44px minimum touch targets on mobile, and visible 2px focus rings.
 
-- [ ] **Step 4: Implement the shell and local icons**
+- [x] **Step 4: Implement the shell and local icons**
 
 Pin a named Lucide release in a source comment and include its license in `web/vendor/LICENSE-lucide.txt`. `mountShell` injects icon-only collapse/menu buttons with `title` and `aria-label`, applies the active link, and returns a cleanup function. The mobile drawer traps navigation focus only while open and returns focus to its trigger on close.
 
-- [ ] **Step 5: Add safe directory-index resolution**
+- [x] **Step 5: Add safe directory-index resolution**
 
 `resolve_static_path` maps an existing directory request to its `index.html`, still validates the resolved target is inside `WEB_DIR`, and retains the root compatibility behavior.
 
-- [ ] **Step 6: Run shell, syntax, and server tests**
+- [x] **Step 6: Run shell, syntax, and server tests**
 
 Run: `node --test web/tests/app-shell-ui.test.js`
 
@@ -134,7 +134,7 @@ Run: `..\.venv\Scripts\python.exe -m unittest tests.test_server_payload -v`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the shared shell**
+- [x] **Step 7: Commit the shared shell**
 
 ```powershell
 git add mt5-review-system/web/shared mt5-review-system/web/vendor mt5-review-system/web/tests/app-shell-ui.test.js mt5-review-system/server/app/server.py mt5-review-system/server/tests/test_server_payload.py
@@ -153,7 +153,7 @@ git commit -m "feat: add responsive application shell"
 - Produces: `requestJson(path, {method, body, signal})`, `RequestGate.begin(key) -> AbortController`, `RequestGate.run(key, requestFactory)`, `RequestGate.abortAll()`, `HttpError`, URL helpers, and existing formatters.
 - Consumes: browser `fetch`, `AbortController`, and `Intl` only.
 
-- [ ] **Step 1: Add fetch cancellation and formatter tests**
+- [x] **Step 1: Add fetch cancellation and formatter tests**
 
 ```javascript
 test("request gate aborts the older request in one region", async () => {
@@ -170,21 +170,21 @@ test("formatters preserve current money and R output", () => {
 });
 ```
 
-- [ ] **Step 2: Run shared module tests and verify they fail**
+- [x] **Step 2: Run shared module tests and verify they fail**
 
 Run: `node --test web/tests/shared-modules.test.mjs`
 
 Expected: FAIL because the modules do not exist.
 
-- [ ] **Step 3: Implement request handling**
+- [x] **Step 3: Implement request handling**
 
 `requestJson` sets JSON headers only when a body exists, parses JSON errors, maps non-2xx responses to `HttpError(status, message)`, and rethrows `AbortError` without showing a user error. `RequestGate` stores one controller per region and exposes `abortAll()` for page unload.
 
-- [ ] **Step 4: Move pure formatters and R explanations**
+- [x] **Step 4: Move pure formatters and R explanations**
 
 Move money/time/percentage/price/escape functions to `formatters.mjs`. Convert `r-multiple.js` into an ES module or add an ES module wrapper while retaining CommonJS compatibility until existing tests are migrated.
 
-- [ ] **Step 5: Run shared tests and syntax checks**
+- [x] **Step 5: Run shared tests and syntax checks**
 
 Run: `node --test web/tests/shared-modules.test.mjs web/tests/r-multiple-ui.test.js`
 
@@ -192,7 +192,7 @@ Run: `node --check web/shared/js/api.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit shared client infrastructure**
+- [x] **Step 6: Commit shared client infrastructure**
 
 ```powershell
 git add mt5-review-system/web/shared/js mt5-review-system/web/r-multiple.js mt5-review-system/web/tests
@@ -214,7 +214,7 @@ git commit -m "refactor: add shared frontend infrastructure"
 - Produces: `createDashboardController({api, view, location})`, `readDashboardState(search)`, and `writeDashboardState(state)`.
 - Consumes: `GET /api/analysis` only. Scratch threshold editing belongs exclusively to Settings.
 
-- [ ] **Step 1: Add dashboard isolation tests**
+- [x] **Step 1: Add dashboard isolation tests**
 
 ```javascript
 test("dashboard loads analysis without campaigns or bootstrap", async () => {
@@ -228,29 +228,29 @@ test("dashboard loads analysis without campaigns or bootstrap", async () => {
 
 Add URL round-trip assertions for preset, start, end, equity days, year, and month.
 
-- [ ] **Step 2: Run dashboard tests and verify they fail**
+- [x] **Step 2: Run dashboard tests and verify they fail**
 
 Run: `node --test web/tests/dashboard-workspace.test.mjs`
 
 Expected: FAIL because dashboard modules do not exist.
 
-- [ ] **Step 3: Build dashboard semantic markup**
+- [x] **Step 3: Build dashboard semantic markup**
 
 Include the application shell mount point, compact page header, analysis filters, equity chart, monthly calendar, heatmap, session stats, system evaluation, mode evaluation, regional loading/error nodes, metric explanation dialog, and toast. Do not include order search, Campaign rows, detail editor, screenshot editor, field manager, backup, or status drawer.
 
-- [ ] **Step 4: Extract dashboard state and rendering**
+- [x] **Step 4: Extract dashboard state and rendering**
 
 Move analysis-only functions from `app.js`. The controller uses `RequestGate` region `analysis`, ignores abort failures, updates URL before reload, and renders one regional retry button on failure. Calendar month navigation changes only year/month state and reloads the analysis payload.
 
-- [ ] **Step 5: Style dashboard layout from shared tokens**
+- [x] **Step 5: Style dashboard layout from shared tokens**
 
 Use stable grid tracks and min/max sizes for charts and calendars. Avoid nested cards, decorative gradients, radial backgrounds, oversized headings, and viewport-scaled font sizes. At 390px, charts and calendar stay within the viewport and tables become labeled row blocks where necessary.
 
-- [ ] **Step 6: Replace root page with a compatibility redirect**
+- [x] **Step 6: Replace root page with a compatibility redirect**
 
 `/index.html` contains a small script that maps `?trade=ID` to `/orders/?trade=ID`; otherwise it redirects to `/dashboard/`. Keep no dashboard implementation in root `app.js` after Tasks 3-6 finish.
 
-- [ ] **Step 7: Run dashboard and existing metric tests**
+- [x] **Step 7: Run dashboard and existing metric tests**
 
 Run: `node --test web/tests/dashboard-workspace.test.mjs web/tests/r-multiple-ui.test.js`
 
@@ -258,7 +258,7 @@ Run: `node --check web/dashboard/dashboard.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit dashboard workspace**
+- [x] **Step 8: Commit dashboard workspace**
 
 ```powershell
 git add mt5-review-system/web/dashboard mt5-review-system/web/index.html mt5-review-system/web/app.js mt5-review-system/web/tests
@@ -282,7 +282,7 @@ git commit -m "feat: split analysis dashboard workspace"
 - Produces: `createOrdersController({api, view, location})`, `readOrdersState(search)`, `renderCampaignRows(page)`, and detail editing actions.
 - Consumes: Campaign list/detail, Position initial stop, trade/campaign review, screenshot, and custom value APIs.
 
-- [ ] **Step 1: Add order pagination, selection, and local refresh tests**
+- [x] **Step 1: Add order pagination, selection, and local refresh tests**
 
 ```javascript
 test("order filters are sent to the server", async () => {
@@ -301,29 +301,29 @@ test("saving a stop refreshes one campaign and the current page", async () => {
 
 Add tests for `?trade=` resolution, `?campaign=`, expandable multi-Position rows, screenshot replacement/delete, review save, custom choice creation, and soft delete.
 
-- [ ] **Step 2: Run order tests and verify they fail**
+- [x] **Step 2: Run order tests and verify they fail**
 
 Run: `node --test web/tests/orders-workspace.test.mjs`
 
 Expected: FAIL because the order modules do not exist.
 
-- [ ] **Step 3: Build the order list and detail markup**
+- [x] **Step 3: Build the order list and detail markup**
 
 Desktop uses a list/detail split with stable columns; mobile uses list first and a full-width detail view with a visible back command. Filters include query, side, trade type, strategy, date range, and R missing. Pagination shows total, current page, previous, and next controls.
 
-- [ ] **Step 4: Extract list state and rendering**
+- [x] **Step 4: Extract list state and rendering**
 
 Move Campaign row, Position child row, R status, stop editor, filtering, selection, and pagination from `app.js`. Remove client-side filtering of an in-memory 200-row list. Keep expanded IDs as temporary page state, while filters/page/selection live in URL.
 
-- [ ] **Step 5: Extract detail, screenshot, review, and custom-field editors**
+- [x] **Step 5: Extract detail, screenshot, review, and custom-field editors**
 
 Move detail functions into `order-detail.mjs` and custom-field behavior into `custom-fields.mjs`. All saves disable their initiating control, show inline progress, restore focus, handle validation messages, and refresh only affected resources.
 
-- [ ] **Step 6: Style responsive order workflows**
+- [x] **Step 6: Style responsive order workflows**
 
 Keep stable table tracks on desktop and labeled blocks at 680px. Inputs must not resize rows on focus or save. Screenshot preview preserves aspect ratio. Long review text scrolls within the editor, not beneath action buttons.
 
-- [ ] **Step 7: Run order, field, R, and syntax tests**
+- [x] **Step 7: Run order, field, R, and syntax tests**
 
 Run: `node --test web/tests/orders-workspace.test.mjs web/tests/custom-fields-ui.test.js web/tests/r-multiple-ui.test.js`
 
@@ -331,7 +331,7 @@ Run: `node --check web/orders/orders.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit orders workspace**
+- [x] **Step 8: Commit orders workspace**
 
 ```powershell
 git add mt5-review-system/web/orders mt5-review-system/web/tests mt5-review-system/web/app.js
@@ -354,29 +354,29 @@ git commit -m "feat: split order review workspace"
 - Produces: `createAlbumController({api, view, location})`, album URL state, date grouping, modal, and lazy-image interactions.
 - Consumes: `GET /api/review-album` only.
 
-- [ ] **Step 1: Update album behavior tests for the new route**
+- [x] **Step 1: Update album behavior tests for the new route**
 
 Assert `/album/` markup mounts the shared shell, `album.mjs` calls only `/api/review-album`, selected tags round-trip through URL, and order links point to `/orders/?trade=...`.
 
-- [ ] **Step 2: Run album tests and verify they fail**
+- [x] **Step 2: Run album tests and verify they fail**
 
 Run: `node --test web/tests/review-album-ui.test.js`
 
 Expected: FAIL because the new album workspace does not exist.
 
-- [ ] **Step 3: Move album logic into modules**
+- [x] **Step 3: Move album logic into modules**
 
 Reuse the existing API payload and exact OR-within/AND-across tag semantics. Preserve date grouping, missing screenshot placeholder, lazy loading, large preview, scrollable review content, and clear-filter empty action.
 
-- [ ] **Step 4: Replace duplicate styles with shared tokens and components**
+- [x] **Step 4: Replace duplicate styles with shared tokens and components**
 
 Keep only album-specific layout in `album/album.css`. Remove page-level color overrides, duplicate form styling, duplicate navigation styling, gradients, and radial backgrounds.
 
-- [ ] **Step 5: Add compatibility redirect for `/album.html`**
+- [x] **Step 5: Add compatibility redirect for `/album.html`**
 
 Handle `/album.html` in static routing with an HTTP 302 or a minimal HTML redirect to `/album/`, preserving query parameters.
 
-- [ ] **Step 6: Run album and syntax tests**
+- [x] **Step 6: Run album and syntax tests**
 
 Run: `node --test web/tests/review-album-ui.test.js`
 
@@ -384,7 +384,7 @@ Run: `node --check web/album/album.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit album workspace**
+- [x] **Step 7: Commit album workspace**
 
 ```powershell
 git add -A mt5-review-system/web/album mt5-review-system/web/album.html mt5-review-system/web/album.js mt5-review-system/web/album.css mt5-review-system/web/tests/review-album-ui.test.js mt5-review-system/server
@@ -406,7 +406,7 @@ git commit -m "feat: move review album into application shell"
 - Produces: settings workspace for classification CRUD, custom-field schema CRUD, Scratch threshold, system status, and backup creation.
 - Consumes: classification, custom-field, analysis-settings, status, and backup APIs only.
 
-- [ ] **Step 1: Add settings ownership tests**
+- [x] **Step 1: Add settings ownership tests**
 
 ```javascript
 test("settings loads configuration without analysis or campaigns", async () => {
@@ -423,25 +423,25 @@ test("settings loads configuration without analysis or campaigns", async () => {
 
 Add tests for create/rename/archive classification, field type/options save, threshold validation, status retry, and backup success.
 
-- [ ] **Step 2: Run settings tests and verify they fail**
+- [x] **Step 2: Run settings tests and verify they fail**
 
 Run: `node --test web/tests/settings-workspace.test.mjs`
 
 Expected: FAIL because settings workspace modules do not exist.
 
-- [ ] **Step 3: Build settings sections without nested cards**
+- [x] **Step 3: Build settings sections without nested cards**
 
 Use tabbed sections for “分类与字段”, “分析设置”, and “数据与状态”. Commands use icon buttons where familiar and icon+text for create, save, backup, and destructive archive actions. Do not render absolute local paths returned by legacy status payloads; show configured state, counts, size, and last activity instead, and never copy private values into client logs.
 
-- [ ] **Step 4: Move manager behavior from the old dashboard**
+- [x] **Step 4: Move manager behavior from the old dashboard**
 
 Extract classification and custom field schema code from `app.js`. After a successful mutation, refresh only the corresponding catalog. Confirm archive actions; do not hard-delete historical option values.
 
-- [ ] **Step 5: Move Scratch, status, and backup operations**
+- [x] **Step 5: Move Scratch, status, and backup operations**
 
 Scratch threshold is owned only by Settings. Dashboard reads the effective threshold included in analysis responses. Backup success displays filename and size without exposing the absolute local path.
 
-- [ ] **Step 6: Run settings and field tests**
+- [x] **Step 6: Run settings and field tests**
 
 Run: `node --test web/tests/settings-workspace.test.mjs web/tests/custom-fields-ui.test.js`
 
@@ -449,7 +449,7 @@ Run: `node --check web/settings/settings.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit settings workspace**
+- [x] **Step 7: Commit settings workspace**
 
 ```powershell
 git add mt5-review-system/web/settings mt5-review-system/web/tests mt5-review-system/web/app.js
@@ -470,7 +470,7 @@ git commit -m "feat: add settings and system workspace"
 - Produces: four independent workspace entry points plus root/legacy redirects.
 - Consumes: all shared and page modules established in Tasks 1-6.
 
-- [ ] **Step 1: Add workspace asset and endpoint isolation tests**
+- [x] **Step 1: Add workspace asset and endpoint isolation tests**
 
 Read every HTML entry and assert:
 
@@ -482,17 +482,17 @@ assert.match(html, /shared\/js\/shell\.mjs/);
 
 Inspect controllers and assert dashboard has no Campaign endpoints, album has no mutation method, settings has no analysis endpoint, and orders has no dashboard analysis endpoint.
 
-- [ ] **Step 2: Run isolation tests and verify they fail**
+- [x] **Step 2: Run isolation tests and verify they fail**
 
 Run: `node --test web/tests/workspace-isolation.test.mjs`
 
 Expected: FAIL while old coupled assets remain referenced.
 
-- [ ] **Step 3: Remove old assets and migrate every test**
+- [x] **Step 3: Remove old assets and migrate every test**
 
 Delete `app.js` and `styles.css` only after no HTML or test references them. Replace string assertions against monolithic sources with page-module or behavior assertions. Keep root `index.html` as the redirect entry.
 
-- [ ] **Step 4: Check every JavaScript entry**
+- [x] **Step 4: Check every JavaScript entry**
 
 Run:
 
@@ -507,19 +507,19 @@ node --check web/settings/settings.mjs
 
 Expected: all exit 0.
 
-- [ ] **Step 5: Run the complete frontend suite**
+- [x] **Step 5: Run the complete frontend suite**
 
 Run: `node --test web/tests/*.test.js web/tests/*.test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 6: Run the complete backend suite after frontend routing changes**
+- [x] **Step 6: Run the complete backend suite after frontend routing changes**
 
 Run from `mt5-review-system/server`: `..\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"`
 
 Expected: PASS.
 
-- [ ] **Step 7: Document the workspace ownership map and commit**
+- [x] **Step 7: Document the workspace ownership map and commit**
 
 ```powershell
 git add -A mt5-review-system/web mt5-review-system/server mt5-review-system/README.md

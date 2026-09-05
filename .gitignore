@@ -8,6 +8,8 @@ MT5ReviewBridge-EA备份/
 
 # Runtime data and generated artefacts in any project subdirectory
 **/data/
+!mt5-review-system/server/app/data/
+!mt5-review-system/server/app/data/*.py
 **/backups/
 **/raw-events/
 **/screenshots/
@@ -29,6 +31,16 @@ venv/
 .idea/
 .vscode/
 .worktrees/
+
+# Node and Playwright artefacts (Task 4 browser verification)
+node_modules/
+**/node_modules/
+**/playwright-report/
+**/test-results/
+**/.cache/
+
+# Playwright browser binaries
+**/.local-browsers/
 
 # MT5 generated binaries and compiler output
 mt5-review-system/mt5-ea/*.ex5

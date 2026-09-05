@@ -20,9 +20,22 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install benchmark deps
+        working-directory: mt5-review-system
+        run: |
+          python -m pip install --upgrade pip
+          # The benchmark tool only needs the project itself; pin the install
+          # so the CI image's pre-installed packages do not leak into our
+          # import resolution.
+          python -m pip install --quiet --no-deps .
+
       - name: Run Python tests
         working-directory: mt5-review-system/server
         run: python -m unittest discover -s tests -p "test_*.py"
+
+      - name: Run data-compatibility tests
+        working-directory: mt5-review-system/server
+        run: python -m unittest tests.test_data_compatibility -v
 
       - name: Compile Python sources
         working-directory: mt5-review-system
@@ -32,14 +45,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: mt5-review-system/package-lock.json
+
+      - name: Install Node dependencies
+        working-directory: mt5-review-system
+        run: npm ci --no-audit --no-fund
 
       - name: Run frontend tests
         working-directory: mt5-review-system
-        run: node --test web/tests/custom-fields-ui.test.js web/tests/review-album-ui.test.js
+        run: node scripts/run-unit-tests.mjs
 
       - name: Check frontend syntax
         working-directory: mt5-review-system
         shell: bash
         run: |
-          node --check web/app.js
-          node --check web/album.js
+          node --check web/shared/js/shell.mjs
+          node --check web/dashboard/dashboard.mjs
+          node --check web/orders/orders.mjs
+          node --check web/album/album.mjs
+          node --check web/settings/settings.mjs
+
+      - name: Run release check (no browser)
+        working-directory: mt5-review-system
+        # The release check orchestrates all non-browser gates and enforces
+        # the v0.6.0 latency budget. Browser / Playwright stays local because
+        # Chromium binaries are not installed in CI; the human release
+        # acceptance command is `python tools/check_release.py` (full suite).
+        run: python tools/check_release.py --skip-browser

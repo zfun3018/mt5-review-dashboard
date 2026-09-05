@@ -6,7 +6,7 @@ set "ROOT_DIR=%~dp0"
 if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
 set "PROJECT_DIR=%ROOT_DIR%\mt5-review-system"
 set "DASHBOARD_URL=http://127.0.0.1:8787"
-if "%MT5_REVIEW_HOST%"=="" set "MT5_REVIEW_HOST=0.0.0.0"
+if "%MT5_REVIEW_HOST%"=="" set "MT5_REVIEW_HOST=127.0.0.1"
 if "%MT5_REVIEW_PORT%"=="" set "MT5_REVIEW_PORT=8787"
 
 if not exist "%PROJECT_DIR%\start.ps1" (
@@ -23,7 +23,7 @@ if not exist "%PROJECT_DIR%\start.ps1" (
 echo Starting MT5 Review Dashboard...
 echo Project: "%PROJECT_DIR%"
 echo URL: %DASHBOARD_URL%
-echo LAN bind: %MT5_REVIEW_HOST%:%MT5_REVIEW_PORT%
+echo Bind host: %MT5_REVIEW_HOST%:%MT5_REVIEW_PORT%
 echo.
 
 if /I not "%MT5_REVIEW_SKIP_BROWSER%"=="1" (

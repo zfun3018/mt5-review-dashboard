@@ -4,12 +4,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from . import storage
+from .core.config import get_runtime_paths
 from .importer import import_bridge_dir
 
 
 def auto_import_from_config() -> dict[str, Any]:
-    config_path = storage.PROJECT_ROOT / "config.local.json"
+    config_path = get_runtime_paths().config_file
     if not config_path.exists():
         return {"skipped": True, "reason": "config.local.json not found"}
 

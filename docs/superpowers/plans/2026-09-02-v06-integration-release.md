@@ -50,7 +50,7 @@
 - Produces: `build_data_fingerprint(paths) -> DataFingerprint`, `compare_fingerprints(before, after) -> CompatibilityReport`, and `upgrade_with_backup(paths) -> UpgradeResult`.
 - Consumes: `RuntimePaths`, SQLite Backup API, and application services for fixed metric summaries.
 
-- [ ] **Step 1: Create minimal legacy fixtures**
+- [x] **Step 1: Create minimal legacy fixtures**
 
 Each fixture contains only synthetic identifiers and covers:
 
@@ -64,7 +64,7 @@ Each fixture contains only synthetic identifiers and covers:
 
 Do not include account, order, terminal, path, or screenshot values derived from the real workspace.
 
-- [ ] **Step 2: Add fingerprint and upgrade tests**
+- [x] **Step 2: Add fingerprint and upgrade tests**
 
 ```python
 def test_v4_fingerprint_survives_idempotent_upgrade(self):
@@ -82,13 +82,13 @@ def test_failed_upgrade_leaves_original_database_unchanged(self):
     self.assertEqual(sha256(self.paths.database.read_bytes()).hexdigest(), before_hash)
 ```
 
-- [ ] **Step 3: Run compatibility tests and verify they fail**
+- [x] **Step 3: Run compatibility tests and verify they fail**
 
 Run from `mt5-review-system/server`: `..\.venv\Scripts\python.exe -m unittest tests.test_data_compatibility -v`
 
 Expected: FAIL because compatibility interfaces and fixtures do not exist.
 
-- [ ] **Step 4: Implement privacy-safe fingerprints**
+- [x] **Step 4: Implement privacy-safe fingerprints**
 
 `DataFingerprint` contains counts and aggregate checks only:
 
@@ -121,17 +121,17 @@ class UpgradeResult:
 
 It must not contain account IDs, order IDs, terminal IDs, absolute paths, review content, custom value content, or screenshot names.
 
-- [ ] **Step 5: Implement backup, transaction, audit, and rollback**
+- [x] **Step 5: Implement backup, transaction, audit, and rollback**
 
 `upgrade_with_backup` closes active connections, creates one SQLite Backup API snapshot in the configured backup directory, performs idempotent schema work in a transaction, runs `PRAGMA integrity_check`, builds the after fingerprint, and returns success only when compatibility rules pass. Any exception closes connections and leaves the original database bytes unchanged.
 
-- [ ] **Step 6: Test v2, v3, and v4 fixtures**
+- [x] **Step 6: Test v2, v3, and v4 fixtures**
 
 Run: `..\.venv\Scripts\python.exe -m unittest tests.test_data_compatibility tests.test_campaign_storage tests.test_classification_options -v`
 
 Expected: PASS for all three source schemas, repeated upgrades, and injected failure.
 
-- [ ] **Step 7: Run the complete backend suite and commit**
+- [x] **Step 7: Run the complete backend suite and commit**
 
 Run: `..\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"`
 
@@ -157,7 +157,7 @@ git commit -m "test: add historical data compatibility audit"
 - Produces: optional `MT5_REVIEW_DATA_DIR` and `MT5_REVIEW_CONFIG_FILE` overrides, while preserving project-relative defaults for the browser version.
 - Consumes: `RuntimePaths` and `RuntimeConfig` from the backend plan.
 
-- [ ] **Step 1: Add runtime path and binding tests**
+- [x] **Step 1: Add runtime path and binding tests**
 
 ```python
 def test_explicit_data_directory_does_not_move_project_files(self):
@@ -170,31 +170,31 @@ def test_lan_binding_requires_explicit_value(self):
     self.assertEqual(RuntimeConfig.from_environment({"MT5_REVIEW_HOST": "0.0.0.0"}).host, "0.0.0.0")
 ```
 
-- [ ] **Step 2: Run runtime tests and verify the data-root test fails**
+- [x] **Step 2: Run runtime tests and verify the data-root test fails**
 
 Run: `..\.venv\Scripts\python.exe -m unittest tests.test_runtime_paths tests.test_server_payload -v`
 
 Expected: FAIL because explicit data/config roots are not fully supported.
 
-- [ ] **Step 3: Implement explicit paths without automatic data movement**
+- [x] **Step 3: Implement explicit paths without automatic data movement**
 
 Resolve environment overrides as absolute paths, create missing user-data subdirectories only at normal initialization, and never copy or delete old data automatically in v0.6.0. `bridge_sync` reads only `RuntimePaths.config_file`.
 
-- [ ] **Step 4: Change launchers to loopback by default**
+- [x] **Step 4: Change launchers to loopback by default**
 
 Remove automatic `0.0.0.0` defaults from both launchers. Continue printing a LAN URL only when `MT5_REVIEW_HOST=0.0.0.0` was explicitly supplied. Keep `MT5_REVIEW_PYTHON` support.
 
-- [ ] **Step 5: Run runtime and startup tests**
+- [x] **Step 5: Run runtime and startup tests**
 
 Run: `..\.venv\Scripts\python.exe -m unittest tests.test_runtime_paths tests.test_server_payload tests.test_bridge_sync -v`
 
 Expected: PASS.
 
-- [ ] **Step 6: Run a temporary-root startup smoke check**
+- [x] **Step 6: Run a temporary-root startup smoke check**
 
 Create a temporary directory, set `MT5_REVIEW_DATA_DIR` and `MT5_REVIEW_CONFIG_FILE` to paths inside it, start the server on port 0 inside a test process, request `/api/health`, and assert all created files remain inside the temporary root.
 
-- [ ] **Step 7: Commit runtime boundaries**
+- [x] **Step 7: Commit runtime boundaries**
 
 ```powershell
 git add mt5-review-system/server/app/core/config.py mt5-review-system/server/app/bridge_sync.py mt5-review-system/server/tests mt5-review-system/run.py mt5-review-system/start.ps1 '一键启动MT5复盘仪表盘.bat'
@@ -295,7 +295,7 @@ The benchmark JSON remains under the ignored `artifacts/` directory. Include its
 - Produces: `npm run test:ui` and Playwright projects `desktop-chromium` and `mobile-390`.
 - Consumes: a server started with a temporary synthetic database; never the default project database.
 
-- [ ] **Step 1: Define development-only browser dependencies**
+- [x] **Step 1: Define development-only browser dependencies**
 
 ```json
 {
@@ -312,11 +312,11 @@ The benchmark JSON remains under the ignored `artifacts/` directory. Include its
 
 Generate and commit the lockfile. Ignore `node_modules/`, `test-results/`, `playwright-report/`, and browser binaries.
 
-- [ ] **Step 2: Add a synthetic Playwright server fixture**
+- [x] **Step 2: Add a synthetic Playwright server fixture**
 
 The fixture creates a temporary runtime root, seeds synthetic trades and placeholder PNGs, starts `run.py` on an available loopback port, waits for `/api/health`, and terminates the child process in teardown. It exposes only the temporary server URL.
 
-- [ ] **Step 3: Write workspace workflow tests**
+- [x] **Step 3: Write workspace workflow tests**
 
 Cover:
 
@@ -333,7 +333,7 @@ test("desktop navigation and workspaces remain isolated", async ({page}) => {
 
 Also test filter URL restoration, order selection/edit, screenshot placeholder, album-to-order link, settings threshold validation, regional retry, modal Escape, and mobile drawer focus return.
 
-- [ ] **Step 4: Add overflow and console assertions**
+- [x] **Step 4: Add overflow and console assertions**
 
 For every page in both projects:
 
@@ -345,7 +345,7 @@ expect(pageErrors).toEqual([]);
 
 Capture screenshots for dashboard, orders list/detail, album, and settings at 1440x1000 and 390x844. Store only synthetic screenshots under ignored `test-results/`; do not commit them.
 
-- [ ] **Step 5: Install the pinned browser tooling**
+- [x] **Step 5: Install the pinned browser tooling**
 
 Run: `npm install`
 
@@ -353,7 +353,7 @@ Run: `npx playwright install chromium`
 
 Expected: lockfile remains unchanged after the second `npm install`.
 
-- [ ] **Step 6: Run unit and browser tests**
+- [x] **Step 6: Run unit and browser tests**
 
 Run: `npm run test:unit`
 
@@ -361,7 +361,7 @@ Run: `npm run test:ui`
 
 Expected: PASS in desktop and mobile projects with no console errors or overflow.
 
-- [ ] **Step 7: Commit browser verification**
+- [x] **Step 7: Commit browser verification**
 
 ```powershell
 git add .gitignore mt5-review-system/package.json mt5-review-system/package-lock.json mt5-review-system/playwright.config.mjs mt5-review-system/web/tests/browser
@@ -380,44 +380,33 @@ git commit -m "test: add responsive workspace browser checks"
 - Produces: `check_release.py --skip-browser` for CI without installed Chromium and full `check_release.py` for local release acceptance.
 - Consumes: Python suite, Node suite, syntax checks, synthetic benchmark artifact, compatibility tests, and Playwright.
 
-- [ ] **Step 1: Add release command-construction tests**
+- [x] **Step 1: Add release command-construction tests**
 
-```python
-def test_release_check_includes_required_gates(self):
-    names = [gate.name for gate in build_gates(skip_browser=False)]
-    self.assertEqual(names, ["python", "node", "syntax", "compatibility", "benchmark", "browser"])
-```
+Implemented in `server/tests/test_release_check.py` covering gate ordering, runnable contract, fail-fast exit code propagation, `--skip-browser` CLI flag, `build_gates(skip_browser=True)` excluding the browser gate, and a stand-in benchmark gate to verify `run_all` truly invokes the callable.
 
-- [ ] **Step 2: Run release-check tests and verify they fail**
+- [x] **Step 2: Run release-check tests and verify they fail**
 
-Run: `..\.venv\Scripts\python.exe -m unittest tests.test_release_check -v`
+Initially the suite failed because `tools.check_release` was missing — the empty `tools/__init__.py` and module were added in Step 3, then the full suite turned green (`Ran 8 tests in 0.024s — OK`).
 
-Expected: FAIL because the release tool does not exist.
+- [x] **Step 3: Implement fail-fast release gates**
 
-- [ ] **Step 3: Implement fail-fast release gates**
+`tools/check_release.py` exposes `Gate` (`@dataclass(frozen=True)` with `name`/`cwd`/`run`), `build_gates(skip_browser)`, and `run_all(gates)` that returns the first nonzero exit code via `subprocess.run` with explicit working directories. Failure summaries include only gate name + tail of stderr; resolved workspace and temporary roots are redacted.
 
-Use `subprocess.run` argument arrays with explicit working directories. Stream normal test output, but redact resolved workspace and temporary-root paths from failure summaries. Return nonzero immediately on the first failed gate.
+- [x] **Step 4: Add a synthetic rollback drill**
 
-- [ ] **Step 4: Add a synthetic rollback drill**
+`server/tests/test_data_compatibility.py` setUp now wraps every fixture with `RuntimePaths.from_root(self.root)` + `set_runtime_paths(self.paths)` and `tearDown` restores `self.original_paths`. The suite covers v3 → upgrade failure → hash & active-count unchanged → successful upgrade → `PRAGMA integrity_check = ok`, validating the rollback drill end-to-end.
 
-The compatibility gate creates a v3 fixture, saves its hash, injects a migration failure, verifies the hash and active counts are unchanged, then runs a successful upgrade and verifies the backup can be opened with `PRAGMA integrity_check = ok`.
+- [x] **Step 5: Update CI with non-browser verification**
 
-- [ ] **Step 5: Update CI with non-browser verification**
+`.github/workflows/ci.yml` gained a `release-check` job running `python tools/check_release.py --skip-browser` (Python + Node + syntax + compatibility + benchmark). The 10,000-trade benchmark and Chromium projects stay as local release gates so CI never silently skips slow or unavailable browser infra.
 
-CI installs Node dependencies from the lockfile and runs Python, Node, syntax, compatibility, and the small 1,000-trade benchmark. The full 10,000-trade benchmark and Chromium projects remain local release gates to avoid hiding slow or unavailable browser infrastructure behind CI exceptions.
+- [x] **Step 6: Run the full release check**
 
-- [ ] **Step 6: Run the full release check**
+Local `python tools/check_release.py --skip-browser` ran 5/5 gates green (python unittest, node unit, syntax scan, data compatibility, benchmark). The 6th browser gate was exercised locally with the desktop-chromium + mobile-390 projects in Task 4 (16/16 Playwright passing).
 
-Run from `mt5-review-system`: `.\.venv\Scripts\python.exe .\tools\check_release.py`
+- [x] **Step 7: Commit release automation**
 
-Expected: all six gates pass.
-
-- [ ] **Step 7: Commit release automation**
-
-```powershell
-git add mt5-review-system/tools/check_release.py mt5-review-system/server/tests/test_release_check.py mt5-review-system/start.ps1 .github/workflows/ci.yml
-git commit -m "chore: add v0.6.0 release verification"
-```
+Commit `6dffbdf` — "ci: add one-command release check + rollback drill" — staged `.github/workflows/ci.yml`, `server/tests/test_data_compatibility.py`, `server/tests/test_release_check.py`, `tools/__init__.py`, and `tools/check_release.py` (582 insertions, 4 deletions across 5 files).
 
 ### Task 6: Update v0.6.0 Documentation and Perform Final Acceptance
 
@@ -435,54 +424,33 @@ git commit -m "chore: add v0.6.0 release verification"
 - Produces: v0.6.0 user and maintainer documentation with exact run, test, migration, rollback, and page ownership instructions.
 - Consumes: accepted implementation and measured verification output.
 
-- [ ] **Step 1: Update version metadata consistently**
+- [x] **Step 1: Update version metadata consistently**
 
-Set `VERSION` to `0.6.0`. Update both README files and the version route to state the same current version and the four workspace URLs.
+`VERSION` set to `0.6.0`; both README files and `docs/VERSION-ROUTE.md` now state v0.6.0 and list the four workspace URLs (`/dashboard/`, `/orders/`, `/album/`, `/settings/`).
 
-- [ ] **Step 2: Document user-visible changes**
+- [x] **Step 2: Document user-visible changes**
 
-Explain in ordinary Chinese:
+`docs/VERSION-ROUTE.md` gained a `## v0.6.0 架构重构版本` section and both README files document the new left navigation, the four separate pages, faster page-specific loading, unchanged historical data/metrics, loopback-only default with explicit LAN opt-in, old link redirection, and that Windows desktop packaging remains the next phase — all in ordinary Chinese.
 
-- the new left navigation;
-- separate dashboard, orders, album, and settings pages;
-- faster page-specific loading;
-- unchanged historical data and metrics;
-- loopback-only default and explicit LAN opt-in;
-- old link redirection;
-- Windows desktop packaging remains the next phase.
+- [x] **Step 3: Extract accepted ADRs from the design spec**
 
-- [ ] **Step 3: Extract accepted ADRs from the design spec**
+Created four ADRs under `docs/adr/`: `0001-use-modular-monolith.md` (ADR-001), `0002-use-native-multi-page-ui.md` (ADR-002), `0003-preserve-sqlite-v4-data.md` (ADR-003), `0004-defer-windows-wrapper.md` (ADR-005). Each states status, context, decision, positive/negative consequences, rejected alternatives, and links back to the v0.6.0 design spec.
 
-Use the four decisions listed in the file map. Each ADR states status, context, decision, positive/negative consequences, rejected alternatives, and links back to the v0.6.0 design.
+- [x] **Step 4: Run all verification from a clean process**
 
-- [ ] **Step 4: Run all verification from a clean process**
+`python tools/check_release.py` (full, browser included) ran 6/6 gates green in 83.9s: python (165 tests), node (80 tests), syntax, compatibility (5 rollback-drill tests), benchmark (`/api/analysis` p95 = 60.7ms ≤ 200ms), browser (16/16 Playwright across desktop-chromium + mobile-390).
 
-Run: `.\.venv\Scripts\python.exe .\tools\check_release.py`
+- [x] **Step 5: Inspect the final diff for sensitive or generated data**
 
-Expected: all gates pass.
+`git diff --check` reported no whitespace errors; `git diff --name-only` listed only `README.md`, `VERSION`, `docs/VERSION-ROUTE.md`, `mt5-review-system/README.md`, and `docs/adr/*`. No `data/`, `backups/`, `config.local.json`, screenshots, raw JSONL, browser output, absolute paths, SQLite files, logs, or binaries.
 
-- [ ] **Step 5: Inspect the final diff for sensitive or generated data**
+- [x] **Step 6: Create the focused v0.6.0 release commit**
 
-Run:
+Commit `e1f1945` — "release: prepare v0.6.0 architecture redesign" — staged `VERSION`, `README.md`, `mt5-review-system/README.md`, `docs/VERSION-ROUTE.md`, and `docs/adr/` (8 files, 206 insertions, 8 deletions).
 
-```powershell
-git status --short
-git diff --check
-git diff --name-only
-```
+- [x] **Step 7: Record final acceptance results**
 
-Expected: no `data/`, `backups/`, `config.local.json`, screenshots, raw JSONL, browser output, local absolute paths, SQLite files, logs, or generated binaries.
-
-- [ ] **Step 6: Create the focused v0.6.0 release commit**
-
-```powershell
-git add VERSION README.md mt5-review-system/README.md docs/VERSION-ROUTE.md docs/adr
-git commit -m "release: prepare v0.6.0 architecture redesign"
-```
-
-- [ ] **Step 7: Record final acceptance results**
-
-In the handoff, report exact Python test count, Node test count, Playwright project count, performance p95 values, schema fixtures verified, desktop/mobile overflow result, and any residual risk. Do not report or display real data counts or private paths.
+Python 165 tests OK, Node 80 tests OK, Playwright 16 tests across 2 projects (desktop-chromium 1440×1000 + mobile-390 390×844), benchmark `/api/analysis` p95 = 60.7ms (budget 200ms), v2/v3/v4 schema fixtures + injected-failure rollback verified, desktop/mobile overflow-free with no console errors. Residual risk: none blocking; the 30 pre-snapshot commits remain compressed into a single recovery snapshot, and Windows desktop packaging is deferred to the next phase.
 
 ## v0.6.0 Release Completion Gate
 

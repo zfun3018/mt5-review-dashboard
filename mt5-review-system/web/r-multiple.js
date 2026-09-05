@@ -159,5 +159,13 @@
     signedR,
   };
   globalScope.RMultipleUI = api;
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      campaignActivityLabel,
+      filterRiskMissing,
+      formatCampaignR,
+      metricExplanation,
+      signedR,
+    };
+  }
 })(typeof globalThis !== "undefined" ? globalThis : this);

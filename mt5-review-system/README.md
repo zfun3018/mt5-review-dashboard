@@ -2,7 +2,7 @@
 
 这是一个 local-first 的 MT5 交易复盘系统。项目代码开源，但订单数据库、截图、原始事件和本机配置默认只保存在当前电脑，不上传云端。
 
-当前版本：`v0.4.1`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
+当前版本：`v0.6.0`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
 
 GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等 AI 工具的项目规则见 [`AGENTS.md`](../AGENTS.md)。
 
@@ -32,13 +32,51 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 
 ## 功能边界
 
-系统由三个部分组成：
+系统由四个独立工作区组成：
 
-1. **订单流水**：订单字段、复盘内容、交易分类、自定义字段和截图生命周期管理；
-2. **分析仪表盘**：指标卡、收益累计曲线、月历、热力图、交易系统评估、Z 分数和模式评估；
-3. **复盘画册**：按北京时间交易日查看截图，并用品种、日期和选项标签进行筛选。
+1. **订单流水**（`/orders/`）：订单字段、复盘内容、交易分类、自定义字段和截图生命周期管理；
+2. **分析仪表盘**（`/dashboard/`）：指标卡、收益累计曲线、月历、热力图、交易系统评估、Z 分数和模式评估；
+3. **复盘画册**（`/album/`）：按北京时间交易日查看截图，并用品种、日期和选项标签进行筛选；
+4. **设置与系统**（`/settings/`）：交易分类与自定义字段 schema 管理、Scratch 阈值、系统状态和本地备份。
 
 后端是 Python 标准库 HTTP 服务，前端是原生 HTML/CSS/JavaScript，SQLite 是唯一业务数据库，不需要 Node 构建或 Python 第三方依赖。
+
+## 前端工作区所有权
+
+前端拆分为四个独立入口页面，共享同一套左侧导航与 UI 系统，每个工作区只调用自己的 API：
+
+| 工作区 | 入口 | 数据源 |
+| --- | --- | --- |
+| 分析仪表盘 | `/dashboard/` | 仅 `GET /api/analysis` |
+| 订单流水 | `/orders/` | Campaign 列表/详情、Position 止损、交易复盘、截图、自定义值、分类与分析设置 |
+| 复盘画册 | `/album/` | 仅 `GET /api/review-album`（只读，无变更操作） |
+| 设置与系统 | `/settings/` | 分类、自定义字段、分析设置、状态、备份 |
+
+共享模块位于 `web/shared/`：`css/tokens.css`、`base.css`、`shell.css`、`components.css` 提供设计令牌与通用组件；`js/api.mjs`、`shell.mjs`、`formatters.mjs`、`feedback.mjs`、`url-state.mjs` 提供请求、外壳、格式化、反馈与 URL 状态。根路径 `/` 是兼容重定向壳，把旧深链（`?trade=`/`?campaign=`）映射到 `/orders/`，否则跳转 `/dashboard/`。
+
+## 后端架构边界
+
+后端按四层组织，依赖只从外层指向内层：
+
+1. **领域层 `app/domain/`**：只负责 Campaign、R 倍数和统计公式，不读取数据库、文件或 HTTP 请求；
+2. **数据层 `app/data/`**：负责 SQLite 连接、迁移、仓储、写入命令、MT5 事件导入、截图与备份文件；
+3. **应用层 `app/application/`**：组合一次完整用例，例如仪表盘分析、订单分页、画册筛选和首页数据装配，并统一 Campaign/Position 响应字段；
+4. **展示层 `app/presentation/`**：负责 HTTP 路由、响应格式、交易界面字段，以及 Campaign 旧序列化入口的兼容适配。
+
+`app/storage.py` 只保留旧脚本和测试仍会调用的兼容入口、运行目录同步与服务组装，不再保存 SQL、迁移表结构或统计公式。新代码应直接调用所属层的模块。
+
+主要所有权如下：
+
+- 数据库生命周期与事务：`data/database.py`、`data/migrations.py`、`data/bootstrap.py`；
+- 交易、Campaign、分类和媒体读取：对应的 `*_repository.py`；
+- 交易、Campaign、分类和 MT5 导入写入：对应的 `*_commands.py` 与 `ingestion_repository.py`；
+- 仪表盘、订单、画册和设置用例：`application/*_service.py`；
+- Campaign/Position 响应字段：`application/campaign_response.py`；
+- HTTP 路由、交易界面字段和旧入口适配：`presentation/http/` 和展示序列化模块。
+
+读取流程为“HTTP 路由 → 应用服务 → 仓储 → SQLite”，读取 Campaign 列表、详情和分析时不会写数据库，也不会顺带重建模型。Campaign 重建与对应写入在同一个事务内完成，重建或写入任一步失败都会整体回滚，全部成功后才提交；一批 JSONL 导入不论包含多少条成交记录，都只在批次末尾重建一次。启动时只有检测到模型版本过旧才执行兼容修复。
+
+历史数据库继续通过幂等迁移升级，迁移前的本地 SQLite 快照、旧交易字段、复盘、分类、自定义字段、截图引用和软删除状态均保持兼容。不会为了新架构重新导入或重处理历史 JSONL。
 
 ## 启动
 
@@ -54,14 +92,15 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 http://127.0.0.1:8787
 ```
 
-一键启动脚本默认监听可信局域网。手机与电脑连接同一 Wi-Fi 后，使用启动窗口显示的
-`http://<电脑局域网IP>:8787` 访问；`127.0.0.1` 只适用于电脑本机。也可以通过环境变量覆盖：
+一键启动脚本默认只监听本机 `127.0.0.1:8787`。服务没有登录验证，不应暴露到公网。确实需要在可信局域网使用手机访问时，必须显式设置监听地址：
 
 ```powershell
-$env:MT5_REVIEW_HOST = "127.0.0.1"  # 仅本机
+$env:MT5_REVIEW_HOST = "0.0.0.0"  # 仅在可信局域网中显式开启
 $env:MT5_REVIEW_PORT = "8787"
 .\start.ps1
 ```
+
+手机与电脑连接同一 Wi-Fi 后，再使用启动窗口显示的 `http://<电脑局域网IP>:8787` 访问。关闭窗口或清除该环境变量后，下次启动恢复为仅本机访问。
 
 ## 本地数据目录
 

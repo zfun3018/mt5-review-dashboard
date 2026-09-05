@@ -16,9 +16,8 @@ if (-not $PythonCommand) {
 
 Set-Location $ProjectRoot
 
-# The one-click launcher is intended for trusted home/office LAN access.
-# Directly running run.py still defaults to loopback unless these variables are set.
-if (-not $env:MT5_REVIEW_HOST) { $env:MT5_REVIEW_HOST = "0.0.0.0" }
+# Keep the unauthenticated service local unless LAN access is explicitly requested.
+if (-not $env:MT5_REVIEW_HOST) { $env:MT5_REVIEW_HOST = "127.0.0.1" }
 if (-not $env:MT5_REVIEW_PORT) { $env:MT5_REVIEW_PORT = "8787" }
 
 $LanIp = [System.Net.Dns]::GetHostEntry([System.Net.Dns]::GetHostName()).AddressList |

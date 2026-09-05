@@ -5,7 +5,16 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from . import storage
+from .core.config import get_runtime_paths
+from .data.campaign_repository import CampaignRepository
+from .data.database import transaction
+from .data.ingestion_repository import (
+    get_ingest_cursor,
+    ingest_mt5_event,
+    update_ingest_cursor,
+)
+from .data.media_repository import MediaRepository
+from .data.trade_commands import list_trades
 
 
 def import_bridge_dir(bridge_dir: str | Path) -> dict[str, Any]:
@@ -25,86 +34,101 @@ def import_bridge_dir(bridge_dir: str | Path) -> dict[str, Any]:
         "cursor_resets": 0,
         "errors": [],
     }
+    domain_changed = False
 
-    for file_path in _jsonl_files(bridge):
-        stats["files"] += 1
-        resolved_path = str(file_path.resolve())
-        file_stat = file_path.stat()
-        cursor = storage.get_ingest_cursor(resolved_path)
-        offset = int(cursor["byte_offset"]) if cursor else 0
-        if cursor and (
-            file_stat.st_size < offset
-            or (
-                file_stat.st_size == int(cursor["file_size"])
-                and file_stat.st_mtime_ns != int(cursor["modified_ns"])
-            )
-        ):
-            offset = 0
-            stats["cursor_resets"] += 1
+    paths = get_runtime_paths()
+    with transaction(paths) as conn:
+        for file_path in _jsonl_files(bridge):
+            stats["files"] += 1
+            resolved_path = str(file_path.resolve())
+            file_stat = file_path.stat()
+            cursor = get_ingest_cursor(resolved_path, _conn=conn)
+            offset = int(cursor["byte_offset"]) if cursor else 0
+            if cursor and (
+                file_stat.st_size < offset
+                or (
+                    file_stat.st_size == int(cursor["file_size"])
+                    and file_stat.st_mtime_ns != int(cursor["modified_ns"])
+                )
+            ):
+                offset = 0
+                stats["cursor_resets"] += 1
 
-        final_offset = offset
-        with file_path.open("rb") as handle:
-            handle.seek(offset)
-            line_number = 0
-            while True:
-                line_start = handle.tell()
-                line = handle.readline()
-                if not line:
-                    break
-                if not line.endswith(b"\n"):
-                    handle.seek(line_start)
-                    break
-                final_offset = handle.tell()
-                stats["bytes_read"] += len(line)
-                line_number += 1
-                raw = line.decode("utf-8-sig" if line_start == 0 else "utf-8").strip()
-                if not raw:
-                    continue
-                try:
-                    payload = json.loads(raw)
-                    stats["events"] += 1
-                    result = storage.ingest_mt5_event(
-                        payload,
-                        raw_event=raw,
-                    )
-                    if result.get("duplicate"):
-                        stats["duplicates"] += 1
+            final_offset = offset
+            with file_path.open("rb") as handle:
+                handle.seek(offset)
+                line_number = 0
+                while True:
+                    line_start = handle.tell()
+                    line = handle.readline()
+                    if not line:
+                        break
+                    if not line.endswith(b"\n"):
+                        handle.seek(line_start)
+                        break
+                    final_offset = handle.tell()
+                    stats["bytes_read"] += len(line)
+                    line_number += 1
+                    raw = line.decode("utf-8-sig" if line_start == 0 else "utf-8").strip()
+                    if not raw:
+                        continue
+                    try:
+                        payload = json.loads(raw)
+                        stats["events"] += 1
+                        result = ingest_mt5_event(
+                            payload,
+                            raw_event=raw,
+                            rebuild=False,
+                            _conn=conn,
+                        )
+                        if result.get("trade_id") or result.get("deal_ticket"):
+                            domain_changed = True
+                        if result.get("duplicate"):
+                            stats["duplicates"] += 1
+                            if _copy_screenshot(payload, bridge):
+                                stats["screenshots_copied"] += 1
+                            if result.get("restored") and result.get("trade_id"):
+                                stats["trades"] += 1
+                            continue
                         if _copy_screenshot(payload, bridge):
                             stats["screenshots_copied"] += 1
-                        if result.get("restored") and result.get("trade_id"):
+                        if result.get("trade_id"):
                             stats["trades"] += 1
-                        continue
-                    if _copy_screenshot(payload, bridge):
-                        stats["screenshots_copied"] += 1
-                    if result.get("trade_id"):
-                        stats["trades"] += 1
-                    if result.get("snapshot"):
-                        stats["snapshots"] += 1
-                except Exception as exc:
-                    stats["errors"].append(
-                        {
-                            "file": str(file_path),
-                            "line": line_number,
-                            "error": str(exc),
-                        }
-                    )
-        final_stat = file_path.stat()
-        storage.update_ingest_cursor(
-            resolved_path,
-            final_offset,
-            final_stat.st_size,
-            final_stat.st_mtime_ns,
-        )
+                        if result.get("snapshot"):
+                            stats["snapshots"] += 1
+                    except Exception as exc:
+                        stats["errors"].append(
+                            {
+                                "file": str(file_path),
+                                "line": line_number,
+                                "error": str(exc),
+                            }
+                        )
+            final_stat = file_path.stat()
+            update_ingest_cursor(
+                resolved_path,
+                final_offset,
+                final_stat.st_size,
+                final_stat.st_mtime_ns,
+                _conn=conn,
+            )
+
+        if domain_changed:
+            CampaignRepository(paths).rebuild(conn=conn)
 
     # A trade event can arrive before MT5 finishes writing its screenshot file.
     # Repair those paths even after the JSONL cursor has advanced past the event.
-    for trade in storage.list_trades(include_deleted=True):
+    media = MediaRepository(paths)
+    for trade in list_trades(include_deleted=True):
         screenshot = str(trade.get("screenshot_path") or "").strip()
-        if screenshot and trade.get("screenshot_missing") and _copy_screenshot({"screenshot_path": screenshot}, bridge):
+        if (
+            screenshot
+            and not media.exists(screenshot)
+            and _copy_screenshot({"screenshot_path": screenshot}, bridge)
+        ):
             stats["screenshots_copied"] += 1
 
     return stats
-
 
 def _jsonl_files(bridge: Path) -> list[Path]:
     files = set(bridge.glob("events_*.jsonl"))
@@ -125,8 +149,9 @@ def _copy_screenshot(payload: dict[str, Any], bridge: Path) -> bool:
     if not _inside(source, bridge) or not source.exists() or not source.is_file():
         return False
 
-    destination = (storage.DATA_DIR / relative).resolve()
-    if not _inside(destination, storage.DATA_DIR):
+    data_dir = get_runtime_paths().data
+    destination = (data_dir / relative).resolve()
+    if not _inside(destination, data_dir):
         raise ValueError(f"Unsafe destination path: {screenshot}")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
