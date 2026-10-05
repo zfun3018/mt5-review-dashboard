@@ -2,7 +2,7 @@
 
 这是一个 local-first 的 MT5 交易复盘系统。项目代码开源，但订单数据库、截图、原始事件和本机配置默认只保存在当前电脑，不上传云端。
 
-当前版本：`v0.6.1`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
+当前版本：`v0.6.17`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
 
 GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等 AI 工具的项目规则见 [`AGENTS.md`](../AGENTS.md)。
 
@@ -14,8 +14,11 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 - 示例订单和示例 5 分钟图表截图
 - 订单流水、K 线截图、500 字以上复盘文本和自定义字段
 - 左侧导航提供统一的“刷新数据”操作，会先执行一次 JSONL 增量同步，再刷新当前页面
+- 订单列表选中行使用高对比背景和边框，打平订单保留独立的选中配色
+- 合并订单按组合独立设置交易场景和交易策略，筛选与仪表盘不再混用子订单分类
 - K 线截图支持直接粘贴、本地上传替换和删除，替换时自动清理旧文件
 - 可新增、改名和停用的交易类型/交易策略，历史统计使用稳定标识
+- 设置页可自定义交易场景和交易策略选项的颜色，并同步到各页面显示
 - 自定义字段支持停用、恢复和永久删除；永久删除会清除该字段的历史填写内容，并要求二次确认
 - 默认 30 天、可切换 3/7/30 天的资金曲线
 - 月度盈亏日历
@@ -25,10 +28,15 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 - 今日/周/月/年指标、净盈亏口径和盈利因子
 - 按日交易系统评估、Z 分数、交易类型/策略模式评估
 - 收益累计曲线（左轴回报、右轴收益率）、分析范围联动筛选和系统评估摘要卡
+- 仪表盘和订单列表支持分享当前完整页面：自动下载 PNG，并在浏览器允许时复制到剪贴板
 - Z 分数解释说明与自适应评估表格
 - 复盘画册：按北京时间交易日展示截图，支持品种、时间和选项标签筛选
+- 复盘画册中的订单复盘沿用订单列表编辑器，可直接编辑并保存
 - 画册短复盘内容默认展开，长内容按需折叠；画册与仪表盘使用统一顶部导航
+- 画册支持归档和恢复，归档交易不再出现在全部画册中
+- 页面顶部可从全部未归档画册中随机抽取一笔交易阅读，随机范围不受筛选影响
 - 画册直接复用现有 SQLite 和截图文件，不新增表、不复制图片、不做历史数据重处理
+- 复盘画册和设置页面不提供页面分享截图功能
 - JSONL 增量同步、事件规范化去重、订单分页、软删除/恢复
 - MT5 EA 桥接源码骨架：`mt5-ea/MT5ReviewBridge.mq5`
 
@@ -51,7 +59,7 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 | --- | --- | --- |
 | 分析仪表盘 | `/dashboard/` | 仅 `GET /api/analysis` |
 | 订单流水 | `/orders/` | Campaign 列表/详情、Position 止损、交易复盘、截图、自定义值、分类与分析设置 |
-| 复盘画册 | `/album/` | 仅 `GET /api/review-album`（只读，无变更操作） |
+| 复盘画册 | `/album/` | `GET /api/review-album`，`PATCH /api/trades/{id}/review` |
 | 设置与系统 | `/settings/` | 分类、自定义字段、分析设置、状态、备份 |
 
 共享模块位于 `web/shared/`：`css/tokens.css`、`base.css`、`shell.css`、`components.css` 提供设计令牌与通用组件；`js/api.mjs`、`shell.mjs`、`formatters.mjs`、`feedback.mjs`、`url-state.mjs` 提供请求、外壳、格式化、反馈与 URL 状态。根路径 `/` 是兼容重定向壳，把旧深链（`?trade=`/`?campaign=`）映射到 `/orders/`，否则跳转 `/dashboard/`。
@@ -94,7 +102,10 @@ GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等
 http://127.0.0.1:8787
 ```
 
-一键启动脚本默认只监听本机 `127.0.0.1:8787`。服务没有登录验证，不应暴露到公网。确实需要在可信局域网使用手机访问时，必须显式设置监听地址：
+根目录的一键启动脚本默认监听可信局域网，并显示手机访问地址；直接运行 `start.ps1` 仍默认只监听本机 `127.0.0.1:8787`。服务没有登录验证，不应暴露到公网。
+一键启动首次运行可能请求管理员权限，只为 Private/LocalSubnet 创建 TCP 8787 防火墙规则。
+
+需要手动启用局域网时，也可以显式设置监听地址：
 
 ```powershell
 $env:MT5_REVIEW_HOST = "0.0.0.0"  # 仅在可信局域网中显式开启
@@ -175,6 +186,9 @@ v0.4.1 增加画册短/长复盘自适应展开策略、统一顶部导航和深
 - `GET /api/analysis?equity_days=30`：日期范围分析、资金曲线、系统评估和模式评估。
 - `POST /api/sync`：执行一次 JSONL 增量同步，供页面刷新数据使用。
 - `GET /api/review-album?symbol=XAUUSDc&tag=strategy:breakout`：按交易日返回画册卡片和标签目录。
+- `GET /api/review-album?archived=true`：返回归档画册。
+- `GET /api/review-album/random`：从全部未归档画册随机返回一笔交易，不接受筛选参数。
+- `PATCH /api/trades/{id}/archived`：归档或恢复一笔画册交易。
 - `GET /api/system-evaluation?start=YYYY-MM-DD&end=YYYY-MM-DD`：按日评估与 Z 分数。
 - `GET /api/mode-evaluation?dimension=trade_type|strategy`：按交易类型或策略聚合。
 - `GET/POST /api/classification-options`：查询或新增交易类型和策略。

@@ -45,6 +45,7 @@ class RecordingStorage:
             },
             "get_analysis_settings": {"scratch_threshold_r": 0.15},
             "query_review_album": {"trades": [{"id": "T-1"}], "total": 1},
+            "get_random_review_album": {"trade": {"id": "T-1"}},
             "list_trends": [{"id": 2, "name": "up"}],
             "list_custom_fields": [{"id": 7, "name": "setup"}],
             "list_classification_options": [{"id": "follow"}],
@@ -68,6 +69,7 @@ class RecordingStorage:
             },
             "update_analysis_settings": {"scratch_threshold_r": 0.2},
             "update_trade_review": {"id": "T/1", "review_text": "reviewed"},
+            "update_trade_archived": {"id": "T/1", "is_archived": 1},
             "update_trade_custom_value": {"trade_id": "T/1", "field_id": 7},
             "update_classification_option": {"id": "follow/revised"},
             "update_trend": {"id": 2, "name": "updated"},
@@ -286,6 +288,7 @@ class HttpRouterTest(unittest.TestCase):
                         "symbols": ["XAUUSD", "EURUSD"],
                         "tags": ["trade_type:follow", "strategy:breakout"],
                         "sort": "asc",
+                        "archived": False,
                         "page": 2,
                         "page_size": 12,
                     },
@@ -574,6 +577,16 @@ class HttpRouterTest(unittest.TestCase):
                 "payload": self.storage.results["update_trade_review"],
             },
             {
+                "name": "update trade archived",
+                "method": "PATCH",
+                "path": "/api/trades/T%2F1/archived",
+                "query": {},
+                "body": {"archived": True},
+                "call": ("update_trade_archived", ("T/1", True), {}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["update_trade_archived"],
+            },
+            {
                 "name": "update trade custom value",
                 "method": "PATCH",
                 "path": "/api/trades/T%2F1/custom-fields/7",
@@ -673,7 +686,7 @@ class HttpRouterTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(len(cases), 20)
+        self.assertEqual(len(cases), 21)
         self.assert_route_contracts(cases)
 
     def test_empty_campaign_prefix_keeps_legacy_not_found_semantics(self):
@@ -829,6 +842,7 @@ class HttpRouterTest(unittest.TestCase):
             ("PATCH", "/api/positions/P-1/initial-stop"),
             ("PATCH", "/api/analysis-settings"),
             ("PATCH", "/api/trades/T-1/review"),
+            ("PATCH", "/api/trades/T-1/archived"),
             ("PATCH", "/api/trades/T-1/custom-fields/7"),
             ("PUT", "/api/classification-options/follow"),
             ("PUT", "/api/trends/2"),
@@ -841,6 +855,7 @@ class HttpRouterTest(unittest.TestCase):
             ("GET", "/api/campaigns/C-1"),
             ("GET", "/api/analysis-settings"),
             ("GET", "/api/review-album"),
+            ("GET", "/api/review-album/random"),
             ("GET", "/api/analysis"),
             ("GET", "/api/system-evaluation"),
             ("GET", "/api/mode-evaluation"),
@@ -861,7 +876,7 @@ class HttpRouterTest(unittest.TestCase):
             ("DELETE", "/api/custom-fields/7/purge"),
         }
 
-        self.assertEqual(len(requires_body | does_not_require_body), 37)
+        self.assertEqual(len(requires_body | does_not_require_body), 39)
         for method, path in requires_body:
             with self.subTest(method=method, path=path, expected=True):
                 self.assertTrue(self.router.route_requires_body(method, path))

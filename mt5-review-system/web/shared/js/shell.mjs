@@ -1,4 +1,5 @@
 import { showToast } from "./feedback.mjs";
+import { sharePageScreenshot } from "./share.mjs";
 
 // Icons are rendered by the locally vendored Lucide v1.8.0 UMD release.
 export const NAV_ITEMS = Object.freeze([
@@ -11,6 +12,7 @@ export const NAV_ITEMS = Object.freeze([
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let mountedShell = null;
 const NAV_COLLAPSED_STORAGE_KEY = "mt5-review-navigation-collapsed";
+const MOBILE_VIEWPORT_QUERY = "(max-width: 720px), (max-width: 900px) and (orientation: landscape) and (max-height: 600px)";
 
 function readCollapsedPreference() {
   try {
@@ -66,7 +68,7 @@ function renderIcons() {
 }
 
 function isMobileViewport() {
-  return Boolean(globalThis.window?.matchMedia?.("(max-width: 720px)").matches);
+  return Boolean(globalThis.window?.matchMedia?.(MOBILE_VIEWPORT_QUERY).matches);
 }
 
 function focusableElements(container) {
@@ -159,7 +161,7 @@ function handleNavigationKeys(event) {
   }
 }
 
-export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null} = {}) {
+export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null, share = false} = {}) {
   mountedShell?.cleanup();
   const root = document.querySelector("[data-app-shell]");
   if (!root) throw new Error("Missing [data-app-shell] mount point");
@@ -211,7 +213,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   });
   refreshButton.append(icon("refresh-cw"), createElement("span", {className: "app-navigation__label", text: "刷新数据"}));
   const environment = createElement("div", {className: "app-navigation__environment"});
-  environment.append(createElement("span", {text: "v0.6.1"}));
+  environment.append(createElement("span", {text: "v0.6.7"}));
   const collapseButton = iconButton({
     label: "折叠导航",
     iconName: "panel-left-close",
@@ -245,6 +247,12 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   });
   const actionArea = createElement("div", {className: "app-page-bar__actions"});
   appendActions(actionArea, actions);
+  let shareButton = null;
+  if (share) {
+    shareButton = iconButton({label: "分享页面", iconName: "share-2", className: "app-share-button"});
+    shareButton.setAttribute("data-share-exclude", "true");
+    actionArea.append(shareButton);
+  }
   pageBar.append(menuButton, heading, actionArea);
   const page = createElement("main", {className: "app-page", attributes: {id: "mainContent"}});
   page.append(...originalNodes);
@@ -271,7 +279,24 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
       refreshButton.removeAttribute("aria-busy");
     }
   };
-  const mediaQuery = globalThis.window?.matchMedia?.("(max-width: 720px)");
+  const onShareClick = async () => {
+    if (!shareButton || shareButton.disabled) return;
+    shareButton.disabled = true;
+    shareButton.setAttribute("aria-busy", "true");
+    try {
+      const result = await sharePageScreenshot();
+      showToast(
+        result.copied ? "截图已下载并复制到剪贴板" : "截图已下载，但未能复制到剪贴板",
+        {tone: result.copied ? "success" : "info"},
+      );
+    } catch (error) {
+      showToast(error?.message || "页面截图失败，请重试", {tone: "error"});
+    } finally {
+      shareButton.disabled = false;
+      shareButton.removeAttribute("aria-busy");
+    }
+  };
+  const mediaQuery = globalThis.window?.matchMedia?.(MOBILE_VIEWPORT_QUERY);
   const onViewportChange = (event) => {
     closeNavigation({returnFocus: false});
     if (!event.matches) setNavigationHidden(navigation, false);
@@ -280,6 +305,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   backdrop.addEventListener("click", onBackdropClick);
   collapseButton.addEventListener("click", onCollapseClick);
   refreshButton.addEventListener("click", onRefreshClick);
+  shareButton?.addEventListener("click", onShareClick);
   document.addEventListener("keydown", handleNavigationKeys);
   mediaQuery?.addEventListener?.("change", onViewportChange);
 
@@ -288,6 +314,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     backdrop.removeEventListener("click", onBackdropClick);
     collapseButton.removeEventListener("click", onCollapseClick);
     refreshButton.removeEventListener("click", onRefreshClick);
+    shareButton?.removeEventListener("click", onShareClick);
     document.removeEventListener("keydown", handleNavigationKeys);
     mediaQuery?.removeEventListener?.("change", onViewportChange);
     document.body.classList.remove("navigation-open");
@@ -297,7 +324,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     root.replaceChildren(...originalNodes);
     if (mountedShell?.root === root) mountedShell = null;
   };
-  mountedShell = {root, navigation, menuButton, collapseButton, backdrop, refreshButton, cleanup};
+  mountedShell = {root, navigation, menuButton, collapseButton, backdrop, refreshButton, shareButton, cleanup};
   setCollapsed(collapsedPreference);
   return cleanup;
 }

@@ -156,6 +156,31 @@ class TradeRepository:
             row["custom_fields"] = custom_values.get(str(row["id"]), {})
         return Page(rows, total, safe_page, safe_size)
 
+    def random_album_trade(self) -> dict[str, Any] | None:
+        clauses, parameters = self._album_where({"archived": False})
+        where_sql = f"WHERE {' AND '.join(clauses)}"
+        with closing(connect(self.paths)) as conn:
+            row = conn.execute(
+                f"""
+                SELECT trades.*, trends.name AS trend_name,
+                       trends.color AS trend_color
+                FROM trades
+                LEFT JOIN trends ON trends.id = trades.trend_id
+                {where_sql}
+                ORDER BY RANDOM()
+                LIMIT 1
+                """,
+                parameters,
+            ).fetchone()
+            if row is None:
+                return None
+            trade = dict(row)
+            custom_values = self.catalog.custom_values_for_trade_ids(
+                conn, [str(trade["id"])]
+            )
+        trade["custom_fields"] = custom_values.get(str(trade["id"]), {})
+        return trade
+
     def list_active_symbols(self) -> list[str]:
         with closing(connect(self.paths)) as conn:
             rows = conn.execute(
@@ -223,6 +248,11 @@ class TradeRepository:
     def _album_where(filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
         clauses = ["trades.deleted_at IS NULL"]
         parameters: list[Any] = []
+        archived = filters.get("archived", False)
+        if not isinstance(archived, bool):
+            raise ValueError("archived must be a boolean")
+        clauses.append("COALESCE(trades.is_archived, 0) = ?")
+        parameters.append(1 if archived else 0)
         start_utc, end_utc = _beijing_date_bounds(
             filters.get("start_date") or filters.get("start"),
             filters.get("end_date") or filters.get("end"),

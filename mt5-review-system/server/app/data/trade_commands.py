@@ -272,6 +272,24 @@ def update_trade_review(trade_id: str, payload: dict[str, Any]) -> dict[str, Any
     return trade
 
 
+def update_trade_archived(trade_id: str, archived: bool) -> dict[str, Any]:
+    with db() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE trades
+            SET is_archived = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (1 if archived else 0, trade_id),
+        )
+        if cursor.rowcount == 0:
+            raise KeyError(trade_id)
+    trade = get_trade(trade_id)
+    if not trade:
+        raise KeyError(trade_id)
+    return trade
+
+
 def delete_trade(trade_id: str) -> None:
     with db() as conn:
         cursor = conn.execute(

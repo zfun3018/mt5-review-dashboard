@@ -139,10 +139,10 @@ def update_campaign_review(campaign_id: str, payload: dict[str, Any]) -> dict[st
             conn.execute(
                 """
                 UPDATE trades
-                SET review_text = ?, trade_type = ?, strategy = ?, updated_at = CURRENT_TIMESTAMP
+                SET review_text = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (review_text, trade_type, strategy, source["trade_id"]),
+                (review_text, source["trade_id"]),
             )
     updated = get_campaign(campaign_id)
     if not updated:

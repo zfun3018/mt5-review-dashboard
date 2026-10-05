@@ -5,6 +5,7 @@ const test = require("node:test");
 const {pathToFileURL} = require("node:url");
 
 const webRoot = path.resolve(__dirname, "..");
+const shellSource = fs.readFileSync(path.join(webRoot, "shared/js/shell.mjs"), "utf8");
 
 class FakeClassList {
   constructor() {
@@ -341,6 +342,41 @@ test("shell keeps mobile drawer keyboard and ARIA state synchronized across view
 
     cleanup();
     assert.equal(viewportListener, null);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});
+
+test("shell treats touch landscape viewports as mobile navigation", () => {
+  assert.match(shellSource, /orientation:\s*landscape/);
+  assert.match(shellSource, /max-height:\s*600px/);
+});
+
+test("shell only mounts page sharing when explicitly enabled", async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const document = new FakeDocument();
+  const root = document.createElement("div");
+  root.setAttribute("data-app-shell", "");
+  document.body.append(root);
+  globalThis.document = document;
+  globalThis.window = {
+    lucide: {createIcons() {}},
+    matchMedia: () => ({matches: false, addEventListener() {}, removeEventListener() {}}),
+  };
+
+  try {
+    const {mountShell} = await import(`${moduleUrl("shared/js/shell.mjs")}?share-test`);
+    const sharedCleanup = mountShell({title: "订单列表", share: true});
+    const shareButton = root.querySelector('[aria-label="分享页面"]');
+    assert.ok(shareButton);
+    assert.equal(shareButton.getAttribute("data-share-exclude"), "true");
+    sharedCleanup();
+
+    const regularCleanup = mountShell({title: "设置"});
+    assert.equal(root.querySelector('[aria-label="分享页面"]'), null);
+    regularCleanup();
   } finally {
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;

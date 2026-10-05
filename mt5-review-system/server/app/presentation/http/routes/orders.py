@@ -94,6 +94,15 @@ def register(router: Router, storage) -> None:
                 return ok(storage.update_trade_review(trade_id, request_body(body)))
             except KeyError:
                 return not_found("Trade not found")
+        if path.endswith("/archived"):
+            payload = request_body(body)
+            archived = payload.get("archived")
+            if not isinstance(archived, bool):
+                raise ValueError("archived must be a boolean")
+            try:
+                return ok(storage.update_trade_archived(trade_id, archived))
+            except KeyError:
+                return not_found("Trade not found")
         if "/custom-fields/" in path:
             try:
                 field_id = int(path_part(path, 5))
@@ -149,6 +158,13 @@ def register(router: Router, storage) -> None:
         "/api/trades/",
         trade_patch,
         suffix="/review",
+        reads_body=True,
+    )
+    router.add_prefix(
+        "PATCH",
+        "/api/trades/",
+        trade_patch,
+        suffix="/archived",
         reads_body=True,
     )
     router.add_prefix(

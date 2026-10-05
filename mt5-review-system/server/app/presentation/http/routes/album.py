@@ -10,11 +10,28 @@ if TYPE_CHECKING:
 
 
 def register(router: Router, storage) -> None:
+    def random_review_album(path: str, query: Query, body: Body):
+        if query:
+            raise ValueError("Random album does not accept filters")
+        return ok(storage.get_random_review_album())
+
     def review_album(path: str, query: Query, body: Body):
-        allowed = {"start", "end", "symbol", "tag", "sort", "page", "page_size"}
+        allowed = {
+            "start",
+            "end",
+            "symbol",
+            "tag",
+            "sort",
+            "archived",
+            "page",
+            "page_size",
+        }
         unknown = sorted(set(query) - allowed)
         if unknown:
             raise ValueError(f"Unsupported album filter: {unknown[0]}")
+        archived_value = first(query, "archived", "false") or "false"
+        if archived_value not in {"true", "false"}:
+            raise ValueError("archived must be true or false")
         return ok(
             storage.query_review_album(
                 start_date=first(query, "start", None),
@@ -22,9 +39,11 @@ def register(router: Router, storage) -> None:
                 symbols=query.get("symbol", []),
                 tags=query.get("tag", []),
                 sort=first(query, "sort", "desc") or "desc",
+                archived=archived_value == "true",
                 page=optional_int(first(query, "page", "1")) or 1,
                 page_size=optional_int(first(query, "page_size", "24")) or 24,
             )
         )
 
+    router.add("GET", "/api/review-album/random", random_review_album)
     router.add("GET", "/api/review-album", review_album)

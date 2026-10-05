@@ -45,6 +45,7 @@ class AlbumService:
             "end_date": end_date,
             "symbols": symbol_values,
             "sort": sort,
+            "archived": values.get("archived", False),
             "custom_fields": {},
         }
         for dimension, group_tags in selected_groups.items():
@@ -74,6 +75,7 @@ class AlbumService:
                 "symbols": symbol_values,
                 "tags": tag_values,
                 "sort": sort,
+                "archived": bool(values.get("archived", False)),
             },
             "trades": page_trades,
             "days": _group_days(page_trades),
@@ -85,6 +87,22 @@ class AlbumService:
                 "tags": catalog["available_tags"],
                 "custom_fields": catalog["all_fields"],
             },
+        }
+
+    def random(self) -> dict[str, Any]:
+        catalog = _build_catalog(
+            self.catalogs.list_classifications(active_only=True),
+            self.catalogs.list_classifications(active_only=True),
+            _active_custom_fields(self.catalogs),
+        )
+        trade = self.trades.random_album_trade()
+        return {
+            "trade": (
+                _serialize_trade(self.trade_serializer(trade), catalog)
+                if trade is not None
+                else None
+            ),
+            "custom_fields": catalog["all_fields"],
         }
 
 

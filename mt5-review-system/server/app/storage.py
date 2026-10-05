@@ -256,6 +256,7 @@ def _query_review_album_adapter(
     symbols: list[str] | str | None = None,
     tags: list[str] | str | None = None,
     sort: str = "desc",
+    archived: bool = False,
     page: int = 1,
     page_size: int = 24,
 ) -> dict[str, Any]:
@@ -266,12 +267,17 @@ def _query_review_album_adapter(
             "symbols": symbols,
             "tags": tags,
             "sort": sort,
+            "archived": archived,
         },
         PageRequest(max(1, int(page)), max(1, min(int(page_size), 100))),
     )
 
 
 query_review_album = _query_review_album_adapter
+
+
+def get_random_review_album() -> dict[str, Any]:
+    return _application_services().album.random()
 
 
 def list_campaigns(
@@ -367,6 +373,11 @@ def delete_trade_screenshot(trade_id: str) -> dict[str, Any]:
 def update_trade_review(trade_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     runtime_paths()
     return _serialize_trade_row(trade_commands.update_trade_review(trade_id, payload))
+
+
+def update_trade_archived(trade_id: str, archived: bool) -> dict[str, Any]:
+    runtime_paths()
+    return _serialize_trade_row(trade_commands.update_trade_archived(trade_id, archived))
 
 
 delete_trade = _synchronized_owner(trade_commands.delete_trade)

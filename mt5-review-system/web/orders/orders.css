@@ -151,9 +151,17 @@
   background: rgba(7, 21, 37, 0.5);
 }
 
-.orders-table tbody tr:hover,
-.orders-table tbody tr.active {
+.orders-table tbody tr:hover {
   background: rgba(61, 130, 246, 0.12);
+}
+
+.orders-table tbody tr.active {
+  background: rgba(61, 130, 246, 0.28) !important;
+  box-shadow: inset 4px 0 0 #5aa4ff, inset 0 0 0 1px rgba(90, 164, 255, 0.7);
+}
+
+.orders-table tbody tr.active td {
+  color: var(--color-text);
 }
 
 /* Column tracks */
@@ -509,8 +517,8 @@ th.custom-col {
 }
 
 .campaign-detail-row.active {
-  background: rgba(32, 199, 160, 0.12) !important;
-  box-shadow: inset 2px 0 0 var(--color-accent);
+  background: rgba(61, 130, 246, 0.24) !important;
+  box-shadow: inset 4px 0 0 #5aa4ff, inset 0 0 0 1px rgba(90, 164, 255, 0.62);
 }
 
 .child-order-cell,
@@ -540,9 +548,21 @@ th.custom-col {
   background: rgba(130, 148, 168, 0.12) !important;
 }
 
-.campaign-row.scratch:hover,
-.campaign-row.scratch.active {
+.campaign-row.scratch:not(.active):hover {
   background: rgba(130, 148, 168, 0.2) !important;
+}
+
+.campaign-row.scratch.active {
+  background: rgba(61, 130, 246, 0.22) !important;
+  box-shadow: inset 4px 0 0 #f2b84b, inset 0 0 0 1px rgba(242, 184, 75, 0.72);
+}
+
+.campaign-row.scratch.active td,
+.campaign-row.scratch.active .order-main strong,
+.campaign-row.scratch.active .campaign-r-cell,
+.campaign-row.scratch.active .profit-text,
+.campaign-row.scratch.active .loss-text {
+  color: #e7eef8;
 }
 
 .campaign-row.scratch .order-main strong,
@@ -1063,6 +1083,31 @@ th.custom-col {
 .choice-cell.table-choice .cell-caret {
   font-size: 10px;
   line-height: 1;
+}
+
+.campaign-classification-select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid color-mix(in srgb, var(--classification-color) 52%, var(--color-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--classification-color) 13%, var(--color-surface-raised));
+  color: var(--color-text);
+  padding: 3px 24px 3px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.campaign-classification-select:hover,
+.campaign-classification-select:focus {
+  border-color: var(--classification-color);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--classification-color) 20%, transparent);
+}
+
+.campaign-classification-select:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .choice-popover {

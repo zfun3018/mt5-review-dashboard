@@ -227,7 +227,7 @@
   display: none;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
   .app-shell,
   .app-shell[data-navigation-collapsed="true"] {
     display: block;

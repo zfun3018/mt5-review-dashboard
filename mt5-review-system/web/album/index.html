@@ -12,6 +12,21 @@
   </head>
   <body>
     <div data-app-shell>
+      <section class="panel album-random" aria-labelledby="albumRandomTitle">
+        <div class="album-random-head">
+          <div>
+            <p class="eyebrow">RANDOM REVIEW</p>
+            <h2 id="albumRandomTitle">随机阅读</h2>
+          </div>
+          <button id="albumRandomButton" class="button-primary album-random-button" type="button">
+            <i data-lucide="shuffle" aria-hidden="true"></i>
+            <span>随机一个</span>
+          </button>
+        </div>
+        <div id="albumRandomStatus" class="album-random-status">尚未抽取画册</div>
+        <div id="albumRandomResult" class="album-random-result" aria-live="polite" hidden></div>
+      </section>
+
       <section class="panel album-toolbar" aria-label="画册筛选">
         <div class="album-toolbar-head">
           <div>
@@ -66,21 +81,54 @@
         <div id="albumError" class="album-error" role="alert" hidden></div>
       </section>
 
-      <section id="albumDays" class="album-days" aria-live="polite"></section>
-      <div id="albumEmpty" class="album-empty" hidden>
-        <strong>当前条件没有交易</strong>
-        <span>清空筛选后查看全部有效订单。</span>
-        <button id="albumEmptyClear" class="button-primary" type="button">清空筛选</button>
-      </div>
+      <section class="album-section" aria-labelledby="albumViewTitle">
+        <div class="album-section-head">
+          <div>
+            <p class="eyebrow">REVIEW ALBUM</p>
+            <h2 id="albumViewTitle">复盘画册</h2>
+          </div>
+          <div class="album-view-tabs" role="tablist" aria-label="画册栏目">
+            <button class="album-view-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="albumAllPanel" data-album-view="all">全部画册</button>
+            <button class="album-view-tab" type="button" role="tab" aria-selected="false" aria-controls="albumArchivedPanel" data-album-view="archived">归档画册 <span id="albumArchivedCount">0</span></button>
+          </div>
+        </div>
+        <div id="albumAllPanel" class="album-view-panel" role="tabpanel" aria-labelledby="albumViewTitle">
+          <div id="albumDays" class="album-days" aria-live="polite"></div>
+          <div id="albumEmpty" class="album-empty" hidden>
+            <strong>当前条件没有交易</strong>
+            <span>清空筛选后查看全部有效订单。</span>
+            <button id="albumEmptyClear" class="button-primary" type="button">清空筛选</button>
+          </div>
+        </div>
+        <div id="albumArchivedPanel" class="album-view-panel" role="tabpanel" aria-labelledby="albumViewTitle" hidden>
+          <div id="albumArchivedDays" class="album-days" aria-live="polite"></div>
+          <div id="albumArchivedEmpty" class="album-section-empty" hidden>
+            <strong>暂无归档画册</strong>
+            <span>归档后的画册会集中显示在这里。</span>
+          </div>
+        </div>
+      </section>
       <div id="albumLoading" class="album-loading" hidden>正在读取交易截图...</div>
     </div>
 
-    <div id="albumImageModal" class="album-image-modal" role="dialog" aria-modal="true" aria-label="截图大图" aria-hidden="true">
-      <button id="albumImageClose" class="app-icon-button" type="button" title="关闭大图" aria-label="关闭大图">×</button>
-      <figure>
-        <img id="albumModalImage" alt="交易截图大图" />
-        <figcaption id="albumModalCaption"></figcaption>
-      </figure>
+    <div id="albumImageModal" class="album-image-modal" role="dialog" aria-modal="true" aria-label="画册阅读器" aria-hidden="true">
+      <button id="albumImageClose" class="app-icon-button" type="button" title="关闭阅读器" aria-label="关闭阅读器">×</button>
+      <div class="album-reader-shell">
+        <figure class="album-reader-media">
+          <img id="albumModalImage" alt="交易截图大图" />
+          <figcaption id="albumModalCaption"></figcaption>
+        </figure>
+        <aside class="album-reader-aside" aria-label="订单信息">
+          <div class="album-reader-toolbar">
+            <span class="eyebrow">REVIEW READER</span>
+            <button id="albumReaderNext" class="button-primary album-reader-next" type="button">
+              <i data-lucide="shuffle" aria-hidden="true"></i>
+              <span>换一个</span>
+            </button>
+          </div>
+          <div id="albumReaderInfo" class="album-reader-info"></div>
+        </aside>
+      </div>
     </div>
 
     <script src="../vendor/lucide.min.js"></script>

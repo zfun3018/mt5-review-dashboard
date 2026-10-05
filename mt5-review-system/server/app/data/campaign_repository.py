@@ -15,7 +15,7 @@ from .database import connect, transaction
 from .trade_repository import Page, _beijing_date_bounds, _escape_like
 
 
-CAMPAIGN_MODEL_REVISION = "3"
+CAMPAIGN_MODEL_REVISION = "5"
 CAMPAIGN_ID_NAMESPACE = uuid.UUID("d72ca9de-dfff-4e64-b1cc-5a8a1837c71d")
 
 
@@ -360,6 +360,15 @@ class CampaignRepository:
             str(row["id"]): row["initial_stop_price"]
             for row in conn.execute("SELECT id, initial_stop_price FROM positions")
         }
+        previous_classifications = {
+            str(row["id"]): {
+                "trade_type": str(row["trade_type"] or "unclassified"),
+                "strategy": str(row["strategy"] or "strategy_unclassified"),
+            }
+            for row in conn.execute(
+                "SELECT id, trade_type, strategy FROM trade_campaigns"
+            )
+        }
         previous_memberships = {
             str(row["position_id"]): {
                 "campaign_id": str(row["campaign_id"]),
@@ -500,10 +509,16 @@ class CampaignRepository:
             active_rows.sort(
                 key=lambda row: (str(row.get("close_time_utc") or ""), str(row["id"]))
             )
-            reviews = [
-                self.review_formatter(str(row["id"]), str(row.get("review_text") or "").strip())
+            review_rows = [
+                (str(row["id"]), str(row.get("review_text") or "").strip())
                 for row in active_rows
                 if str(row.get("review_text") or "").strip()
+            ]
+            reviews = [
+                review
+                if len(review_rows) == 1
+                else self.review_formatter(trade_id, review)
+                for trade_id, review in review_rows
             ]
             trade_types = list(
                 dict.fromkeys(
@@ -515,6 +530,13 @@ class CampaignRepository:
                     str(row.get("strategy") or "strategy_unclassified") for row in active_rows
                 )
             )
+            previous_classification = previous_classifications.get(campaign_id)
+            if previous_classification:
+                campaign_trade_type = previous_classification["trade_type"]
+                campaign_strategy = previous_classification["strategy"]
+            else:
+                campaign_trade_type = trade_types[0] if trade_types else "unclassified"
+                campaign_strategy = strategies[0] if strategies else "strategy_unclassified"
             screenshot_path = next(
                 (
                     str(row.get("screenshot_path") or "")
@@ -540,6 +562,8 @@ class CampaignRepository:
                     closed_at_utc = excluded.closed_at_utc,
                     status = excluded.status,
                     net_pnl = excluded.net_pnl,
+                    trade_type = excluded.trade_type,
+                    strategy = excluded.strategy,
                     review_text = CASE
                         WHEN trade_campaigns.review_text = '' THEN excluded.review_text
                         ELSE trade_campaigns.review_text
@@ -563,8 +587,8 @@ class CampaignRepository:
                     campaign["status"],
                     net_pnl,
                     "\n\n".join(reviews),
-                    trade_types[0] if trade_types else "unclassified",
-                    strategies[0] if strategies else "strategy_unclassified",
+                    campaign_trade_type,
+                    campaign_strategy,
                     screenshot_path,
                     int(len(trade_types) > 1 or len(strategies) > 1),
                     risk["campaign_r"],

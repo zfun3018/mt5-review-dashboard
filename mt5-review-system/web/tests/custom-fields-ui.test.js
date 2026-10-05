@@ -70,6 +70,8 @@ test("classification manager supports data-driven create, rename, and archive", 
   assert.match(classificationsSource, /data-classification-save/);
   assert.match(classificationsSource, /data-classification-archive/);
   assert.match(classificationsSource, /\/api\/classification-options/);
+  assert.match(classificationsSource, /data-classification-color/);
+  assert.match(classificationsSource, /color/);
   assert.doesNotMatch(classificationsSource, /\{ follow: "跟随", reversal: "反转", unclassified: "未分类" \}/);
 });
 

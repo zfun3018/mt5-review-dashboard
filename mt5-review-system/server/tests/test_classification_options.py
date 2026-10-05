@@ -78,6 +78,56 @@ class ClassificationOptionsTest(unittest.TestCase):
         self.assertEqual(row["order_count"], 1)
         self.assertEqual(row["net_pnl"], 12.5)
 
+    def test_editing_campaign_classification_refreshes_filter_values(self):
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
+        updated = storage.update_campaign_review(
+            campaign_id,
+            {
+                "trade_type": "reversal",
+                "strategy": "range",
+                "review_text": "分类已调整",
+            },
+        )
+        self.assertEqual(updated["trade_type"], "reversal")
+        self.assertEqual(updated["strategy"], "range")
+
+        filtered = storage.list_campaigns(trade_type="reversal", strategy="range")
+        self.assertEqual(filtered["total"], 1)
+        self.assertEqual(filtered["campaigns"][0]["trade_type"], "reversal")
+        self.assertEqual(filtered["campaigns"][0]["strategy"], "range")
+        self.assertEqual(
+            storage.list_campaigns(trade_type="follow", strategy="breakout")["total"],
+            0,
+        )
+
+    def test_model_revision_rebuild_preserves_campaign_classification(self):
+        with storage.db() as conn:
+            conn.execute("UPDATE trades SET strategy = 'range' WHERE id = 'T-1'")
+            conn.execute("UPDATE trade_campaigns SET strategy = 'breakout'")
+            conn.execute(
+                "UPDATE schema_meta SET value = '4' WHERE key = 'model_revision'"
+            )
+
+        storage.init_db(seed=False)
+
+        filtered = storage.list_campaigns(strategy="breakout")
+        self.assertEqual(filtered["total"], 1)
+        self.assertEqual(filtered["campaigns"][0]["strategy"], "breakout")
+        strategy_rows = storage.get_analysis()["mode_evaluation"]["strategy"]
+        breakout_row = next(row for row in strategy_rows if row["key"] == "breakout")
+        self.assertEqual(breakout_row["order_count"], 1)
+
+    def test_classification_option_color_can_be_created_and_updated(self):
+        created = storage.create_classification_option(
+            {"dimension": "trade_type", "label": "颜色场景", "color": "#f97316"}
+        )
+        self.assertEqual(created["color"], "#f97316")
+
+        updated = storage.update_classification_option(created["id"], {"color": "#a78bfa"})
+        self.assertEqual(updated["color"], "#a78bfa")
+        persisted = next(item for item in storage.list_classification_options() if item["id"] == created["id"])
+        self.assertEqual(persisted["color"], "#a78bfa")
+
     def test_deleting_archives_option_but_preserves_historical_use(self):
         storage.delete_classification_option("follow")
 

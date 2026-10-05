@@ -46,14 +46,26 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
         row["name"]
         for row in conn.execute("PRAGMA table_info(trades)").fetchall()
     }
+    archive_column_added = "is_archived" not in trade_columns
     for name, definition in {
         "fee": "REAL NOT NULL DEFAULT 0",
         "trade_type": "TEXT NOT NULL DEFAULT 'unclassified'",
         "strategy": "TEXT NOT NULL DEFAULT 'strategy_unclassified'",
+        "is_featured": "INTEGER NOT NULL DEFAULT 0",
+        "is_archived": "INTEGER NOT NULL DEFAULT 0",
         "deleted_at": "TEXT",
     }.items():
         if name not in trade_columns:
             conn.execute(f"ALTER TABLE trades ADD COLUMN {name} {definition}")
+
+    if archive_column_added:
+        conn.execute(
+            "UPDATE trades SET is_archived = CASE WHEN is_featured = 1 THEN 0 ELSE 1 END"
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_trades_archived_close "
+        "ON trades(is_archived, close_time_utc)"
+    )
 
     raw_columns = {
         row["name"]

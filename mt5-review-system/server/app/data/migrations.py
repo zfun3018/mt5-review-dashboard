@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS trades (
     remark TEXT NOT NULL DEFAULT '',
     trade_type TEXT NOT NULL DEFAULT 'unclassified',
     strategy TEXT NOT NULL DEFAULT 'strategy_unclassified',
+    is_featured INTEGER NOT NULL DEFAULT 0,
+    is_archived INTEGER NOT NULL DEFAULT 0,
     deleted_at TEXT,
     source TEXT NOT NULL DEFAULT 'manual',
     raw_json TEXT,
@@ -162,6 +164,35 @@ def _backup_before_v4(paths: RuntimePaths) -> dict[str, Any] | None:
     }
 
 
+def _backup_before_album_archive(paths: RuntimePaths) -> dict[str, Any] | None:
+    if not paths.database.exists() or paths.database.stat().st_size == 0:
+        return None
+    source = connect(paths)
+    try:
+        table = source.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'trades'"
+        ).fetchone()
+        if not table:
+            return None
+        columns = {
+            row["name"] for row in source.execute("PRAGMA table_info(trades)").fetchall()
+        }
+    finally:
+        source.close()
+    if "is_archived" in columns:
+        return None
+    created_at = datetime.now(timezone.utc)
+    snapshot = paths.backups / (
+        f"pre-album-archive-{created_at.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}.sqlite"
+    )
+    backup_database(paths.database, snapshot)
+    return {
+        "file_path": str(snapshot),
+        "created_at": created_at.isoformat(),
+        "size_bytes": snapshot.stat().st_size,
+    }
+
+
 def ensure_schema(
     paths: RuntimePaths,
     seed: bool | Callable[[], None] = True,
@@ -171,7 +202,7 @@ def ensure_schema(
     paths.screenshots.mkdir(parents=True, exist_ok=True)
     paths.raw_events.mkdir(parents=True, exist_ok=True)
     paths.backups.mkdir(parents=True, exist_ok=True)
-    migration_backup = _backup_before_v4(paths)
+    migration_backup = _backup_before_v4(paths) or _backup_before_album_archive(paths)
 
     if migrate is None:
         from .bootstrap import _ensure_schema

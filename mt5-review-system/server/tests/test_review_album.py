@@ -165,6 +165,51 @@ class ReviewAlbumTest(unittest.TestCase):
             for tag in trade["album_tags"]
         ))
 
+    def test_archived_trade_is_persisted_and_returned_by_album(self):
+        archived = storage.update_trade_archived("T-1", True)
+
+        self.assertEqual(archived["id"], "T-1")
+        self.assertEqual(archived["is_archived"], 1)
+        self.assertFalse(any(
+            item["id"] == "T-1" for item in storage.query_review_album()["trades"]
+        ))
+        trade = next(
+            item
+            for item in storage.query_review_album(archived=True)["trades"]
+            if item["id"] == "T-1"
+        )
+        self.assertEqual(trade["is_archived"], 1)
+
+        storage.upsert_trade(
+            {
+                "id": "T-1",
+                "account": "123",
+                "order_no": "T-1",
+                "position_id": "T-1",
+                "order_ticket": "T-1",
+                "deal_ticket": "T-1",
+                "symbol": "EURUSD",
+                "side": "long",
+                "lots": 0.01,
+                "open_time_utc": "2026-08-20T16:30:00+00:00",
+                "close_time_utc": "2026-08-20T16:30:00+00:00",
+                "entry_price": 1.0,
+                "exit_price": 1.5,
+                "pnl": 10.0,
+                "screenshot_path": "screenshots/missing.png",
+                "trade_type": "follow",
+                "strategy": "breakout",
+            }
+        )
+        self.assertEqual(storage.get_trade("T-1")["is_archived"], 1)
+
+        restored = storage.update_trade_archived("T-1", False)
+        self.assertEqual(restored["is_archived"], 0)
+
+    def test_archived_update_rejects_missing_trade(self):
+        with self.assertRaises(KeyError):
+            storage.update_trade_archived("missing", True)
+
     def test_invalid_date_and_unknown_tag_are_rejected(self):
         with self.assertRaises(ValueError):
             storage.query_review_album(start_date="2026-08-22", end_date="2026-08-20")

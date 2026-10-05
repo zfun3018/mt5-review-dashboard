@@ -113,7 +113,7 @@
 
 .classification-option-row {
   display: grid;
-  grid-template-columns: var(--space-4) 1fr auto auto auto;
+  grid-template-columns: var(--space-4) auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -131,6 +131,14 @@
   height: var(--space-3);
   border-radius: 50%;
   background: var(--option-color, var(--color-accent));
+}
+
+.classification-option-row input[type="color"],
+.classification-add-row input[type="color"] {
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 2px;
+  flex: 0 0 auto;
 }
 
 .classification-state {
@@ -306,7 +314,7 @@
   }
 
   .classification-option-row {
-    grid-template-columns: var(--space-4) 1fr auto;
+    grid-template-columns: var(--space-4) auto minmax(0, 1fr) auto;
   }
 
   .classification-option-row .classification-state {

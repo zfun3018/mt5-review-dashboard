@@ -56,13 +56,14 @@ const EMPTY_ALBUM = {
   available_filters: { symbols: [], tags: [], custom_fields: [] },
 };
 
-test("album mounts the shared shell and reads only the review-album API", () => {
+test("album mounts the shared shell and keeps review writes scoped to trades", () => {
   assert.match(albumHtml, /data-app-shell/);
   assert.match(albumHtml, /shared\/css\/tokens\.css/);
   assert.match(albumSource, /shell\.mjs/);
   assert.match(albumHtml, /复盘画册/);
   assert.match(albumSource, /\/api\/review-album/);
-  assert.doesNotMatch(albumSource, /\/api\/campaigns|\/api\/trades|\/api\/analysis|\/api\/positions/);
+  assert.match(albumSource, /\/api\/trades/);
+  assert.doesNotMatch(albumSource, /\/api\/campaigns|\/api\/analysis|\/api\/positions/);
   assert.match(albumSource, /custom_fields/);
   assert.doesNotMatch(albumSource, /sideFilter/);
   assert.doesNotMatch(albumSource, /q=/);
@@ -74,6 +75,111 @@ test("album renders date groups, labels, review text, and order links into the o
   assert.match(albumSource, /review_text/);
   assert.match(albumSource, /href="\/orders\/\?trade=/);
   assert.match(albumSource, /BEIJING CLOSE DATE/);
+  assert.match(albumHtml, /随机阅读/);
+  assert.match(albumSource, /\/api\/review-album\/random/);
+  assert.match(albumSource, /data-archive-toggle/);
+  assert.match(albumSource, /\/archived/);
+  assert.match(albumHtml, /role="tablist"/);
+  assert.match(albumHtml, /data-album-view="all"/);
+  assert.match(albumHtml, /data-album-view="archived"/);
+});
+
+test("album renders archived trades in a separate section", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const activeTrade = {
+    id: "T-1",
+    symbol: "EURUSD",
+    close_time_bj: "2026-08-20T16:30:00+08:00",
+    open_time_bj: "2026-08-20T16:00:00+08:00",
+    is_archived: 0,
+    net_pnl: 10,
+    lots: 0.01,
+    side: "long",
+    duration_label: "30m",
+    album_tags: [],
+    review_text: "当前复盘",
+  };
+  const archivedTrade = { ...activeTrade, id: "T-2", is_archived: 1, review_text: "归档复盘" };
+  const view = new FakeView();
+  const controller = createAlbumController({
+    api: {
+      async requestJson(requestPath) {
+        if (requestPath.includes("archived=true")) {
+          return {
+            ...EMPTY_ALBUM,
+            trades: [archivedTrade],
+            days: [{ date: "2026-08-20", order_count: 1, net_pnl: 10, trades: [archivedTrade] }],
+            total: 1,
+          };
+        }
+        return {
+          ...EMPTY_ALBUM,
+          trades: [activeTrade],
+          days: [{ date: "2026-08-20", order_count: 1, net_pnl: 10, trades: [activeTrade] }],
+          total: 1,
+        };
+      },
+    },
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+
+  assert.match(view.getElementById("albumArchivedDays").innerHTML, /归档复盘/);
+  assert.doesNotMatch(view.getElementById("albumArchivedDays").innerHTML, /当前复盘/);
+  assert.match(view.getElementById("albumDays").innerHTML, /当前复盘/);
+  controller.dispose();
+});
+
+test("album toggles a trade archived state through the trade endpoint", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const calls = [];
+  const trade = { id: "T-1", is_archived: 0, trade_type: "follow", strategy: "breakout" };
+  const controller = createAlbumController({
+    api: {
+      async requestJson(requestPath, options = {}) {
+        calls.push({ requestPath, options });
+        return requestPath.startsWith("/api/review-album")
+          ? { ...EMPTY_ALBUM, trades: [trade], days: [{ date: "2026-08-20", trades: [trade] }] }
+          : { ...trade, is_archived: 1 };
+      },
+    },
+    view: new FakeView(),
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  await controller.toggleArchived("T-1");
+
+  assert.equal(calls[2].requestPath, "/api/trades/T-1/archived");
+  assert.equal(calls[2].options.method, "PATCH");
+  assert.deepEqual(calls[2].options.body, { archived: true });
+  controller.dispose();
+});
+
+test("album defaults to all trades and switches between one visible panel", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const view = new FakeView();
+  const controller = createAlbumController({
+    api: { async requestJson() { return EMPTY_ALBUM; } },
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  assert.equal(controller.getView(), "all");
+  assert.equal(view.getElementById("albumAllPanel").hidden, false);
+  assert.equal(view.getElementById("albumArchivedPanel").hidden, true);
+
+  await controller.setView("archived");
+  assert.equal(controller.getView(), "archived");
+  assert.equal(view.getElementById("albumAllPanel").hidden, true);
+  assert.equal(view.getElementById("albumArchivedPanel").hidden, false);
+  controller.dispose();
 });
 
 test("album activates its navigation destination through the shared shell", () => {
@@ -123,9 +229,114 @@ test("album controller requests only the review-album endpoint", async () => {
     history: { replaceState() {} },
   });
   await controller.load();
-  assert.equal(paths.length, 1);
+  assert.equal(paths.length, 2);
   assert.match(paths[0], /^\/api\/review-album\?/);
+  assert.match(paths[1], /archived=true/);
   controller.dispose();
+});
+
+test("album saves an order review through the existing trade review endpoint", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const calls = [];
+  const controllerView = new FakeView();
+  const reviewTrade = { id: "T-1", trade_type: "follow", strategy: "breakout", review_text: "旧复盘" };
+  const api = {
+    async requestJson(requestPath, options = {}) {
+      calls.push({ requestPath, options });
+      return requestPath.startsWith("/api/review-album")
+        ? {
+          ...EMPTY_ALBUM,
+          trades: [{ ...reviewTrade }],
+          days: [{ date: "2026-08-01", order_count: 1, net_pnl: 1, trades: [{ ...reviewTrade }] }],
+        }
+        : { id: "T-1", review_text: options.body.review_text };
+    },
+  };
+  const controller = createAlbumController({
+    api,
+    view: controllerView,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  await controller.saveReview("T-1", "新的复盘内容");
+
+  assert.equal(calls[2].requestPath, "/api/trades/T-1/review");
+  assert.equal(calls[2].options.method, "PATCH");
+  assert.deepEqual(calls[2].options.body, {
+    trade_type: "follow",
+    strategy: "breakout",
+    review_text: "新的复盘内容",
+  });
+  assert.match(controllerView.getElementById("albumDays").innerHTML, /新的复盘内容/);
+  assert.doesNotMatch(controllerView.getElementById("albumDays").innerHTML, /旧复盘/);
+  controller.dispose();
+});
+
+test("album saves a review when the order is present only in a date group", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const calls = [];
+  const view = new FakeView();
+  const reviewTrade = { id: "T-2", trade_type: "follow", strategy: "breakout", review_text: "旧复盘" };
+  const api = {
+    async requestJson(requestPath, options = {}) {
+      calls.push({ requestPath, options });
+      return requestPath.startsWith("/api/review-album")
+        ? {
+          ...EMPTY_ALBUM,
+          trades: [],
+          days: [{ date: "2026-08-01", order_count: 1, net_pnl: 1, trades: [{ ...reviewTrade }] }],
+        }
+        : { id: "T-2", review_text: options.body.review_text };
+    },
+  };
+  const controller = createAlbumController({
+    api,
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  await controller.saveReview("T-2", "日期分组中的新复盘");
+
+  assert.equal(calls[2].requestPath, "/api/trades/T-2/review");
+  assert.match(view.getElementById("albumDays").innerHTML, /日期分组中的新复盘/);
+  controller.dispose();
+});
+
+test("album renders the same bounded review editor contract as the orders workspace", () => {
+  assert.match(albumSource, /textarea/);
+  assert.match(albumSource, /maxlength="10000"/);
+  assert.match(albumSource, /保存/);
+  assert.match(albumSource, /api.*trades.*encodeURIComponent.*tradeId.*review/);
+});
+
+test("random reading keeps the original image-and-order layout", () => {
+  assert.match(albumSource, /album-card--random/);
+  assert.doesNotMatch(albumSource, /<details class="album-meta"/);
+  assert.match(albumSource, /<div class="album-meta">/);
+  assert.match(albumStyle, /\.album-card\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.65fr\) minmax\(360px, 0\.85fr\)/);
+  assert.doesNotMatch(albumStyle, /\.album-random-result \.album-card--random\s*\{[\s\S]*display:\s*block/);
+});
+
+test("image reader keeps the order context and random navigation beside the image", () => {
+  assert.match(albumHtml, /albumImageModal[\s\S]*albumReaderNext/);
+  assert.match(albumHtml, /albumReaderInfo/);
+  assert.match(albumSource, /data-trade-id/);
+  assert.match(albumSource, /function renderReader\(/);
+  assert.match(albumSource, /getElement\("albumReaderNext"\)\?\.addEventListener/);
+  assert.match(albumStyle, /\.album-reader-shell\s*\{[\s\S]*grid-template-columns/);
+  assert.match(albumStyle, /\.album-reader-media img\s*\{[\s\S]*max-height:\s*calc\(100dvh/);
+  assert.match(albumStyle, /\.album-reader-aside\s*\{[\s\S]*border-left/);
+});
+
+test("random reading uses the image-led landscape layout", () => {
+  assert.match(albumStyle, /\.album-reader-shell\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(300px, 360px\)/);
+  assert.match(albumStyle, /\.album-reader-media img\s*\{[\s\S]*max-height:\s*calc\(100dvh/);
+  assert.match(albumStyle, /\.album-reader-aside\s*\{[\s\S]*border-left/);
+  assert.match(albumStyle, /@media \(max-width: 900px\) and \(orientation: landscape\) and \(max-height: 600px\)/);
 });
 
 test("album keeps screenshot proportions and stacks metadata below the image on mobile", () => {
@@ -134,11 +345,11 @@ test("album keeps screenshot proportions and stacks metadata below the image on 
   assert.match(albumStyle, /@media \(max-width: 720px\)[\s\S]*\.album-card\s*\{[^}]*grid-template-columns:\s*1fr/s);
 });
 
-test("album review text stays visible in one scrollable block regardless of length", () => {
-  assert.match(albumSource, /function renderReview\(text\)/);
+test("album review editor stays usable for long text", () => {
+  assert.match(albumSource, /function renderReview\(trade, context\)/);
   assert.match(albumSource, /album-review-expanded/);
-  assert.doesNotMatch(albumSource, /details open class="album-review"/);
-  assert.match(albumStyle, /\.album-review p\s*\{[\s\S]*max-height:\s*none/);
+  assert.match(albumSource, /maxlength="10000"/);
+  assert.match(albumStyle, /\.album-review-editor\s*\{[\s\S]*overflow-y:\s*scroll/);
 });
 
 test("album desktop cards allocate the screenshot's spare height to review content", () => {
@@ -150,8 +361,8 @@ test("album desktop cards allocate the screenshot's spare height to review conte
 test("album review content keeps a bounded vertical scrollbar instead of clipping behind actions", () => {
   assert.match(albumStyle, /\.album-card\s*\{[\s\S]*min-height:\s*0/);
   assert.match(albumStyle, /\.album-meta\s*\{[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/);
-  assert.match(albumStyle, /\.album-review p\s*\{[\s\S]*overflow-y:\s*scroll/);
-  assert.match(albumStyle, /\.album-review p::-webkit-scrollbar\s*\{[\s\S]*width:\s*10px/);
+  assert.match(albumStyle, /\.album-review-editor\s*\{[\s\S]*overflow-y:\s*scroll/);
+  assert.match(albumStyle, /\.album-review-editor::-webkit-scrollbar\s*\{[\s\S]*width:\s*10px/);
 });
 
 test("album is listed as a shared shell destination", async () => {

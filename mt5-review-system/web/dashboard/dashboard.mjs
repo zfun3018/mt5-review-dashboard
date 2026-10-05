@@ -760,7 +760,7 @@ export function createDashboardController({
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh })
+      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh, share: true })
       : null;
 
     const timePreset = getElement("timePreset");

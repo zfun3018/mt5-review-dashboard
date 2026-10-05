@@ -4,6 +4,7 @@ const DIMENSIONS = [
   ["trade_type", "交易场景", "新增场景"],
   ["strategy", "交易策略", "新增策略"],
 ];
+const DEFAULT_CLASSIFICATION_COLOR = "#2bd4ff";
 
 // Classification CRUD. Mutations go through `afterMutation` so the controller
 // refreshes only the classification catalog, never the full configuration.
@@ -26,10 +27,22 @@ export function createClassificationsModule({
     return node.querySelectorAll(`[data-classification-new="${dimension}"]`)[0]?.value?.trim() || "";
   }
 
+  function readNewColor(dimension) {
+    const node = getElement("classificationManager");
+    if (!node || typeof node.querySelectorAll !== "function") return DEFAULT_CLASSIFICATION_COLOR;
+    return node.querySelectorAll(`[data-classification-new-color="${dimension}"]`)[0]?.value || DEFAULT_CLASSIFICATION_COLOR;
+  }
+
   function readLabel(optionId) {
     const node = getElement("classificationManager");
     if (!node || typeof node.querySelectorAll !== "function") return "";
     return node.querySelectorAll(`[data-classification-label="${optionId}"]`)[0]?.value?.trim() || "";
+  }
+
+  function readColor(optionId) {
+    const node = getElement("classificationManager");
+    if (!node || typeof node.querySelectorAll !== "function") return DEFAULT_CLASSIFICATION_COLOR;
+    return node.querySelectorAll(`[data-classification-color="${optionId}"]`)[0]?.value || DEFAULT_CLASSIFICATION_COLOR;
   }
 
   function render() {
@@ -40,7 +53,8 @@ export function createClassificationsModule({
         .map(
           (option) => `
             <div class="classification-option-row ${option.active ? "" : "archived"}" data-classification-row="${escapeAttr(option.id)}">
-              <span class="classification-color" style="--option-color:${escapeAttr(option.color)}"></span>
+              <span class="classification-color" style="--option-color:${escapeAttr(option.color || DEFAULT_CLASSIFICATION_COLOR)}"></span>
+              <input type="color" value="${escapeAttr(option.color || DEFAULT_CLASSIFICATION_COLOR)}" data-classification-color="${escapeAttr(option.id)}" title="颜色" aria-label="${escapeAttr(option.label)}颜色" />
               <input type="text" value="${escapeAttr(option.label)}" data-classification-label="${escapeAttr(option.id)}" />
               <span class="classification-state">${option.active ? "使用中" : "已停用"}</span>
               <button class="button" type="button" data-classification-save="${escapeAttr(option.id)}">保存</button>
@@ -54,6 +68,7 @@ export function createClassificationsModule({
           <h4>${escapeHtml(title)}</h4>
           <div class="classification-option-list">${rows}</div>
           <div class="classification-add-row">
+            <input type="color" value="${DEFAULT_CLASSIFICATION_COLOR}" data-classification-new-color="${escapeAttr(dimension)}" title="新增分类颜色" aria-label="新增分类颜色" />
             <input type="text" data-classification-new="${escapeAttr(dimension)}" placeholder="${escapeAttr(placeholder)}" maxlength="40" />
             <button class="button-primary" type="button" data-classification-add="${escapeAttr(dimension)}">新增</button>
           </div>
@@ -84,7 +99,7 @@ export function createClassificationsModule({
     });
   }
 
-  async function create(dimension, labelValue) {
+  async function create(dimension, labelValue, colorValue) {
     const label = (labelValue ?? readNewLabel(dimension)).trim();
     if (!label) {
       toast("请填写分类名称", { tone: "error" });
@@ -92,14 +107,14 @@ export function createClassificationsModule({
     }
     const option = await api.requestJson("/api/classification-options", {
       method: "POST",
-      body: { dimension, label },
+      body: { dimension, label, color: colorValue ?? readNewColor(dimension) },
     });
     await afterMutation();
     toast("分类已新增");
     return option;
   }
 
-  async function rename(optionId, labelValue) {
+  async function rename(optionId, labelValue, colorValue) {
     const label = (labelValue ?? readLabel(optionId)).trim();
     if (!label) {
       toast("分类名称不能为空", { tone: "error" });
@@ -107,10 +122,10 @@ export function createClassificationsModule({
     }
     const updated = await api.requestJson(`/api/classification-options/${encodeURIComponent(optionId)}`, {
       method: "PUT",
-      body: { label },
+      body: { label, color: colorValue ?? readColor(optionId) },
     });
     await afterMutation();
-    toast("分类名称已更新，历史统计保持不变");
+    toast("分类及颜色已更新，历史统计保持不变");
     return updated;
   }
 

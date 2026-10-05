@@ -93,6 +93,20 @@ export function createOrdersController({
       .join("");
   }
 
+  function renderCampaignClassificationSelect(campaign, dimension) {
+    const currentId = campaign?.[dimension] || (dimension === "strategy" ? "strategy_unclassified" : "unclassified");
+    const option = classificationOptions(dimension).find((item) => item.id === currentId);
+    const label = dimension === "trade_type" ? "交易场景" : "交易策略";
+    return `<select
+      class="campaign-classification-select"
+      data-campaign-classification="${escapeAttr(dimension)}"
+      data-campaign-id="${escapeAttr(campaign.id)}"
+      aria-label="${label}"
+      title="修改组合${label}"
+      style="--classification-color: ${escapeAttr(option?.color || "#8ca29b")}"
+    >${classificationSelectOptions(dimension, currentId)}</select>`;
+  }
+
   function scratchThresholdR() {
     const value = Number(catalog.scratch_threshold_r ?? 0.15);
     return Number.isFinite(value) ? Math.abs(value) : 0.15;
@@ -189,7 +203,9 @@ export function createOrdersController({
     const position = selectedPositionId && detail
       ? (detail.positions || []).find((item) => item.id === selectedPositionId)
       : null;
-    const trade = position ? position.source_trade || null : campaignSourceTrade(campaign);
+    const trade = position
+      ? resolveTrade(selectedTradeId) || position.source_trade || null
+      : campaignSourceTrade(campaign);
     return {
       campaign,
       detail,
@@ -235,6 +251,24 @@ export function createOrdersController({
     await afterMutation();
   }
 
+  async function saveCampaignClassification(campaignId, dimension, value) {
+    const campaign = page.campaigns.find((item) => item.id === campaignId);
+    if (!campaign || !["trade_type", "strategy"].includes(dimension)) return null;
+    const payload = {
+      trade_type: dimension === "trade_type" ? value : campaign.trade_type,
+      strategy: dimension === "strategy" ? value : campaign.strategy,
+      review_text: campaign.review_text || "",
+    };
+    const updated = await api.requestJson(`/api/campaigns/${encodeURIComponent(campaignId)}/review`, {
+      method: "PATCH",
+      body: payload,
+    });
+    Object.assign(campaign, updated || {}, { [dimension]: value });
+    if (campaignDetail?.id === campaignId) Object.assign(campaignDetail, updated || {}, { [dimension]: value });
+    await afterMutation();
+    return updated;
+  }
+
   function setClassificationValue(tradeId, dimension, value) {
     forEachTradeReference(tradeId, (trade) => {
       trade[dimension] = value;
@@ -275,8 +309,6 @@ export function createOrdersController({
       <tr class="campaign-detail-row ${scratch ? "scratch" : ""} ${selectedPositionId === position.id ? "active" : ""}" data-campaign-id="${escapeAttr(campaign.id)}" data-position-id="${escapeAttr(position.id)}" data-trade-id="${escapeAttr(sourceTrade?.id || "")}">
         <td data-label="交易组合"><div class="child-order-cell"><span class="child-branch">└</span><span>Position ${escapeHtml(position.display_position_id || position.position_id)}</span></div></td>
         <td data-label="品种 / 方向"><div class="symbol-cell"><span class="side ${campaign.side}">${campaign.side === "long" ? "多" : "空"}</span><span class="child-label">第 ${index + 1} 笔</span></div></td>
-        <td data-label="交易场景">${sourceTrade ? customFieldsModule.renderCustomValueEditor(sourceTrade, classificationField("trade_type"), "table") : `<span class="catalog-value">未分类</span>`}</td>
-        <td data-label="交易策略">${sourceTrade ? customFieldsModule.renderCustomValueEditor(sourceTrade, classificationField("strategy"), "table") : `<span class="catalog-value">未分类</span>`}</td>
         <td data-label="交易数据">
           <div class="trade-metrics-cell">
             <span><b>入</b> ${formatTablePrice(position.weighted_entry_price)} <i>${formatVolume(position.entry_volume)}手</i></span>
@@ -287,6 +319,8 @@ export function createOrdersController({
         <td data-label="初始止损">${stopEditorMarkup(position)}</td>
         <td data-label="组合 R" class="campaign-r-cell ${position.risk_status === "complete" ? "risk-complete" : "risk-missing"}">${escapeHtml(rValue)}</td>
         <td data-label="组合盈亏" class="${profitClass(position.position_pnl)}">${formatMoney(position.position_pnl ?? 0)}</td>
+        <td data-label="交易场景">${sourceTrade ? customFieldsModule.renderCustomValueEditor(sourceTrade, classificationField("trade_type"), "table") : `<span class="catalog-value">未分类</span>`}</td>
+        <td data-label="交易策略">${sourceTrade ? customFieldsModule.renderCustomValueEditor(sourceTrade, classificationField("strategy"), "table") : `<span class="catalog-value">未分类</span>`}</td>
         ${customCells}
         <td data-label="截图">${shot}</td>
       </tr>
@@ -301,12 +335,12 @@ export function createOrdersController({
         <tr>
           <th>交易组合</th>
           <th>品种 / 方向</th>
-          <th>交易场景</th>
-          <th>交易策略</th>
           <th>交易数据<span>入场价 / 出场价 / 持仓时间</span></th>
           <th>初始止损</th>
           <th class="r-col">组合 R</th>
           <th>组合盈亏</th>
+          <th>交易场景</th>
+          <th>交易策略</th>
           ${customFields().map((field) => `<th class="custom-col">${escapeHtml(field.name)}<span>${fieldTypeLabel(field.field_type)}</span></th>`).join("")}
           <th>截图</th>
         </tr>
@@ -360,8 +394,6 @@ export function createOrdersController({
                 </div>
               </div>
             </td>
-            <td data-label="交易场景">${trade ? customFieldsModule.renderCustomValueEditor(trade, classificationField("trade_type"), "table") : `<span class="catalog-value">未分类</span>`}</td>
-            <td data-label="交易策略">${trade ? customFieldsModule.renderCustomValueEditor(trade, classificationField("strategy"), "table") : `<span class="catalog-value">未分类</span>`}</td>
             <td data-label="交易数据">
               <div class="trade-metrics-cell">
                 <span><b>入</b> ${formatTablePrice(campaign.weighted_entry_price)} <i>${formatVolume(campaign.entry_volume)}手</i></span>
@@ -372,6 +404,8 @@ export function createOrdersController({
             <td data-label="初始止损">${stopCell}</td>
             <td data-label="组合 R" class="campaign-r-cell ${riskClass}">${escapeHtml(rMultiple()?.formatCampaignR?.(campaign) || "-")}${scratch ? '<span class="scratch-badge">打平</span>' : ""}</td>
             <td data-label="组合盈亏" class="${profitClass(campaign.net_pnl)}">${formatMoney(campaign.net_pnl)}</td>
+            <td data-label="交易场景">${renderCampaignClassificationSelect(campaign, "trade_type")}</td>
+            <td data-label="交易策略">${renderCampaignClassificationSelect(campaign, "strategy")}</td>
             ${customCells}
             <td data-label="截图">${shot}</td>
           </tr>
@@ -423,6 +457,24 @@ export function createOrdersController({
         }
       });
       input.addEventListener("blur", () => handleStopSave(input.dataset.positionStop, input));
+    }
+    for (const select of view.querySelectorAll("[data-campaign-classification]")) {
+      select.addEventListener("click", (event) => event.stopPropagation());
+      select.addEventListener("change", async () => {
+        select.disabled = true;
+        try {
+          await saveCampaignClassification(
+            select.dataset.campaignId,
+            select.dataset.campaignClassification,
+            select.value,
+          );
+          toast("组合分类已保存");
+        } catch (error) {
+          select.disabled = false;
+          toast(error?.message || "组合分类保存失败", { tone: "error" });
+          await loadList();
+        }
+      });
     }
     customFieldsModule.bindCustomValueInputs();
     customFieldsModule.bindChoiceTriggers();
@@ -575,6 +627,15 @@ export function createOrdersController({
     }
     try {
       await loadCampaignDetail(campaignId);
+      if (state.trade) {
+        const selectedPosition = (campaignDetail?.positions || []).find((item) =>
+          [item.source_trade, ...(item.source_trades || [])].some(
+            (trade) => String(trade?.id) === String(state.trade),
+          ),
+        );
+        selectedPositionId = selectedPosition?.id || null;
+        selectedTradeId = selectedPosition ? state.trade : null;
+      }
     } catch (error) {
       if (error?.name === "AbortError") return;
       toast(error?.message || "交易组合详情加载失败", { tone: "error" });
@@ -680,11 +741,14 @@ export function createOrdersController({
     state = readOrdersState(location.search);
     await loadCatalog();
     await loadList();
+    if ((state.trade || state.campaign) && selectedCampaignId) {
+      await selectCampaign(selectedCampaignId);
+    }
   }
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/orders/", title: "订单列表", onRefresh })
+      ? mountShell({ activeRoute: "/orders/", title: "订单列表", onRefresh, share: true })
       : null;
 
     const searchInput = getElement("searchInput");
@@ -783,6 +847,7 @@ export function createOrdersController({
     load,
     loadList,
     saveInitialStop,
+    saveCampaignClassification,
     handleStopSave,
     deleteSelectedTrade,
     toggleExpand,

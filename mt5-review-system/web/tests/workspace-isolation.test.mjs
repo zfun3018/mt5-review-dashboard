@@ -39,12 +39,14 @@ test("dashboard only calls the analysis endpoint", () => {
   assert.doesNotMatch(source, /\/api\/status|\/api\/backups|\/api\/classification-options|\/api\/custom-fields/);
 });
 
-test("album only reads the review album and never mutates", () => {
+test("album reads the review album and only mutates order review text", () => {
   const source = read("album", "album.mjs");
   assert.match(source, /\/api\/review-album/);
+  assert.match(source, /\/api\/trades\//);
   assert.doesNotMatch(source, /\/api\/analysis(?!-)/);
-  assert.doesNotMatch(source, /\/api\/campaigns|\/api\/trades|\/api\/status/);
-  assert.doesNotMatch(source, /method:\s*"(POST|PUT|PATCH|DELETE)"/);
+  assert.doesNotMatch(source, /\/api\/campaigns|\/api\/status/);
+  assert.doesNotMatch(source, /method:\s*"(POST|PUT|DELETE)"/);
+  assert.match(source, /method:\s*"PATCH"/);
 });
 
 test("settings owns configuration, status, and backup without analysis", () => {

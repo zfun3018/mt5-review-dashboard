@@ -20,6 +20,8 @@ class CampaignStorageTest(TemporaryStorageCase):
         pnl,
         *,
         review_text="",
+        trade_type="follow",
+        strategy="breakout",
         deleted=False,
     ):
         insert_trade(
@@ -33,6 +35,8 @@ class CampaignStorageTest(TemporaryStorageCase):
             exit_price=exit_price,
             pnl=pnl,
             review_text=review_text,
+            trade_type=trade_type,
+            strategy=strategy,
         )
         if deleted:
             storage.delete_trade(trade_id)
@@ -418,7 +422,120 @@ class CampaignStorageTest(TemporaryStorageCase):
         storage.update_trade_review("P1", {"review_text": "write-side synchronized"})
         detail = storage.get_campaign(campaign_id)
 
-        self.assertIn("write-side synchronized", detail["review_text"])
+        self.assertEqual(detail["review_text"], "write-side synchronized")
+        self.assertNotIn("来源", detail["review_text"])
+
+    def test_combined_campaign_classification_is_independent_from_child_orders(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:30:00+00:00",
+            100.0,
+            104.0,
+            4.0,
+        )
+        self._trade(
+            "P2",
+            "P2",
+            0.5,
+            "2026-08-01T00:20:00+00:00",
+            "2026-08-01T00:40:00+00:00",
+            102.0,
+            106.0,
+            2.0,
+        )
+        campaign = storage.list_campaigns()["campaigns"][0]
+        storage.update_campaign_review(
+            campaign["id"],
+            {"trade_type": "follow", "strategy": "breakout", "review_text": "组合复盘"},
+        )
+
+        storage.update_trade_review(
+            "P1",
+            {"trade_type": "reversal", "strategy": "range", "review_text": "子订单复盘"},
+        )
+
+        updated = storage.get_campaign(campaign["id"])
+        self.assertEqual(updated["trade_type"], "follow")
+        self.assertEqual(updated["strategy"], "breakout")
+        self.assertEqual(
+            storage.list_campaigns(trade_type="follow", strategy="breakout")["total"],
+            1,
+        )
+        self.assertEqual(
+            storage.list_campaigns(trade_type="reversal", strategy="range")["total"],
+            0,
+        )
+        analysis = storage.get_analysis("2026-08-01", "2026-08-01")
+        type_row = next(
+            row for row in analysis["mode_evaluation"]["trade_type"] if row["key"] == "follow"
+        )
+        strategy_row = next(
+            row for row in analysis["mode_evaluation"]["strategy"] if row["key"] == "breakout"
+        )
+        self.assertEqual(type_row["order_count"], 1)
+        self.assertEqual(strategy_row["order_count"], 1)
+
+    def test_single_position_campaign_keeps_its_classification_during_trade_rebuild(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:30:00+00:00",
+            100.0,
+            104.0,
+            4.0,
+        )
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
+        storage.update_campaign_review(
+            campaign_id,
+            {"trade_type": "reversal", "strategy": "range", "review_text": "组合复盘"},
+        )
+
+        storage.update_trade_review("P1", {"review_text": "只修改子订单复盘"})
+
+        updated = storage.get_campaign(campaign_id)
+        self.assertEqual((updated["trade_type"], updated["strategy"]), ("reversal", "range"))
+
+    def test_updating_combined_campaign_classification_does_not_rewrite_children(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:30:00+00:00",
+            100.0,
+            104.0,
+            4.0,
+            trade_type="follow",
+            strategy="breakout",
+        )
+        self._trade(
+            "P2",
+            "P2",
+            0.5,
+            "2026-08-01T00:20:00+00:00",
+            "2026-08-01T00:40:00+00:00",
+            102.0,
+            106.0,
+            2.0,
+            trade_type="reversal",
+            strategy="range",
+        )
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
+
+        storage.update_campaign_review(
+            campaign_id,
+            {"trade_type": "reversal", "strategy": "range", "review_text": "组合分类"},
+        )
+
+        first = storage.get_trade("P1")
+        second = storage.get_trade("P2")
+        self.assertEqual((first["trade_type"], first["strategy"]), ("follow", "breakout"))
+        self.assertEqual((second["trade_type"], second["strategy"]), ("reversal", "range"))
 
     def test_position_summary_includes_source_trade_review_screenshot_and_custom_fields(self):
         field = storage.create_custom_field({"name": "执行质量", "field_type": "text"})

@@ -211,8 +211,10 @@ class ArchitectureContractTest(TemporaryStorageCase):
             listed,
         )
 
-    def test_one_click_launcher_keeps_lan_binding_opt_in(self):
+    def test_one_click_launcher_enables_lan_binding_without_changing_direct_start(self):
         source = START_SCRIPT.read_text(encoding="utf-8")
+        launcher = START_SCRIPT.parents[1] / "一键启动MT5复盘仪表盘.bat"
+        launcher_source = launcher.read_text(encoding="utf-8")
 
         self.assertNotIn(
             'if (-not $env:MT5_REVIEW_HOST) { $env:MT5_REVIEW_HOST = "0.0.0.0" }',
@@ -222,6 +224,16 @@ class ArchitectureContractTest(TemporaryStorageCase):
             'if (-not $env:MT5_REVIEW_HOST) { $env:MT5_REVIEW_HOST = "127.0.0.1" }',
             source,
         )
+        self.assertIn('if "%MT5_REVIEW_HOST%"=="" set "MT5_REVIEW_HOST=0.0.0.0"', launcher_source)
+        self.assertIn("ensure-lan-firewall.ps1", launcher_source)
+
+    def test_lan_firewall_rule_is_private_and_local_subnet_only(self):
+        firewall_script = START_SCRIPT.parent / "tools" / "ensure-lan-firewall.ps1"
+        source = firewall_script.read_text(encoding="utf-8")
+
+        self.assertIn("-Profile Private", source)
+        self.assertIn("-RemoteAddress LocalSubnet", source)
+        self.assertIn("-Protocol TCP", source)
 
     def test_owned_integration_modules_do_not_depend_on_storage_facade(self):
         violations = []

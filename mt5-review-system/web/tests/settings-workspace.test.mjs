@@ -176,8 +176,8 @@ test("settings loads configuration without analysis or campaigns", async () => {
 test("classification options are data driven and user manageable", async () => {
   const { api, controller } = controllerWith();
   await controller.load();
-  await controller.createClassificationOption("trade_type", "新类型");
-  await controller.renameClassificationOption("trade_type_follow", "跟随改");
+  await controller.createClassificationOption("trade_type", "新类型", "#f97316");
+  await controller.renameClassificationOption("trade_type_follow", "跟随改", "#a78bfa");
   await controller.archiveClassificationOption("trade_type_follow");
 
   assert.ok(api.paths.includes("/api/classification-options"));
@@ -187,8 +187,8 @@ test("classification options are data driven and user manageable", async () => {
   const putIndex = api.paths.findIndex((p, i) => p === "/api/classification-options/trade_type_follow" && api.methods[i] === "PUT");
   assert.ok(postIndex >= 0);
   assert.ok(putIndex >= 0);
-  assert.deepEqual(api.bodies[postIndex], { dimension: "trade_type", label: "新类型" });
-  assert.deepEqual(api.bodies[putIndex], { label: "跟随改" });
+  assert.deepEqual(api.bodies[postIndex], { dimension: "trade_type", label: "新类型", color: "#f97316" });
+  assert.deepEqual(api.bodies[putIndex], { label: "跟随改", color: "#a78bfa" });
   assert.ok(api.methods.includes("DELETE"));
 });
 

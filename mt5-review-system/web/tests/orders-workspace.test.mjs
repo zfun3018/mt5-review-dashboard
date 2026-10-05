@@ -7,6 +7,12 @@ import {
   normalizeListState,
   readOrdersState,
 } from "../orders/orders-state.mjs";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const ordersSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.mjs"), "utf8");
+const ordersStyle = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.css"), "utf8");
 
 class FakeElement {
   constructor() {
@@ -78,12 +84,15 @@ class FakeView {
 function recordingApi(routes, { campaigns = [], detail = null } = {}) {
   const paths = [];
   const methods = [];
+  const bodies = [];
   return {
     paths,
     methods,
+    bodies,
     async requestJson(requestPath, options = {}) {
       paths.push(requestPath);
       methods.push(options.method || "GET");
+      bodies.push(options.body);
       if (Object.prototype.hasOwnProperty.call(routes, requestPath)) return routes[requestPath];
       if (requestPath.startsWith("/api/campaigns?")) {
         return { campaigns, total: campaigns.length, page: 1, page_size: 50 };
@@ -182,6 +191,32 @@ test("?trade= resolves the owning campaign", async () => {
   assert.doesNotMatch(inactiveRow[1], /active/);
 });
 
+test("?trade= opens the matching order detail instead of the campaign review", async () => {
+  const sourceTrade = { id: "T-9", display_order_no: "T-9", review_text: "订单级复盘", custom_fields: {} };
+  const representativeTrade = { id: "T-10", display_order_no: "T-10", review_text: "代表订单复盘", custom_fields: {} };
+  const selectedPosition = position("1", {
+    source_trade: representativeTrade,
+    source_trades: [sourceTrade, representativeTrade],
+  });
+  const selectedCampaign = campaign("C-1", {
+    source_trade_ids: ["T-9"],
+    position_summaries: [selectedPosition],
+    review_text: "来源 T-9\n订单级复盘",
+  });
+  const { view, controller } = controllerWith(
+    { search: "?trade=T-9" },
+    {},
+    { campaigns: [selectedCampaign], detail: { ...selectedCampaign, positions: [selectedPosition] } },
+  );
+
+  await controller.load();
+
+  assert.match(view.getElementById("orderDetail").innerHTML, /保存订单复盘/);
+  assert.match(view.getElementById("orderDetail").innerHTML, /订单级复盘/);
+  assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /代表订单复盘/);
+  assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /来源 T-9/);
+});
+
 test("?campaign= keeps the requested campaign selected", async () => {
   const { view, controller } = controllerWith(
     { search: "?campaign=C-2" },
@@ -272,6 +307,51 @@ test("buildCampaignsQuery maps camelCase state to the snake_case contract", () =
     query,
     "q=XAU&side=long&trade_type=follow&strategy=breakout&start=2026-08-01&end=2026-08-31&r_missing=1&page=2&page_size=50",
   );
+});
+
+test("combined campaign summary renders and saves campaign classification", async () => {
+  const combined = campaign("C-1", {
+    position_count: 2,
+    trade_type: "follow",
+    strategy: "breakout",
+    source_trade_ids: ["T-1", "T-2"],
+    position_summaries: [
+      position("1", { source_trade: { id: "T-1", trade_type: "reversal", strategy: "range", custom_fields: {} } }),
+      position("2", { source_trade: { id: "T-2", trade_type: "reversal", strategy: "range", custom_fields: {} } }),
+    ],
+  });
+  const { api, view, controller } = controllerWith(
+    { search: "" },
+    {},
+    { campaigns: [combined], detail: { ...combined, positions: combined.position_summaries } },
+  );
+  await controller.loadList();
+
+  const summary = view.getElementById("orderRows").innerHTML.split("campaign-detail-row")[0];
+  assert.match(summary, /data-campaign-classification="trade_type"[^>]*data-campaign-id="C-1"/);
+  assert.match(summary, /data-campaign-classification="strategy"[^>]*data-campaign-id="C-1"/);
+  assert.doesNotMatch(summary, /data-trade-id="T-2"/);
+
+  await controller.saveCampaignClassification("C-1", "strategy", "range");
+  const patchIndex = api.methods.indexOf("PATCH");
+  assert.equal(api.paths[patchIndex], "/api/campaigns/C-1/review");
+  assert.deepEqual(api.bodies[patchIndex], {
+    trade_type: "follow",
+    strategy: "range",
+    review_text: "",
+  });
+});
+
+test("order table places trade scene and strategy after campaign PnL", () => {
+  const renderSource = ordersSource.slice(ordersSource.indexOf("function renderCampaignPositionRow"), ordersSource.indexOf("function bindRowInteractions"));
+  assert.match(renderSource, /组合盈亏[\s\S]*交易场景[\s\S]*交易策略/);
+  assert.match(renderSource, /<th>组合盈亏<\/th>\s*<th>交易场景<\/th>\s*<th>交易策略<\/th>/);
+});
+
+test("selected order rows use a stronger background than scratch rows", () => {
+  assert.match(ordersStyle, /\.orders-table tbody tr\.active\s*\{[\s\S]*background:\s*rgba\(61, 130, 246, 0\.28\) !important;[\s\S]*box-shadow:/);
+  assert.match(ordersStyle, /\.campaign-row\.scratch\s*\{[\s\S]*background:\s*rgba\(130, 148, 168, 0\.12\) !important;/);
+  assert.match(ordersStyle, /\.campaign-row\.scratch\.active\s*\{[\s\S]*background:\s*rgba\(61, 130, 246, 0\.22\) !important;[\s\S]*#f2b84b/);
 });
 
 test("readOrdersState parses filters, pagination, and selection", () => {
