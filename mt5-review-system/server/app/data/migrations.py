@@ -129,6 +129,17 @@ CREATE TABLE IF NOT EXISTS backups (
     created_at TEXT NOT NULL,
     size_bytes INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS reading_checkins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_id TEXT NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+    checkin_date TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (trade_id, checkin_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reading_checkins_date
+    ON reading_checkins(checkin_date, trade_id);
 """
 
 

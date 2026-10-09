@@ -68,6 +68,7 @@ class AlbumService:
             _serialize_trade(self.trade_serializer(trade), catalog)
             for trade in result.items
         ]
+        _apply_checkin_status(page_trades, self.trades)
         return {
             "filters": {
                 "start": start_date or "",
@@ -96,14 +97,20 @@ class AlbumService:
             _active_custom_fields(self.catalogs),
         )
         trade = self.trades.random_album_trade()
+        serialized = (
+            _serialize_trade(self.trade_serializer(trade), catalog)
+            if trade is not None
+            else None
+        )
+        if serialized is not None:
+            _apply_checkin_status([serialized], self.trades)
         return {
-            "trade": (
-                _serialize_trade(self.trade_serializer(trade), catalog)
-                if trade is not None
-                else None
-            ),
+            "trade": serialized,
             "custom_fields": catalog["all_fields"],
         }
+
+    def checkins(self, days: int = 90, today=None) -> dict[str, Any]:
+        return self.trades.reading_checkin_overview(days=days, today=today)
 
 
 def _values(value: list[str] | str | None) -> list[str]:
@@ -240,6 +247,30 @@ def _serialize_trade(
     serialized["album_date"] = to_beijing(trade["close_time_utc"]).date().isoformat()
     serialized["album_tags"] = _tags_for_trade(trade, catalog)
     return serialized
+
+
+def _apply_checkin_status(trades: list[dict[str, Any]], repository) -> None:
+    trade_ids = [str(trade["id"]) for trade in trades]
+    summarizer = getattr(repository, "reading_checkin_summary", None)
+    if callable(summarizer):
+        summaries = summarizer(trade_ids)
+    else:
+        checker = getattr(repository, "reading_checkin_status", None)
+        counter = getattr(repository, "reading_checkin_counts", None)
+        checked_ids = checker(trade_ids) if callable(checker) else set()
+        counts = counter(trade_ids) if callable(counter) else {}
+        summaries = {
+            trade_id: {
+                "count": int(counts.get(trade_id, 0)),
+                "checked_in": trade_id in checked_ids,
+            }
+            for trade_id in trade_ids
+        }
+    for trade in trades:
+        trade_id = str(trade["id"])
+        summary = summaries.get(trade_id, {})
+        trade["reading_checked_in_today"] = bool(summary.get("checked_in", False))
+        trade["reading_checkin_count"] = int(summary.get("count", 0))
 
 
 def _group_days(trades: list[dict[str, Any]]) -> list[dict[str, Any]]:

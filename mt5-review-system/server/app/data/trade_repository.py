@@ -181,6 +181,124 @@ class TradeRepository:
         trade["custom_fields"] = custom_values.get(str(trade["id"]), {})
         return trade
 
+    def reading_checkin_status(
+        self,
+        trade_ids: list[str],
+        checkin_date: str | None = None,
+    ) -> set[str]:
+        ids = [str(trade_id) for trade_id in trade_ids if str(trade_id)]
+        if not ids:
+            return set()
+        day = checkin_date or _beijing_today()
+        placeholders = ",".join("?" for _ in ids)
+        with closing(connect(self.paths)) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT trade_id
+                FROM reading_checkins
+                WHERE checkin_date = ? AND trade_id IN ({placeholders})
+                """,
+                [day, *ids],
+            ).fetchall()
+        return {str(row["trade_id"]) for row in rows}
+
+    def reading_checkin_counts(self, trade_ids: list[str]) -> dict[str, int]:
+        ids = [str(trade_id) for trade_id in trade_ids if str(trade_id)]
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        with closing(connect(self.paths)) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT trade_id, COUNT(*) AS count
+                FROM reading_checkins
+                WHERE trade_id IN ({placeholders})
+                GROUP BY trade_id
+                """,
+                ids,
+            ).fetchall()
+        return {str(row["trade_id"]): int(row["count"]) for row in rows}
+
+    def reading_checkin_summary(
+        self,
+        trade_ids: list[str],
+        checkin_date: str | None = None,
+    ) -> dict[str, dict[str, int | bool]]:
+        ids = [str(trade_id) for trade_id in trade_ids if str(trade_id)]
+        if not ids:
+            return {}
+        day = checkin_date or _beijing_today()
+        placeholders = ",".join("?" for _ in ids)
+        with closing(connect(self.paths)) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT trade_id,
+                       COUNT(*) AS count,
+                       MAX(CASE WHEN checkin_date = ? THEN 1 ELSE 0 END) AS checked_in
+                FROM reading_checkins
+                WHERE trade_id IN ({placeholders})
+                GROUP BY trade_id
+                """,
+                [day, *ids],
+            ).fetchall()
+        return {
+            str(row["trade_id"]): {
+                "count": int(row["count"]),
+                "checked_in": bool(row["checked_in"]),
+            }
+            for row in rows
+        }
+
+    def reading_checkin_overview(
+        self,
+        days: int = 90,
+        today: str | date | None = None,
+    ) -> dict[str, Any]:
+        safe_days = max(1, min(int(days), 366))
+        end = _coerce_date(today) if today is not None else date.today()
+        if today is None:
+            end = _beijing_today_object()
+        start = end - timedelta(days=safe_days - 1)
+        start_value = start.isoformat()
+        end_value = end.isoformat()
+        with closing(connect(self.paths)) as conn:
+            goal_row = conn.execute(
+                "SELECT value FROM analysis_settings WHERE key = 'reading_daily_goal'"
+            ).fetchone()
+            count_rows = conn.execute(
+                """
+                SELECT checkin_date, COUNT(*) AS count
+                FROM reading_checkins
+                JOIN trades ON trades.id = reading_checkins.trade_id
+                WHERE checkin_date BETWEEN ? AND ? AND trades.deleted_at IS NULL
+                GROUP BY checkin_date
+                """,
+                (start_value, end_value),
+            ).fetchall()
+        goal = _normalize_reading_goal(goal_row["value"] if goal_row else 20)
+        counts = {str(row["checkin_date"]): int(row["count"]) for row in count_rows}
+        day_rows = [
+            {
+                "date": (start + timedelta(days=offset)).isoformat(),
+                "count": counts.get((start + timedelta(days=offset)).isoformat(), 0),
+                "goal": goal,
+                "completed": counts.get((start + timedelta(days=offset)).isoformat(), 0) >= goal,
+            }
+            for offset in range(safe_days)
+        ]
+        today_value = end.isoformat()
+        today_count = counts.get(today_value, 0)
+        return {
+            "daily_goal": goal,
+            "today": {
+                "date": today_value,
+                "count": today_count,
+                "completed": today_count >= goal,
+            },
+            "days": day_rows,
+            "range": {"start": start_value, "end": end_value},
+        }
+
     def list_active_symbols(self) -> list[str]:
         with closing(connect(self.paths)) as conn:
             rows = conn.execute(
@@ -342,3 +460,27 @@ def _beijing_date_bounds(
         else None
     )
     return start_utc, end_utc
+
+
+def _beijing_today_object() -> date:
+    return to_beijing(datetime.now(timezone.utc)).date()
+
+
+def _beijing_today() -> str:
+    return _beijing_today_object().isoformat()
+
+
+def _coerce_date(value: str | date) -> date:
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value))
+
+
+def _normalize_reading_goal(value: object) -> int:
+    try:
+        goal = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("reading daily goal must be an integer") from exc
+    if not 1 <= goal <= 500:
+        raise ValueError("reading daily goal must be between 1 and 500")
+    return goal

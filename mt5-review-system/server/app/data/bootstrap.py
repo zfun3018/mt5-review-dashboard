@@ -282,6 +282,9 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('scratch_threshold_r', '0.15')"
     )
+    conn.execute(
+        "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('reading_daily_goal', '20')"
+    )
     campaign_columns = {
         row["name"]
         for row in conn.execute("PRAGMA table_info(trade_campaigns)").fetchall()

@@ -216,6 +216,56 @@ class ReviewAlbumTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             storage.query_review_album(tags=["side:long"])
 
+    def test_reading_checkin_is_unique_per_trade_and_beijing_date(self):
+        first = storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
+        repeated = storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
+        next_day = storage.checkin_review_trade("T-1", checkin_date="2026-10-09")
+
+        self.assertTrue(first["created"])
+        self.assertFalse(repeated["created"])
+        self.assertTrue(next_day["created"])
+        current_view = storage.query_review_album()
+        current_trade = next(item for item in current_view["trades"] if item["id"] == "T-1")
+        self.assertTrue(current_trade["reading_checked_in_today"])
+        overview = storage.get_review_checkins(days=2, today="2026-10-09")
+        self.assertEqual(overview["days"], [
+            {"date": "2026-10-08", "count": 1, "goal": 20, "completed": False},
+            {"date": "2026-10-09", "count": 1, "goal": 20, "completed": False},
+        ])
+        self.assertTrue(storage.cancel_review_trade("T-1", checkin_date="2026-10-09")["deleted"])
+        self.assertFalse(storage.cancel_review_trade("T-1", checkin_date="2026-10-09")["deleted"])
+        self.assertEqual(storage.get_review_checkins(days=1, today="2026-10-09")["today"]["count"], 0)
+
+    def test_album_trade_exposes_cumulative_reading_checkin_count(self):
+        storage.checkin_review_trade("T-1", checkin_date="2026-10-07")
+        storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
+
+        trade = next(item for item in storage.query_review_album()["trades"] if item["id"] == "T-1")
+        self.assertEqual(trade["reading_checkin_count"], 2)
+
+    def test_reading_checkin_rejects_deleted_trade_and_persists_daily_goal(self):
+        with self.assertRaises(KeyError):
+            storage.checkin_review_trade("T-DELETED", checkin_date="2026-10-08")
+
+        self.assertEqual(storage.set_review_daily_goal(7)["daily_goal"], 7)
+        overview = storage.get_review_checkins(days=1, today="2026-10-08")
+        self.assertEqual(overview["daily_goal"], 7)
+        with self.assertRaises(ValueError):
+            storage.set_review_daily_goal(0)
+        with self.assertRaises(ValueError):
+            storage.set_review_daily_goal(2.5)
+
+    def test_soft_deleted_trade_drops_reading_history_before_restore(self):
+        storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
+        self.assertEqual(storage.get_review_checkins(days=1, today="2026-10-08")["today"]["count"], 1)
+
+        storage.delete_trade("T-1")
+        storage.restore_trade("T-1")
+
+        restored = next(item for item in storage.query_review_album()["trades"] if item["id"] == "T-1")
+        self.assertEqual(restored["reading_checkin_count"], 0)
+        self.assertEqual(storage.get_review_checkins(days=1, today="2026-10-08")["today"]["count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
 from ..core.config import get_runtime_paths
 from .database import transaction
@@ -17,6 +18,7 @@ import uuid
 from typing import Any
 
 from ..domain.analytics import calculate_duration_seconds
+from ..domain.analytics import to_beijing
 from .campaign_repository import CampaignRepository
 from .catalog_commands import _ensure_classification_option, _validate_classification_assignment
 from .catalog_repository import CatalogRepository
@@ -290,6 +292,91 @@ def update_trade_archived(trade_id: str, archived: bool) -> dict[str, Any]:
     return trade
 
 
+def checkin_review_trade(
+    trade_id: str,
+    checkin_date: str | None = None,
+) -> dict[str, Any]:
+    trade_id = str(trade_id).strip()
+    if not trade_id:
+        raise ValueError("trade_id is required")
+    day = checkin_date or to_beijing(datetime.now(timezone.utc)).date().isoformat()
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("checkin_date must be YYYY-MM-DD") from exc
+    with db() as conn:
+        trade = conn.execute(
+            "SELECT id FROM trades WHERE id = ? AND deleted_at IS NULL",
+            (trade_id,),
+        ).fetchone()
+        if not trade:
+            raise KeyError(trade_id)
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO reading_checkins (trade_id, checkin_date) VALUES (?, ?)",
+            (trade_id, day),
+        )
+    return {
+        "trade_id": trade_id,
+        "date": day,
+        "created": cursor.rowcount == 1,
+        "checked_in": True,
+    }
+
+
+def cancel_review_trade(
+    trade_id: str,
+    checkin_date: str | None = None,
+) -> dict[str, Any]:
+    trade_id = str(trade_id).strip()
+    if not trade_id:
+        raise ValueError("trade_id is required")
+    day = checkin_date or to_beijing(datetime.now(timezone.utc)).date().isoformat()
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("checkin_date must be YYYY-MM-DD") from exc
+    with db() as conn:
+        trade = conn.execute(
+            "SELECT id FROM trades WHERE id = ? AND deleted_at IS NULL",
+            (trade_id,),
+        ).fetchone()
+        if not trade:
+            raise KeyError(trade_id)
+        cursor = conn.execute(
+            "DELETE FROM reading_checkins WHERE trade_id = ? AND checkin_date = ?",
+            (trade_id, day),
+        )
+    return {
+        "trade_id": trade_id,
+        "date": day,
+        "deleted": cursor.rowcount == 1,
+        "checked_in": False,
+    }
+
+
+def set_review_daily_goal(daily_goal: int) -> dict[str, int]:
+    if isinstance(daily_goal, bool):
+        raise ValueError("daily_goal must be an integer")
+    if isinstance(daily_goal, float) and not daily_goal.is_integer():
+        raise ValueError("daily_goal must be an integer")
+    try:
+        goal = int(daily_goal)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("daily_goal must be an integer") from exc
+    if not 1 <= goal <= 500:
+        raise ValueError("daily_goal must be between 1 and 500")
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO analysis_settings (key, value, updated_at)
+            VALUES ('reading_daily_goal', ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+            """,
+            (str(goal),),
+        )
+    return {"daily_goal": goal}
+
+
 def delete_trade(trade_id: str) -> None:
     with db() as conn:
         cursor = conn.execute(
@@ -298,6 +385,9 @@ def delete_trade(trade_id: str) -> None:
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
+        # Soft deletion bypasses SQLite's ON DELETE CASCADE, so remove the
+        # derived reading history explicitly before allowing restoration.
+        conn.execute("DELETE FROM reading_checkins WHERE trade_id = ?", (trade_id,))
         _campaign_repository().rebuild(conn=conn)
 
 
@@ -309,6 +399,8 @@ def restore_trade(trade_id: str) -> dict[str, Any]:
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
+        # Also clean legacy rows left by older soft-delete behavior.
+        conn.execute("DELETE FROM reading_checkins WHERE trade_id = ?", (trade_id,))
         _campaign_repository().rebuild(conn=conn)
     trade = get_trade(trade_id)
     if not trade:

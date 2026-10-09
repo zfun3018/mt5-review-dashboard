@@ -27,6 +27,33 @@
         <div id="albumRandomResult" class="album-random-result" aria-live="polite" hidden></div>
       </section>
 
+      <section class="panel album-checkin-panel" aria-labelledby="albumCheckinTitle">
+        <div class="album-checkin-head">
+          <div>
+            <p class="eyebrow">READING RHYTHM</p>
+            <h2 id="albumCheckinTitle">打卡热力图</h2>
+          </div>
+          <div class="album-checkin-goal">
+            <label for="albumCheckinGoal">每日目标</label>
+            <input id="albumCheckinGoal" type="number" min="1" max="500" step="1" value="20" inputmode="numeric" />
+            <span>张</span>
+            <button id="albumCheckinGoalSave" class="button-primary" type="button">保存目标</button>
+          </div>
+        </div>
+        <div id="albumCheckinSummary" class="album-checkin-summary" aria-live="polite">读取打卡进度...</div>
+        <div class="album-checkin-calendar-head">
+          <button id="albumCheckinPrevious" class="app-icon-button" type="button" title="上个月" aria-label="上个月">
+            <i data-lucide="chevron-left" aria-hidden="true"></i>
+          </button>
+          <strong id="albumCheckinMonthLabel">本月</strong>
+          <button id="albumCheckinNext" class="app-icon-button" type="button" title="下个月" aria-label="下个月">
+            <i data-lucide="chevron-right" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="albumCheckinMonthSummary" class="album-checkin-month-summary" aria-live="polite">本月打卡统计读取中...</div>
+        <div id="albumCheckinHeatmap" class="album-checkin-heatmap" role="grid" aria-label="本月阅读打卡日历"></div>
+      </section>
+
       <section class="panel album-toolbar" aria-label="画册筛选">
         <div class="album-toolbar-head">
           <div>
@@ -121,10 +148,16 @@
         <aside class="album-reader-aside" aria-label="订单信息">
           <div class="album-reader-toolbar">
             <span class="eyebrow">REVIEW READER</span>
-            <button id="albumReaderNext" class="button-primary album-reader-next" type="button">
-              <i data-lucide="shuffle" aria-hidden="true"></i>
-              <span>换一个</span>
-            </button>
+            <div class="album-reader-toolbar-actions">
+              <button id="albumReaderCheckin" class="button album-reader-checkin" type="button" data-checkin="">
+                <i data-lucide="check" aria-hidden="true"></i>
+                <span>打卡</span>
+              </button>
+              <button id="albumReaderNext" class="button-primary album-reader-next" type="button">
+                <i data-lucide="shuffle" aria-hidden="true"></i>
+                <span>换一个</span>
+              </button>
+            </div>
           </div>
           <div id="albumReaderInfo" class="album-reader-info"></div>
         </aside>

@@ -56,6 +56,66 @@ const EMPTY_ALBUM = {
   available_filters: { symbols: [], tags: [], custom_fields: [] },
 };
 
+const EMPTY_CHECKINS = {
+  daily_goal: 20,
+  today: { date: "2026-10-08", count: 0, completed: false },
+  days: [],
+};
+
+test("album exposes daily check-in controls and a heatmap", () => {
+  assert.match(albumHtml, /albumCheckinHeatmap/);
+  assert.match(albumHtml, /albumCheckinGoal/);
+  assert.match(albumHtml, /albumCheckinPrevious/);
+  assert.match(albumHtml, /albumCheckinNext/);
+  assert.match(albumHtml, /albumCheckinMonthSummary/);
+  assert.match(albumSource, /data-checkin/);
+  assert.match(albumSource, /\/api\/review-album\/checkin/);
+  assert.match(albumSource, /\/api\/review-album\/goal/);
+  assert.match(albumSource, /\/api\/review-album\/checkin\//);
+  assert.match(albumSource, /renderCheckinHeatmap/);
+  assert.match(albumSource, /album-checkin-month/);
+  assert.match(albumSource, /reading_checkin_count/);
+  assert.match(albumSource, /取消打卡/);
+  assert.match(albumStyle, /album-checkin-heatmap/);
+  assert.match(albumStyle, /album-checkin-month/);
+});
+
+test("album shows one check-in calendar month with monthly totals and paging", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const view = new FakeView();
+  const checkins = {
+    daily_goal: 2,
+    today: { date: "2026-10-08", count: 2, completed: true },
+    days: [
+      { date: "2026-09-30", count: 1, goal: 2, completed: false },
+      { date: "2026-10-01", count: 2, goal: 2, completed: true },
+      { date: "2026-10-08", count: 2, goal: 2, completed: true },
+    ],
+  };
+  const controller = createAlbumController({
+    api: {
+      async requestJson(requestPath) {
+        if (requestPath.startsWith("/api/review-album/checkins")) return checkins;
+        return EMPTY_ALBUM;
+      },
+    },
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+
+  const calendar = view.getElementById("albumCheckinHeatmap");
+  assert.match(calendar.innerHTML, /2026年10月/);
+  assert.doesNotMatch(calendar.innerHTML, /2026年09月/);
+  assert.match(view.getElementById("albumCheckinMonthSummary").textContent, /本月打卡 4 张/);
+  controller.changeCheckinMonth(-1);
+  assert.match(calendar.innerHTML, /2026年9月/);
+  assert.doesNotMatch(calendar.innerHTML, /2026年10月/);
+  controller.dispose();
+});
+
 test("album mounts the shared shell and keeps review writes scoped to trades", () => {
   assert.match(albumHtml, /data-app-shell/);
   assert.match(albumHtml, /shared\/css\/tokens\.css/);
@@ -154,9 +214,9 @@ test("album toggles a trade archived state through the trade endpoint", async ()
   await controller.load();
   await controller.toggleArchived("T-1");
 
-  assert.equal(calls[2].requestPath, "/api/trades/T-1/archived");
-  assert.equal(calls[2].options.method, "PATCH");
-  assert.deepEqual(calls[2].options.body, { archived: true });
+  assert.equal(calls[3].requestPath, "/api/trades/T-1/archived");
+  assert.equal(calls[3].options.method, "PATCH");
+  assert.deepEqual(calls[3].options.body, { archived: true });
   controller.dispose();
 });
 
@@ -219,7 +279,7 @@ test("album controller requests only the review-album endpoint", async () => {
   const api = {
     async requestJson(requestPath) {
       paths.push(requestPath);
-      return EMPTY_ALBUM;
+      return requestPath.startsWith("/api/review-album/checkins") ? EMPTY_CHECKINS : EMPTY_ALBUM;
     },
   };
   const controller = createAlbumController({
@@ -229,9 +289,132 @@ test("album controller requests only the review-album endpoint", async () => {
     history: { replaceState() {} },
   });
   await controller.load();
-  assert.equal(paths.length, 2);
+  assert.equal(paths.length, 3);
   assert.match(paths[0], /^\/api\/review-album\?/);
   assert.match(paths[1], /archived=true/);
+  assert.match(paths[2], /\/api\/review-album\/checkins/);
+  controller.dispose();
+});
+
+test("album records a daily check-in and saves the reading goal", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const calls = [];
+  const view = new FakeView();
+  const trade = { id: "T-1", symbol: "EURUSD", is_archived: 0, reading_checked_in_today: false };
+  const api = {
+    async requestJson(requestPath, options = {}) {
+      calls.push({ requestPath, options });
+      if (requestPath.startsWith("/api/review-album/checkins")) return EMPTY_CHECKINS;
+      if (requestPath.startsWith("/api/review-album")) {
+        return { ...EMPTY_ALBUM, trades: [trade], days: [{ date: "2026-10-08", trades: [trade] }] };
+      }
+      if (requestPath === "/api/review-album/checkin") {
+        return { trade_id: "T-1", date: "2026-10-08", created: true, checked_in: true };
+      }
+      return { daily_goal: 25 };
+    },
+  };
+  const controller = createAlbumController({
+    api,
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  await controller.checkinTrade("T-1");
+  await controller.saveReadingGoal(25);
+
+  assert.equal(trade.reading_checkin_count, 1);
+  assert.equal(calls[3].requestPath, "/api/review-album/checkin");
+  assert.equal(calls[3].options.method, "POST");
+  assert.deepEqual(calls[3].options.body, { trade_id: "T-1" });
+  const goalCall = calls.find((call) => call.requestPath === "/api/review-album/goal");
+  assert.equal(goalCall.options.method, "PUT");
+  assert.deepEqual(goalCall.options.body, { daily_goal: 25 });
+  controller.dispose();
+});
+
+test("album can cancel an existing daily check-in", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const calls = [];
+  const trade = { id: "T-1", symbol: "EURUSD", reading_checked_in_today: true, reading_checkin_count: 3 };
+  const api = {
+    async requestJson(requestPath, options = {}) {
+      calls.push({ requestPath, options });
+      if (requestPath.startsWith("/api/review-album/checkins")) return EMPTY_CHECKINS;
+      if (requestPath.startsWith("/api/review-album")) {
+        return { ...EMPTY_ALBUM, trades: [trade], days: [{ date: "2026-10-08", trades: [trade] }] };
+      }
+      return { trade_id: "T-1", date: "2026-10-08", deleted: true, checked_in: false };
+    },
+  };
+  const controller = createAlbumController({
+    api,
+    view: new FakeView(),
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  await controller.cancelCheckin("T-1", { confirm: () => true });
+
+  assert.equal(trade.reading_checkin_count, 2);
+  const cancelCall = calls.find((call) => call.requestPath === "/api/review-album/checkin/T-1");
+  assert.equal(cancelCall.options.method, "DELETE");
+  controller.dispose();
+});
+
+test("album does not cancel a check-in when confirmation is declined", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const calls = [];
+  const trade = { id: "T-1", symbol: "EURUSD", reading_checked_in_today: true, reading_checkin_count: 3 };
+  const controller = createAlbumController({
+    api: {
+      async requestJson(requestPath, options = {}) {
+        calls.push({ requestPath, options });
+        if (requestPath.startsWith("/api/review-album/checkins")) return EMPTY_CHECKINS;
+        return { ...EMPTY_ALBUM, trades: [trade], days: [{ date: "2026-10-08", trades: [trade] }] };
+      },
+    },
+    view: new FakeView(),
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+  const result = await controller.cancelCheckin("T-1", { confirm: () => false });
+
+  assert.equal(result, null);
+  assert.equal(trade.reading_checkin_count, 3);
+  assert.equal(calls.some((call) => call.options.method === "DELETE"), false);
+  controller.dispose();
+});
+
+test("album renders a useful fallback when check-in data is unavailable", async () => {
+  const { createAlbumController } = await import("../album/album.mjs");
+  const view = new FakeView();
+  const controller = createAlbumController({
+    api: {
+      async requestJson(requestPath) {
+        if (requestPath.startsWith("/api/review-album/checkins")) {
+          throw new Error("check-in endpoint unavailable");
+        }
+        return EMPTY_ALBUM;
+      },
+    },
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+
+  assert.equal(view.getElementById("albumCheckinSummary").textContent, "打卡数据暂时不可用");
+  assert.equal(view.getElementById("albumCheckinMonthLabel").textContent, "暂无数据");
+  assert.equal(view.getElementById("albumCheckinPrevious").disabled, true);
+  assert.equal(view.getElementById("albumCheckinNext").disabled, true);
+  assert.match(view.getElementById("albumCheckinHeatmap").innerHTML, /打卡数据暂时不可用/);
   controller.dispose();
 });
 
@@ -262,9 +445,9 @@ test("album saves an order review through the existing trade review endpoint", a
   await controller.load();
   await controller.saveReview("T-1", "新的复盘内容");
 
-  assert.equal(calls[2].requestPath, "/api/trades/T-1/review");
-  assert.equal(calls[2].options.method, "PATCH");
-  assert.deepEqual(calls[2].options.body, {
+  assert.equal(calls[3].requestPath, "/api/trades/T-1/review");
+  assert.equal(calls[3].options.method, "PATCH");
+  assert.deepEqual(calls[3].options.body, {
     trade_type: "follow",
     strategy: "breakout",
     review_text: "新的复盘内容",
@@ -301,7 +484,7 @@ test("album saves a review when the order is present only in a date group", asyn
   await controller.load();
   await controller.saveReview("T-2", "日期分组中的新复盘");
 
-  assert.equal(calls[2].requestPath, "/api/trades/T-2/review");
+  assert.equal(calls[3].requestPath, "/api/trades/T-2/review");
   assert.match(view.getElementById("albumDays").innerHTML, /日期分组中的新复盘/);
   controller.dispose();
 });

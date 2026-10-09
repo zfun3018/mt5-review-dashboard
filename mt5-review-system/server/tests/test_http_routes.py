@@ -46,6 +46,24 @@ class RecordingStorage:
             "get_analysis_settings": {"scratch_threshold_r": 0.15},
             "query_review_album": {"trades": [{"id": "T-1"}], "total": 1},
             "get_random_review_album": {"trade": {"id": "T-1"}},
+            "get_review_checkins": {
+                "daily_goal": 20,
+                "today": {"date": "2026-10-08", "count": 2, "completed": False},
+                "days": [],
+            },
+            "checkin_review_trade": {
+                "trade_id": "T-1",
+                "date": "2026-10-08",
+                "created": True,
+                "checked_in": True,
+            },
+            "cancel_review_trade": {
+                "trade_id": "T-1",
+                "date": "2026-10-08",
+                "deleted": True,
+                "checked_in": False,
+            },
+            "set_review_daily_goal": {"daily_goal": 25},
             "list_trends": [{"id": 2, "name": "up"}],
             "list_custom_fields": [{"id": 7, "name": "setup"}],
             "list_classification_options": [{"id": "follow"}],
@@ -297,6 +315,16 @@ class HttpRouterTest(unittest.TestCase):
                 "payload": self.storage.results["query_review_album"],
             },
             {
+                "name": "review check-ins",
+                "method": "GET",
+                "path": "/api/review-album/checkins",
+                "query": {"days": ["30"]},
+                "body": None,
+                "call": ("get_review_checkins", (), {"days": 30}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["get_review_checkins"],
+            },
+            {
                 "name": "analysis",
                 "method": "GET",
                 "path": "/api/analysis",
@@ -432,7 +460,7 @@ class HttpRouterTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(len(cases), 15)
+        self.assertEqual(len(cases), 16)
         self.assert_route_contracts(cases)
 
     def test_every_legacy_mutation_route_preserves_body_call_status_and_payload(self):
@@ -451,6 +479,26 @@ class HttpRouterTest(unittest.TestCase):
                 "call": ("restore_trade", ("T/1",), {}),
                 "status": HTTPStatus.OK,
                 "payload": self.storage.results["restore_trade"],
+            },
+            {
+                "name": "check in review trade",
+                "method": "POST",
+                "path": "/api/review-album/checkin",
+                "query": {},
+                "body": {"trade_id": "T-1"},
+                "call": ("checkin_review_trade", ("T-1",), {}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["checkin_review_trade"],
+            },
+            {
+                "name": "cancel review trade check-in",
+                "method": "DELETE",
+                "path": "/api/review-album/checkin/T%2F1",
+                "query": {},
+                "body": None,
+                "call": ("cancel_review_trade", ("T/1",), {}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["cancel_review_trade"],
             },
             {
                 "name": "replace screenshot",
@@ -565,6 +613,16 @@ class HttpRouterTest(unittest.TestCase):
                 ),
                 "status": HTTPStatus.OK,
                 "payload": self.storage.results["update_analysis_settings"],
+            },
+            {
+                "name": "update review daily goal",
+                "method": "PUT",
+                "path": "/api/review-album/goal",
+                "query": {},
+                "body": {"daily_goal": 25},
+                "call": ("set_review_daily_goal", (25,), {}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["set_review_daily_goal"],
             },
             {
                 "name": "update trade review",
@@ -686,7 +744,7 @@ class HttpRouterTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(len(cases), 21)
+        self.assertEqual(len(cases), 24)
         self.assert_route_contracts(cases)
 
     def test_empty_campaign_prefix_keeps_legacy_not_found_semantics(self):

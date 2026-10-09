@@ -280,6 +280,25 @@ def get_random_review_album() -> dict[str, Any]:
     return _application_services().album.random()
 
 
+def get_review_checkins(days: int = 90, today=None) -> dict[str, Any]:
+    return _application_services().album.checkins(days=days, today=today)
+
+
+def checkin_review_trade(trade_id: str, checkin_date: str | None = None) -> dict[str, Any]:
+    runtime_paths()
+    return trade_commands.checkin_review_trade(trade_id, checkin_date)
+
+
+def cancel_review_trade(trade_id: str, checkin_date: str | None = None) -> dict[str, Any]:
+    runtime_paths()
+    return trade_commands.cancel_review_trade(trade_id, checkin_date)
+
+
+def set_review_daily_goal(daily_goal: int) -> dict[str, int]:
+    runtime_paths()
+    return trade_commands.set_review_daily_goal(daily_goal)
+
+
 def list_campaigns(
     query: str = "",
     symbol: str = "",
