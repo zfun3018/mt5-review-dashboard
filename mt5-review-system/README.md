@@ -1,122 +1,105 @@
 # MT5 本地复盘系统
 
-这是一个 local-first 的 MT5 交易复盘系统。项目代码开源，但订单数据库、截图、原始事件和本机配置默认只保存在当前电脑，不上传云端。
+这是项目的运行与开发目录，提供本地 Python HTTP 服务、原生网页、SQLite 数据库适配、MT5 EA 桥接和测试工具。
 
-当前版本：`v0.6.20`。版本路线见上级目录 `docs/VERSION-ROUTE.md`。
+首次了解项目请先看 [根目录 README](../README.md) 和 [项目技术说明](../docs/PROJECT-GUIDE.md)。版本规则见 [版本路线](../docs/VERSION-ROUTE.md)，已发布内容见 [CHANGELOG](../CHANGELOG.md)，正式版本操作见 [发布指南](../docs/RELEASE-GUIDE.md)。
 
-GitHub 首页使用说明见上级目录 [`README.md`](../README.md)，Codex 等 AI 工具的项目规则见 [`AGENTS.md`](../AGENTS.md)。
+## 运行环境
 
-## 已搭建内容
+- Windows 10 或 Windows 11；
+- Python 3.11 或更高版本，推荐 Python 3.12；
+- PowerShell 5.1 或更高版本；
+- Node.js 20 或更高版本仅用于前端测试；
+- MetaTrader 5 和 MetaEditor 仅在需要实时同步和编译 EA 时需要。
 
-- 本地 HTTP 服务：`http://127.0.0.1:8787`
-- 本地 SQLite 数据库：`data/journal.sqlite`
-- 已检测到的 MT5 数据目录配置：`config.local.json`
-- 示例订单和示例 5 分钟图表截图
-- 订单流水、K 线截图、500 字以上复盘文本和自定义字段
-- 左侧导航提供统一的“刷新数据”操作，会先执行一次 JSONL 增量同步，再刷新当前页面
-- 订单列表选中行使用高对比背景和边框，打平订单保留独立的选中配色
-- 合并订单按组合独立设置交易场景和交易策略，筛选与仪表盘不再混用子订单分类
-- K 线截图支持直接粘贴、本地上传替换和删除，替换时自动清理旧文件
-- 可新增、改名和停用的交易类型/交易策略，历史统计使用稳定标识
-- 设置页可自定义交易场景和交易策略选项的颜色，并同步到各页面显示
-- 自定义字段支持停用、恢复和永久删除；永久删除会清除该字段的历史填写内容，并要求二次确认
-- 默认 30 天、可切换 3/7/30 天的资金曲线
-- 月度盈亏日历
-- 一周 x 24 小时盈亏热力图
-- 北京时间亚盘、欧盘、美盘胜率
-- 本地备份接口
-- 今日/周/月/年指标、净盈亏口径和盈利因子
-- 按日交易系统评估、Z 分数、交易类型/策略模式评估
-- 收益累计曲线（左轴回报、右轴收益率）、分析范围联动筛选和系统评估摘要卡
-- 仪表盘和订单列表支持分享当前完整页面：自动下载 PNG，并在浏览器允许时复制到剪贴板
-- Z 分数解释说明与自适应评估表格
-- 复盘画册：按北京时间交易日展示截图，支持品种、时间和选项标签筛选
-- 复盘画册中的订单复盘沿用订单列表编辑器，可直接编辑并保存
-- 画册短复盘内容默认展开，长内容按需折叠；画册与仪表盘使用统一顶部导航
-- 画册支持归档和恢复，归档交易不再出现在全部画册中
-- 页面顶部可从全部未归档画册中随机抽取一笔交易阅读，随机范围不受筛选影响
-- 随机阅读和画册图片支持按北京时间每日打卡，提供每日阅读目标和近 90 天打卡热力图
-- 画册直接复用现有 SQLite 和截图文件，不新增表、不复制图片、不做历史数据重处理
-- 复盘画册和设置页面不提供页面分享截图功能
-- JSONL 增量同步、事件规范化去重、订单分页、软删除/恢复
-- MT5 EA 桥接源码骨架：`mt5-ea/MT5ReviewBridge.mq5`
+后端只使用 Python 标准库，不需要安装 `requirements.txt` 或第三方 Python 包。
 
-## 功能边界
+## 配置
 
-系统由四个独立工作区组成：
+从项目根目录复制配置模板：
 
-1. **订单流水**（`/orders/`）：订单字段、复盘内容、交易分类、自定义字段和截图生命周期管理；
-2. **分析仪表盘**（`/dashboard/`）：指标卡、收益累计曲线、月历、热力图、交易系统评估、Z 分数和模式评估；
-3. **复盘画册**（`/album/`）：按北京时间交易日查看截图，并用品种、日期和选项标签进行筛选；
-4. **设置与系统**（`/settings/`）：交易分类与自定义字段 schema 管理、Scratch 阈值、系统状态和本地备份。
+```powershell
+Copy-Item .\config.local.example.json .\config.local.json
+```
 
-后端是 Python 标准库 HTTP 服务，前端是原生 HTML/CSS/JavaScript，SQLite 是唯一业务数据库，不需要 Node 构建或 Python 第三方依赖。
+编辑 `config.local.json` 中的本机路径：
 
-## 前端工作区所有权
+| 配置字段 | 作用 |
+| --- | --- |
+| `mt5_install_dir` | MT5 安装目录 |
+| `mt5_data_dir` | MT5 终端数据目录 |
+| `mql5_experts_dir` | EA 安装到的 Experts 目录 |
+| `mql5_files_bridge_dir` | EA 写入 JSONL 和截图的桥接目录 |
+| `local_dashboard_url` | MT5 允许 WebRequest 的本地服务地址 |
+| `local_bridge_endpoint` | EA 推送交易事件的 API 地址 |
 
-前端拆分为四个独立入口页面，共享同一套左侧导航与 UI 系统，每个工作区只调用自己的 API：
+`config.local.json` 已被 Git 忽略，只能保存在本机，不要提交。
 
-| 工作区 | 入口 | 数据源 |
-| --- | --- | --- |
-| 分析仪表盘 | `/dashboard/` | 仅 `GET /api/analysis` |
-| 订单流水 | `/orders/` | Campaign 列表/详情、Position 止损、交易复盘、截图、自定义值、分类与分析设置 |
-| 复盘画册 | `/album/` | `GET /api/review-album`，`PATCH /api/trades/{id}/review` |
-| 设置与系统 | `/settings/` | 分类、自定义字段、分析设置、状态、备份 |
+## 启动服务
 
-共享模块位于 `web/shared/`：`css/tokens.css`、`base.css`、`shell.css`、`components.css` 提供设计令牌与通用组件；`js/api.mjs`、`shell.mjs`、`formatters.mjs`、`feedback.mjs`、`url-state.mjs` 提供请求、外壳、格式化、反馈与 URL 状态。根路径 `/` 是兼容重定向壳，把旧深链（`?trade=`/`?campaign=`）映射到 `/orders/`，否则跳转 `/dashboard/`。
-
-## 后端架构边界
-
-后端按四层组织，依赖只从外层指向内层：
-
-1. **领域层 `app/domain/`**：只负责 Campaign、R 倍数和统计公式，不读取数据库、文件或 HTTP 请求；
-2. **数据层 `app/data/`**：负责 SQLite 连接、迁移、仓储、写入命令、MT5 事件导入、截图与备份文件；
-3. **应用层 `app/application/`**：组合一次完整用例，例如仪表盘分析、订单分页、画册筛选和首页数据装配，并统一 Campaign/Position 响应字段；
-4. **展示层 `app/presentation/`**：负责 HTTP 路由、响应格式、交易界面字段，以及 Campaign 旧序列化入口的兼容适配。
-
-`app/storage.py` 只保留旧脚本和测试仍会调用的兼容入口、运行目录同步与服务组装，不再保存 SQL、迁移表结构或统计公式。新代码应直接调用所属层的模块。
-
-主要所有权如下：
-
-- 数据库生命周期与事务：`data/database.py`、`data/migrations.py`、`data/bootstrap.py`；
-- 交易、Campaign、分类和媒体读取：对应的 `*_repository.py`；
-- 交易、Campaign、分类和 MT5 导入写入：对应的 `*_commands.py` 与 `ingestion_repository.py`；
-- 仪表盘、订单、画册和设置用例：`application/*_service.py`；
-- Campaign/Position 响应字段：`application/campaign_response.py`；
-- HTTP 路由、交易界面字段和旧入口适配：`presentation/http/` 和展示序列化模块。
-
-读取流程为“HTTP 路由 → 应用服务 → 仓储 → SQLite”，读取 Campaign 列表、详情和分析时不会写数据库，也不会顺带重建模型。Campaign 重建与对应写入在同一个事务内完成，重建或写入任一步失败都会整体回滚，全部成功后才提交；一批 JSONL 导入不论包含多少条成交记录，都只在批次末尾重建一次。启动时只有检测到模型版本过旧才执行兼容修复。
-
-历史数据库继续通过幂等迁移升级，迁移前的本地 SQLite 快照、旧交易字段、复盘、分类、自定义字段、截图引用和软删除状态均保持兼容。不会为了新架构重新导入或重处理历史 JSONL。
-
-## 启动
-
-在项目目录运行：
+在当前目录运行：
 
 ```powershell
 .\start.ps1
 ```
 
-然后打开：
+默认地址：
 
 ```text
 http://127.0.0.1:8787
 ```
 
-根目录的一键启动脚本默认监听可信局域网，并显示手机访问地址；直接运行 `start.ps1` 仍默认只监听本机 `127.0.0.1:8787`。服务没有登录验证，不应暴露到公网。
-一键启动首次运行可能请求管理员权限，只为 Private/LocalSubnet 创建 TCP 8787 防火墙规则。
-
-需要手动启用局域网时，也可以显式设置监听地址：
+服务默认只监听本机。只有在可信局域网中明确需要手机访问时，才设置：
 
 ```powershell
-$env:MT5_REVIEW_HOST = "0.0.0.0"  # 仅在可信局域网中显式开启
+$env:MT5_REVIEW_HOST = "0.0.0.0"
 $env:MT5_REVIEW_PORT = "8787"
 .\start.ps1
 ```
 
-手机与电脑连接同一 Wi-Fi 后，再使用启动窗口显示的 `http://<电脑局域网IP>:8787` 访问。关闭窗口或清除该环境变量后，下次启动恢复为仅本机访问。
+根目录的一键启动脚本默认启用可信局域网访问，并显示手机地址；它只为 Private/LocalSubnet 创建 TCP 8787 防火墙规则。服务没有登录认证，不要配置公网端口转发。
 
-## 本地数据目录
+## 安装和使用 MT5 EA
+
+1. 复制并编辑 `config.local.json`；
+2. 安装 EA 源码：
+
+```powershell
+.\tools\install_ea.ps1
+```
+
+3. 在 MetaEditor 中打开并编译 `mt5-ea/MT5ReviewBridge.mq5`；
+4. 在 MT5 中刷新导航器，把 EA 挂载到长期打开的图表；
+5. 在“工具 → 选项 → EA 交易”中允许 WebRequest：
+
+```text
+http://127.0.0.1:8787
+```
+
+如果服务运行在另一台电脑，改用那台电脑的可信局域网地址。EA 同时写入本地 JSONL，作为 WebRequest 失败时的兜底。
+
+如果实时 WebRequest 没有成功，可以增量回灌：
+
+```powershell
+.\tools\import_from_mt5.ps1
+```
+
+导入器读取桥接目录中的 `events_*.jsonl`，写入 SQLite，并补偿迟到的截图文件。
+
+## 四个工作区
+
+| 工作区 | 地址 | 主要用途 |
+| --- | --- | --- |
+| 分析仪表盘 | `/dashboard/` | 指标、收益曲线、月历、热力图和评估 |
+| 订单流水 | `/orders/` | Campaign/Position、复盘、分类、自定义字段和截图 |
+| 复盘画册 | `/album/` | 截图筛选、归档、随机阅读和每日打卡 |
+| 设置与系统 | `/settings/` | 分类、自定义字段、分析设置、状态和备份 |
+
+根路径 `/` 是兼容入口，会把旧的 `?trade=` 或 `?campaign=` 深链导向订单流水，否则进入仪表盘。
+
+## 本地数据
+
+以下目录可能包含敏感数据，只在本机使用：
 
 ```text
 data/
@@ -124,100 +107,66 @@ data/
   raw-events/
   screenshots/
 backups/
+config.local.json
 ```
 
-备份会把数据库、原始事件和截图打包到 `backups/`。
+不要读取、上传、暂存或提交这些目录中的内容。迁移项目时，使用本地备份或复制整个运行数据目录；不要把真实数据放入测试夹具。
 
-## MT5 EA 使用思路
+## 后端和前端开发边界
 
-检测到当前 MT5：
+后端依赖方向为：
 
-```text
-安装目录：D:\Apps\MetaTrader5
-数据目录：C:\Users\<USERNAME>\AppData\Roaming\MetaQuotes\Terminal\<TERMINAL_ID>
-EA 目录：C:\Users\<USERNAME>\AppData\Roaming\MetaQuotes\Terminal\<TERMINAL_ID>\MQL5\Experts
-Files 目录：C:\Users\<USERNAME>\AppData\Roaming\MetaQuotes\Terminal\<TERMINAL_ID>\MQL5\Files
-```
+1. `server/app/domain/`：Campaign、R 倍数和统计公式；
+2. `server/app/data/`：数据库、迁移、仓储、导入、截图和备份；
+3. `server/app/application/`：完整业务用例；
+4. `server/app/presentation/`：HTTP 路由和响应格式。
 
-以上路径仅为示例。新环境请复制 `config.local.example.json` 为
-`config.local.json`，并替换为自己的 MT5 安装目录、终端数据目录和桥接目录。
+前端每个工作区使用自己的入口和状态模块，共享样式与工具位于 `web/shared/`。不要把 SQL 放进路由或页面，不要让读取接口隐式重建模型，不要恢复单一全局前端脚本。
 
-安装 EA 源码：
+## 常用接口
+
+- `GET /api/analysis?equity_days=30`：日期范围分析、收益曲线和评估；
+- `POST /api/sync`：执行一次 JSONL 增量同步；
+- `GET /api/review-album`：读取画册和标签；
+- `GET /api/review-album/random`：随机读取一笔未归档交易；
+- `PATCH /api/trades/{id}/review`：保存订单复盘；
+- `PATCH /api/trades/{id}/archived`：归档或恢复画册交易；
+- `GET /api/trades?page=1&page_size=50`：分页读取订单；
+- `GET/POST /api/classification-options`：读取或新增交易分类；
+- `DELETE /api/custom-fields/{id}`：停用自定义字段；
+- `DELETE /api/custom-fields/{id}/purge`：永久删除字段及其历史填写。
+
+统计展示按北京时间计算。净盈亏为利润、手续费、隔夜利息和费用的合计；R、SQN、Z 分数按 Campaign 统计。
+
+## 测试
+
+从 `server` 目录运行 Python 测试：
 
 ```powershell
-.\tools\install_ea.ps1
+Set-Location .\server
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
-然后：
-
-1. 在 MetaEditor 里编译 `MT5ReviewBridge.mq5`。
-2. 在 MT5 里把 EA 挂到一个长期打开的图表。
-3. 如果要让 EA 直接推送到本地服务，在 MT5 设置里允许：
-
-```text
-http://127.0.0.1:8787
-```
-
-EA 同时会写本地 JSONL，作为 WebRequest 失败时的兜底流水。
-
-EA 源码需要复制到本机的 `Experts` 目录，并使用本机 MetaEditor 编译生成 `MT5ReviewBridge.ex5`。
-
-## 从 MT5 JSONL 回灌
-
-如果 EA 没有开启 WebRequest，或者 MT5 当时没连上本地服务，可运行：
+从 `mt5-review-system` 目录运行前端测试：
 
 ```powershell
-.\tools\import_from_mt5.ps1
+node --test web/tests/custom-fields-ui.test.js web/tests/review-album-ui.test.js
+node --check web/shared/js/shell.mjs
+node --check web/dashboard/dashboard.mjs
+node --check web/orders/orders.mjs
+node --check web/album/album.mjs
+node --check web/settings/settings.mjs
 ```
 
-这个脚本会读取 `MQL5\Files\MT5ReviewBridge` 下的 `events_*.jsonl`，并复制截图到本项目的 `data\screenshots`。
-
-首次升级到 v0.2.0 时会自动执行 SQLite schema v2 迁移并建立 JSONL 读取游标。之后刷新页面只读取新增内容，不会重复扫描历史文件。
-
-首次升级到 v0.3.0 时会自动执行 SQLite schema v3 迁移，建立交易分类配置表。分类改名不会改变历史订单的分类标识；界面中的删除为停用，历史订单和统计继续保留。备注已从订单复盘界面和保存流程移除，数据库中的旧备注数据保留以兼容历史版本。
-
-v0.3.1 增加订单截图的手动替换与删除接口。新图片保存为本地截图目录中的唯一文件，订单路径和原始交易快照同步更新；确认没有其他订单引用后，旧图片文件自动清理。
-
-v0.4.0 增加独立复盘画册页面。画册按北京时间平仓日期分组，桌面端左图右信息、移动端图下信息；筛选仅包含品种、时间范围、交易类型/策略和单选/多选自定义字段选项标签，不提供多空或文本字段筛选。
-
-v0.4.1 增加画册短/长复盘自适应展开策略、统一顶部导航和深色筛选控件；一键启动脚本默认支持可信局域网访问，并在启动时显示手机访问地址。项目同时补充 MIT 许可证、贡献规范、安全策略、AI 协作规则和 GitHub Actions 测试。
-
-## 统计与接口
-
-- `GET /api/analysis?equity_days=30`：日期范围分析、资金曲线、系统评估和模式评估。
-- `POST /api/sync`：执行一次 JSONL 增量同步，供页面刷新数据使用。
-- `GET /api/review-album?symbol=XAUUSDc&tag=strategy:breakout`：按交易日返回画册卡片和标签目录。
-- `GET /api/review-album?archived=true`：返回归档画册。
-- `GET /api/review-album/random`：从全部未归档画册随机返回一笔交易，不接受筛选参数。
-- `PATCH /api/trades/{id}/archived`：归档或恢复一笔画册交易。
-- `GET /api/system-evaluation?start=YYYY-MM-DD&end=YYYY-MM-DD`：按日评估与 Z 分数。
-- `GET /api/mode-evaluation?dimension=trade_type|strategy`：按交易类型或策略聚合。
-- `GET/POST /api/classification-options`：查询或新增交易类型和策略。
-- `PUT/DELETE /api/classification-options/{id}`：改名或停用分类，稳定标识不变。
-- `GET /api/trades?page=1&page_size=50&side=long`：订单分页与筛选。
-- `DELETE /api/trades/{id}` 与 `POST /api/trades/{id}/restore`：软删除和恢复。
-- `DELETE /api/custom-fields/{id}`：停用自定义字段；`POST /api/custom-fields/{id}/restore`：恢复字段。
-- `DELETE /api/custom-fields/{id}/purge`：永久删除字段、选项及历史填写内容。
-
-统计中的净盈亏为利润 + 手续费 + 隔夜利息 + 费用；盈亏平衡交易不进入 Z 分数的胜负序列。
-
-## 开发验证
-
-从 `server` 目录运行 Python 测试（确保 `python` 指向 Python 3.12）：
+完整发布检查：
 
 ```powershell
-python -m unittest discover -s tests -v
+python .\tools\check_release.py
+python .\tools\check_release.py --skip-browser
 ```
 
-从项目目录运行前端静态测试（需要 Node.js 20 或更高版本）：
+UI 修改需要检查桌面端和 390px 移动端，不应出现横向溢出。涉及数据模型、统计口径、迁移或图片生命周期的变更，必须补充测试并更新版本路线。
 
-```powershell
-node --test web/tests/*.test.js
-```
+## 相关档案
 
-## 重要口径
-
-- 统计展示按北京时间计算。
-- 原始交易时间建议保留服务器时间和 UTC 时间，避免跨时区复盘错位。
-- 美盘默认配置为北京时间 `20:00-02:00`，可后续改为可配置。
-- 当前 EA 是桥接骨架，后续需要在你的 MT5 真实环境里编译验证。
+架构决策在 `../docs/adr/`，功能设计在 `../docs/superpowers/specs/`，实施计划在 `../docs/superpowers/plans/`。这些文件记录为什么这样设计，不替代本 README 的运行步骤。
