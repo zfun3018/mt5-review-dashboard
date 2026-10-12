@@ -1,8 +1,10 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app import storage
+from app.domain.analytics import BEIJING_TZ
 
 
 class ReviewAlbumTest(unittest.TestCase):
@@ -217,9 +219,12 @@ class ReviewAlbumTest(unittest.TestCase):
             storage.query_review_album(tags=["side:long"])
 
     def test_reading_checkin_is_unique_per_trade_and_beijing_date(self):
-        first = storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
-        repeated = storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
-        next_day = storage.checkin_review_trade("T-1", checkin_date="2026-10-09")
+        today = datetime.now(timezone.utc).astimezone(BEIJING_TZ).date()
+        previous_date = (today - timedelta(days=1)).isoformat()
+        today_date = today.isoformat()
+        first = storage.checkin_review_trade("T-1", checkin_date=previous_date)
+        repeated = storage.checkin_review_trade("T-1", checkin_date=previous_date)
+        next_day = storage.checkin_review_trade("T-1", checkin_date=today_date)
 
         self.assertTrue(first["created"])
         self.assertFalse(repeated["created"])
@@ -227,14 +232,14 @@ class ReviewAlbumTest(unittest.TestCase):
         current_view = storage.query_review_album()
         current_trade = next(item for item in current_view["trades"] if item["id"] == "T-1")
         self.assertTrue(current_trade["reading_checked_in_today"])
-        overview = storage.get_review_checkins(days=2, today="2026-10-09")
+        overview = storage.get_review_checkins(days=2, today=today_date)
         self.assertEqual(overview["days"], [
-            {"date": "2026-10-08", "count": 1, "goal": 20, "completed": False},
-            {"date": "2026-10-09", "count": 1, "goal": 20, "completed": False},
+            {"date": previous_date, "count": 1, "goal": 20, "completed": False},
+            {"date": today_date, "count": 1, "goal": 20, "completed": False},
         ])
-        self.assertTrue(storage.cancel_review_trade("T-1", checkin_date="2026-10-09")["deleted"])
-        self.assertFalse(storage.cancel_review_trade("T-1", checkin_date="2026-10-09")["deleted"])
-        self.assertEqual(storage.get_review_checkins(days=1, today="2026-10-09")["today"]["count"], 0)
+        self.assertTrue(storage.cancel_review_trade("T-1", checkin_date=today_date)["deleted"])
+        self.assertFalse(storage.cancel_review_trade("T-1", checkin_date=today_date)["deleted"])
+        self.assertEqual(storage.get_review_checkins(days=1, today=today_date)["today"]["count"], 0)
 
     def test_album_trade_exposes_cumulative_reading_checkin_count(self):
         storage.checkin_review_trade("T-1", checkin_date="2026-10-07")
