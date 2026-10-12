@@ -2,7 +2,7 @@
 
 一个 local-first 的 MT5 交易复盘工具：交易事件和截图留在本机，订单、统计和复盘内容通过本地网页统一查看。
 
-当前版本：`v0.6.21`，版本号以根目录 `VERSION` 为准。正式版本通过 [GitHub Releases](https://github.com/zfun3018/mt5-review-dashboard/releases) 发布。
+当前版本：`v0.6.22`，版本号以根目录 `VERSION` 为准。正式版本通过 [GitHub Releases](https://github.com/zfun3018/mt5-review-dashboard/releases) 发布。
 
 ## 项目适合谁
 
