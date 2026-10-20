@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import closing, nullcontext
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -7,6 +8,8 @@ from typing import Any
 
 from ..core.config import RuntimePaths
 from ..domain.analytics import to_beijing
+from ..platform_modules.domestic_futures_contracts import contract_display
+from ..platforms import DOMESTIC_FUTURES_PLATFORM
 from .catalog_repository import CatalogRepository
 from .database import connect
 
@@ -62,9 +65,15 @@ class TradeRepository:
             custom_values = self.catalog.custom_values_for_trade_ids(
                 conn, [str(row["id"]) for row in rows]
             )
+            campaign_reviews = self._campaign_reviews_for_trade_ids(
+                conn,
+                [str(row["id"]) for row in rows],
+                str(filters.get("platform") or "mt5"),
+            )
 
         for row in rows:
             row["custom_fields"] = custom_values.get(str(row["id"]), {})
+            row.update(campaign_reviews.get(str(row["id"]), {}))
         return Page(rows, total, safe_page, safe_size)
 
     def query_analysis_rows(
@@ -72,10 +81,13 @@ class TradeRepository:
         start_date: str | None,
         end_date: str | None,
         *,
+        platform: str = "mt5",
         conn: Any | None = None,
     ) -> list[dict[str, Any]]:
         clauses = ["trades.deleted_at IS NULL"]
         parameters: list[Any] = []
+        clauses.append("trades.platform = ?")
+        parameters.append(platform)
         start_utc, end_utc = _beijing_date_bounds(start_date, end_date)
         # Direct ISO-string comparison (not julianday()) so the query can SEARCH
         # `idx_trades_close_time`; EXPLAIN QUERY PLAN shows a SEARCH on
@@ -91,7 +103,22 @@ class TradeRepository:
         with context as active_conn:
             rows = active_conn.execute(
                 f"""
-                SELECT trades.id, trades.close_time_utc,
+                SELECT trades.id, trades.close_time_utc, trades.symbol,
+                       trades.product_name, trades.contract_name, trades.pnl,
+                       trades.commission, trades.swap, trades.fee,
+                       trades.review_text, trades.screenshot_path,
+                       trades.trade_type, trades.strategy,
+                       CASE WHEN EXISTS (
+                           SELECT 1
+                           FROM campaign_source_trades AS source_links
+                           JOIN campaign_positions AS campaign_links
+                             ON campaign_links.campaign_id = source_links.campaign_id
+                           JOIN positions AS linked_positions
+                             ON linked_positions.id = campaign_links.position_id
+                            AND linked_positions.platform = trades.platform
+                           WHERE source_links.trade_id = trades.id
+                             AND linked_positions.initial_stop_price IS NOT NULL
+                       ) THEN 1 ELSE 0 END AS has_initial_stop,
                        (COALESCE(trades.pnl, 0.0) + COALESCE(trades.commission, 0.0)
                         + COALESCE(trades.swap, 0.0) + COALESCE(trades.fee, 0.0)) AS net_pnl
                 FROM trades
@@ -152,12 +179,18 @@ class TradeRepository:
             custom_values = self.catalog.custom_values_for_trade_ids(
                 conn, [str(row["id"]) for row in rows]
             )
+            campaign_reviews = self._campaign_reviews_for_trade_ids(
+                conn,
+                [str(row["id"]) for row in rows],
+                str(filters.get("platform") or "mt5"),
+            )
         for row in rows:
             row["custom_fields"] = custom_values.get(str(row["id"]), {})
+            row.update(campaign_reviews.get(str(row["id"]), {}))
         return Page(rows, total, safe_page, safe_size)
 
-    def random_album_trade(self) -> dict[str, Any] | None:
-        clauses, parameters = self._album_where({"archived": False})
+    def random_album_trade(self, platform: str = "mt5") -> dict[str, Any] | None:
+        clauses, parameters = self._album_where({"archived": False, "platform": platform})
         where_sql = f"WHERE {' AND '.join(clauses)}"
         with closing(connect(self.paths)) as conn:
             row = conn.execute(
@@ -178,8 +211,78 @@ class TradeRepository:
             custom_values = self.catalog.custom_values_for_trade_ids(
                 conn, [str(trade["id"])]
             )
+            campaign_reviews = self._campaign_reviews_for_trade_ids(
+                conn, [str(trade["id"])], platform
+            )
         trade["custom_fields"] = custom_values.get(str(trade["id"]), {})
+        trade.update(campaign_reviews.get(str(trade["id"]), {}))
         return trade
+
+    @staticmethod
+    def _campaign_reviews_for_trade_ids(
+        conn: Any,
+        trade_ids: list[str],
+        platform: str,
+    ) -> dict[str, dict[str, Any]]:
+        if not trade_ids:
+            return {}
+        placeholders = ",".join("?" for _ in trade_ids)
+        rows = conn.execute(
+            f"""
+            SELECT campaign_source_trades.trade_id,
+                   trade_campaigns.id AS campaign_id,
+                   trade_campaigns.review_text,
+                   trade_campaigns.trade_type_tags,
+                   trade_campaigns.strategy_tags,
+                   trade_campaigns.mistake_tags
+            FROM campaign_source_trades
+            JOIN trade_campaigns
+              ON trade_campaigns.id = campaign_source_trades.campaign_id
+            WHERE campaign_source_trades.trade_id IN ({placeholders})
+              AND trade_campaigns.platform = ?
+              AND trade_campaigns.deleted_at IS NULL
+            ORDER BY trade_campaigns.updated_at DESC, trade_campaigns.id DESC
+            """,
+            [*trade_ids, platform],
+        ).fetchall()
+        result: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            trade_id = str(row["trade_id"])
+            if trade_id in result:
+                continue
+            result[trade_id] = {
+                "campaign_id": str(row["campaign_id"]),
+                "review_text": str(row["review_text"] or ""),
+                "trade_type_tags": _json_tags(row["trade_type_tags"]),
+                "strategy_tags": _json_tags(row["strategy_tags"]),
+                "mistake_tags": _json_tags(row["mistake_tags"]),
+            }
+        return result
+
+    def list_album_mistake_tags(self, platform: str = "mt5") -> list[str]:
+        with closing(connect(self.paths)) as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT CAST(mistake.value AS TEXT) AS tag
+                FROM trade_campaigns
+                JOIN campaign_source_trades
+                  ON campaign_source_trades.campaign_id = trade_campaigns.id
+                JOIN trades
+                  ON trades.id = campaign_source_trades.trade_id
+                 AND trades.platform = trade_campaigns.platform
+                JOIN json_each(
+                    CASE WHEN json_valid(trade_campaigns.mistake_tags)
+                         THEN trade_campaigns.mistake_tags ELSE '[]' END
+                ) AS mistake
+                WHERE trade_campaigns.platform = ?
+                  AND trade_campaigns.deleted_at IS NULL
+                  AND trades.deleted_at IS NULL
+                  AND CAST(mistake.value AS TEXT) <> ''
+                ORDER BY tag
+                """,
+                (platform,),
+            ).fetchall()
+        return [str(row["tag"]) for row in rows]
 
     def reading_checkin_status(
         self,
@@ -194,9 +297,15 @@ class TradeRepository:
         with closing(connect(self.paths)) as conn:
             rows = conn.execute(
                 f"""
-                SELECT trade_id
-                FROM reading_checkins
-                WHERE checkin_date = ? AND trade_id IN ({placeholders})
+                SELECT DISTINCT links.trade_id
+                FROM campaign_source_trades AS links
+                JOIN campaign_checkins AS checkins
+                  ON checkins.campaign_id = links.campaign_id
+                JOIN trade_campaigns AS campaigns
+                  ON campaigns.id = links.campaign_id
+                WHERE checkins.checkin_date = ?
+                  AND links.trade_id IN ({placeholders})
+                  AND campaigns.deleted_at IS NULL
                 """,
                 [day, *ids],
             ).fetchall()
@@ -210,10 +319,15 @@ class TradeRepository:
         with closing(connect(self.paths)) as conn:
             rows = conn.execute(
                 f"""
-                SELECT trade_id, COUNT(*) AS count
-                FROM reading_checkins
-                WHERE trade_id IN ({placeholders})
-                GROUP BY trade_id
+                SELECT links.trade_id, COUNT(DISTINCT checkins.checkin_date) AS count
+                FROM campaign_source_trades AS links
+                JOIN campaign_checkins AS checkins
+                  ON checkins.campaign_id = links.campaign_id
+                JOIN trade_campaigns AS campaigns
+                  ON campaigns.id = links.campaign_id
+                WHERE links.trade_id IN ({placeholders})
+                  AND campaigns.deleted_at IS NULL
+                GROUP BY links.trade_id
                 """,
                 ids,
             ).fetchall()
@@ -232,12 +346,17 @@ class TradeRepository:
         with closing(connect(self.paths)) as conn:
             rows = conn.execute(
                 f"""
-                SELECT trade_id,
-                       COUNT(*) AS count,
-                       MAX(CASE WHEN checkin_date = ? THEN 1 ELSE 0 END) AS checked_in
-                FROM reading_checkins
-                WHERE trade_id IN ({placeholders})
-                GROUP BY trade_id
+                SELECT links.trade_id,
+                       COUNT(DISTINCT checkins.checkin_date) AS count,
+                       MAX(CASE WHEN checkins.checkin_date = ? THEN 1 ELSE 0 END) AS checked_in
+                FROM campaign_source_trades AS links
+                JOIN campaign_checkins AS checkins
+                  ON checkins.campaign_id = links.campaign_id
+                JOIN trade_campaigns AS campaigns
+                  ON campaigns.id = links.campaign_id
+                WHERE links.trade_id IN ({placeholders})
+                  AND campaigns.deleted_at IS NULL
+                GROUP BY links.trade_id
                 """,
                 [day, *ids],
             ).fetchall()
@@ -253,6 +372,7 @@ class TradeRepository:
         self,
         days: int = 90,
         today: str | date | None = None,
+        platform: str = "mt5",
     ) -> dict[str, Any]:
         safe_days = max(1, min(int(days), 366))
         end = _coerce_date(today) if today is not None else date.today()
@@ -267,13 +387,16 @@ class TradeRepository:
             ).fetchone()
             count_rows = conn.execute(
                 """
-                SELECT checkin_date, COUNT(*) AS count
-                FROM reading_checkins
-                JOIN trades ON trades.id = reading_checkins.trade_id
-                WHERE checkin_date BETWEEN ? AND ? AND trades.deleted_at IS NULL
-                GROUP BY checkin_date
+                SELECT checkins.checkin_date, COUNT(DISTINCT checkins.campaign_id) AS count
+                FROM campaign_checkins AS checkins
+                JOIN trade_campaigns AS campaigns
+                  ON campaigns.id = checkins.campaign_id
+                WHERE checkins.checkin_date BETWEEN ? AND ?
+                  AND campaigns.deleted_at IS NULL
+                  AND campaigns.platform = ?
+                GROUP BY checkins.checkin_date
                 """,
-                (start_value, end_value),
+                (start_value, end_value, platform),
             ).fetchall()
         goal = _normalize_reading_goal(goal_row["value"] if goal_row else 20)
         counts = {str(row["checkin_date"]): int(row["count"]) for row in count_rows}
@@ -299,29 +422,95 @@ class TradeRepository:
             "range": {"start": start_value, "end": end_value},
         }
 
-    def list_active_symbols(self) -> list[str]:
+    def list_active_symbols(self, platform: str = "mt5") -> list[str]:
         with closing(connect(self.paths)) as conn:
             rows = conn.execute(
                 """
                 SELECT DISTINCT symbol
                 FROM trades
-                WHERE deleted_at IS NULL AND COALESCE(symbol, '') != ''
+                WHERE deleted_at IS NULL AND platform = ? AND COALESCE(symbol, '') != ''
                 ORDER BY symbol
                 """
+                , (platform,)
             ).fetchall()
         return [str(row["symbol"]) for row in rows]
 
-    def list_equity_snapshots(self, *, conn: Any | None = None) -> list[dict[str, Any]]:
+    def list_equity_snapshots(self, *, platform: str = "mt5", conn: Any | None = None) -> list[dict[str, Any]]:
         context = nullcontext(conn) if conn is not None else closing(connect(self.paths))
         with context as active_conn:
             rows = active_conn.execute(
-                "SELECT time_utc, balance, equity FROM equity_snapshots ORDER BY time_utc"
+                "SELECT platform, time_utc, balance, equity FROM equity_snapshots WHERE platform = ? ORDER BY time_utc",
+                (platform,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def latest_import_summary(self, platform: str = "mt5") -> dict[str, Any]:
+        with closing(connect(self.paths)) as conn:
+            trade_row = conn.execute(
+                """
+                SELECT id, close_time_utc, symbol, product_name, contract_name
+                FROM trades
+                WHERE platform = ? AND deleted_at IS NULL
+                ORDER BY close_time_utc DESC, id DESC
+                LIMIT 1
+                """,
+                (platform,),
+            ).fetchone()
+            batch_row = conn.execute(
+                """
+                SELECT *
+                FROM import_batches
+                WHERE platform = ? AND status = 'committed'
+                ORDER BY COALESCE(completed_at, started_at) DESC, id DESC
+                LIMIT 1
+                """,
+                (platform,),
+            ).fetchone()
+            trade_count = conn.execute(
+                "SELECT COUNT(*) AS value FROM trades WHERE platform = ? AND deleted_at IS NULL",
+                (platform,),
+            ).fetchone()["value"]
+            batch_count = conn.execute(
+                "SELECT COUNT(*) AS value FROM import_batches WHERE platform = ?",
+                (platform,),
+            ).fetchone()["value"]
+
+        latest_trade = None
+        if trade_row is not None:
+            close_time_bj = to_beijing(str(trade_row["close_time_utc"] or ""))
+            symbol = str(trade_row["symbol"] or "")
+            if platform == DOMESTIC_FUTURES_PLATFORM:
+                display = contract_display(symbol)
+                product_name = display["product_name"]
+                contract_name = display["contract_name"]
+            else:
+                product_name = str(trade_row["product_name"] or "")
+                contract_name = str(trade_row["contract_name"] or "")
+            latest_trade = {
+                "id": str(trade_row["id"]),
+                "trade_date": close_time_bj.date().isoformat(),
+                "time_bj": close_time_bj.isoformat(),
+                "symbol": symbol,
+                "product_name": product_name,
+                "contract_name": contract_name,
+            }
+        latest_batch = dict(batch_row) if batch_row is not None else None
+        return {
+            "platform": platform,
+            "latest_trade": latest_trade,
+            "latest_imported_at": (latest_batch or {}).get("completed_at"),
+            "latest_batch": latest_batch,
+            "counts": {
+                "trades": int(trade_count or 0),
+                "import_batches": int(batch_count or 0),
+            },
+        }
 
     def _where(self, filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
         clauses: list[str] = []
         parameters: list[Any] = []
+        clauses.append("trades.platform = ?")
+        parameters.append(str(filters.get("platform") or "mt5"))
         deleted = str(filters.get("deleted") or "").strip().lower()
         if not deleted:
             deleted = "all" if filters.get("include_deleted") else "active"
@@ -366,6 +555,8 @@ class TradeRepository:
     def _album_where(filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
         clauses = ["trades.deleted_at IS NULL"]
         parameters: list[Any] = []
+        clauses.append("trades.platform = ?")
+        parameters.append(str(filters.get("platform") or "mt5"))
         archived = filters.get("archived", False)
         if not isinstance(archived, bool):
             raise ValueError("archived must be a boolean")
@@ -392,7 +583,7 @@ class TradeRepository:
             clauses.append(f"LOWER(trades.symbol) IN ({placeholders})")
             parameters.extend(symbols)
 
-        for dimension in ("trade_type", "strategy"):
+        for dimension in ("trade_type", "strategy", "mistake"):
             selected = [
                 str(value)
                 for value in filters.get(dimension) or []
@@ -400,8 +591,53 @@ class TradeRepository:
             ]
             if selected:
                 placeholders = ",".join("?" for _ in selected)
-                clauses.append(f"trades.{dimension} IN ({placeholders})")
-                parameters.extend(selected)
+                tag_column = {
+                    "trade_type": "trade_type_tags",
+                    "strategy": "strategy_tags",
+                    "mistake": "mistake_tags",
+                }[dimension]
+                json_match = (
+                    "EXISTS (SELECT 1 FROM json_each("
+                    f"CASE WHEN json_valid(selected_campaign.{tag_column}) "
+                    f"THEN selected_campaign.{tag_column} ELSE '[]' END"
+                    ") AS selected_tag "
+                    f"WHERE CAST(selected_tag.value AS TEXT) IN ({placeholders}))"
+                )
+                if dimension == "mistake":
+                    campaign_match = json_match
+                    parameters.extend(selected)
+                    fallback_match = None
+                else:
+                    campaign_match = (
+                        f"(selected_campaign.{dimension} IN ({placeholders}) "
+                        f"OR {json_match})"
+                    )
+                    parameters.extend(selected)
+                    parameters.extend(selected)
+                    fallback_match = (
+                        "NOT EXISTS (SELECT 1 FROM campaign_source_trades AS "
+                        "legacy_source JOIN trade_campaigns AS legacy_campaign "
+                        "ON legacy_campaign.id = legacy_source.campaign_id "
+                        "WHERE legacy_source.trade_id = trades.id "
+                        "AND legacy_campaign.platform = trades.platform "
+                        "AND legacy_campaign.deleted_at IS NULL) "
+                        f"AND trades.{dimension} IN ({placeholders})"
+                    )
+                    parameters.extend(selected)
+                campaign_exists = (
+                    "EXISTS (SELECT 1 FROM campaign_source_trades AS selected_source "
+                    "JOIN trade_campaigns AS selected_campaign "
+                    "ON selected_campaign.id = selected_source.campaign_id "
+                    "WHERE selected_source.trade_id = trades.id "
+                    "AND selected_campaign.platform = trades.platform "
+                    "AND selected_campaign.deleted_at IS NULL "
+                    f"AND {campaign_match})"
+                )
+                clauses.append(
+                    campaign_exists
+                    if fallback_match is None
+                    else f"({campaign_exists} OR ({fallback_match}))"
+                )
 
         custom_fields = filters.get("custom_fields") or {}
         for field_id in sorted(custom_fields, key=str):
@@ -437,6 +673,17 @@ class TradeRepository:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _json_tags(value: Any) -> list[str]:
+    if isinstance(value, list):
+        parsed = value
+    else:
+        try:
+            parsed = json.loads(str(value or "[]"))
+        except (TypeError, json.JSONDecodeError):
+            parsed = []
+    return [str(item).strip() for item in parsed if str(item).strip()] if isinstance(parsed, list) else []
 
 
 def _beijing_date_bounds(

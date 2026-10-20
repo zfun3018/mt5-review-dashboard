@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createOrdersController } from "../orders/orders.mjs";
+import {
+  calculateCampaignPageSize,
+  createOrdersController,
+  mergePinnedCampaigns,
+  renderCheckinCalendarMarkup,
+} from "../orders/orders.mjs";
 import {
   buildCampaignsQuery,
   normalizeListState,
@@ -10,9 +15,13 @@ import {
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { executionRows } from "../orders/order-detail.mjs";
+import { formatBeijingDateTime } from "../shared/js/formatters.mjs";
 
 const ordersSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.mjs"), "utf8");
 const ordersStyle = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.css"), "utf8");
+const ordersHtml = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "index.html"), "utf8");
+const orderDetailSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "order-detail.mjs"), "utf8");
 
 class FakeElement {
   constructor() {
@@ -93,7 +102,10 @@ function recordingApi(routes, { campaigns = [], detail = null } = {}) {
       paths.push(requestPath);
       methods.push(options.method || "GET");
       bodies.push(options.body);
-      if (Object.prototype.hasOwnProperty.call(routes, requestPath)) return routes[requestPath];
+      if (Object.prototype.hasOwnProperty.call(routes, requestPath)) {
+        const route = routes[requestPath];
+        return typeof route === "function" ? await route(requestPath, options) : route;
+      }
       if (requestPath.startsWith("/api/campaigns?")) {
         return { campaigns, total: campaigns.length, page: 1, page_size: 50 };
       }
@@ -168,12 +180,112 @@ test("order filters are sent to the server", async () => {
   assert.equal(api.paths[0], "/api/campaigns?q=XAU&side=long&r_missing=1&page=2&page_size=50");
 });
 
+test("featured is a view of the same campaign order list", async () => {
+  const { api, controller } = controllerWith();
+  await controller.loadList({ listView: "featured" });
+  assert.equal(api.paths[0], "/api/campaigns?featured=1&page=1&page_size=12");
+});
+
+test("check-in calendar renders a month grid with weekday headers and counts", () => {
+  const markup = renderCheckinCalendarMarkup({
+    days: [
+      { date: "2026-10-01", count: 2 },
+      { date: "2026-10-08", count: 1 },
+    ],
+  });
+  assert.match(markup, /2026年10月/);
+  assert.match(markup, /星期一/);
+  assert.match(markup, /星期日/);
+  assert.match(markup, /2次/);
+  assert.match(markup, /role="gridcell"/);
+  assert.match(markup, /is-empty/);
+});
+
+test("campaign check-in toggles between create and cancel and refreshes the calendar", async () => {
+  const selected = campaign("C-1", { checkin_checked_in_today: false, checkin_count: 2 });
+  const { api, controller } = controllerWith(
+    { search: "" },
+    {
+      "/api/campaigns/C-1/checkin": { campaign_id: "C-1", checked_in: true },
+      "/api/campaigns/C-1/checkin?cancel=1": { campaign_id: "C-1", checked_in: false },
+      "/api/campaign-checkins?days=35&platform=mt5": { days: [] },
+    },
+    { campaigns: [selected], detail: { ...selected, positions: [] } },
+  );
+
+  await controller.checkinCampaign(selected);
+  assert.equal(api.methods[0], "POST");
+  assert.ok(api.paths.includes("/api/campaign-checkins?days=35&platform=mt5"));
+
+  selected.checkin_checked_in_today = true;
+  await controller.checkinCampaign(selected);
+  assert.ok(api.methods.includes("DELETE"));
+  assert.ok(api.paths.some((path) => path === "/api/campaigns/C-1/checkin"));
+});
+
+test("random featured campaign remains visible while its detail is loading", async () => {
+  const selected = campaign("C-RANDOM", { display_order_no: "C-RANDOM" });
+  const { api, controller } = controllerWith(
+    { search: "" },
+    { "/api/campaigns/random-featured": { campaign: selected } },
+    { campaigns: [campaign("C-FIRST")], detail: { ...selected, positions: [] } },
+  );
+
+  await controller.loadList();
+  await controller.randomFeaturedCampaign();
+
+  assert.equal(controller.getState().campaign, "C-RANDOM");
+  assert.ok(controller.getPage().campaigns.some((item) => item.id === "C-RANDOM"));
+  assert.equal(api.paths[api.paths.indexOf("/api/campaigns/random-featured")], "/api/campaigns/random-featured");
+});
+
+test("random campaign stays selected when a capacity refresh returns another page", () => {
+  const selected = campaign("C-RANDOM");
+  const refreshedPage = [campaign("C-FIRST"), campaign("C-SECOND"), campaign("C-THIRD")];
+
+  const visible = mergePinnedCampaigns(refreshedPage, selected, 3);
+
+  assert.equal(visible[0].id, "C-RANDOM");
+  assert.deepEqual(visible.map((item) => item.id), ["C-RANDOM", "C-FIRST", "C-SECOND"]);
+});
+
 test("saving a stop refreshes one campaign and the current page", async () => {
   const { api, controller } = controllerWith();
   await controller.saveInitialStop("P-1", 98);
   assert.deepEqual(api.methods, ["PATCH", "GET", "GET"]);
   assert.match(api.paths[1], /\/api\/campaigns\//);
   assert.match(api.paths[2], /\/api\/campaigns\?/);
+});
+
+test("campaign stop save falls back to each position when the campaign endpoint is unavailable", async () => {
+  const selected = campaign("C-1", {
+    position_count: 2,
+    position_summaries: [position("1"), position("2")],
+  });
+  const detail = { ...selected, positions: selected.position_summaries };
+  const { api, controller } = controllerWith(
+    { search: "" },
+    {
+      "/api/campaigns/C-1/initial-stop": async () => {
+        const error = new Error("Campaign not found");
+        error.status = 404;
+        throw error;
+      },
+    },
+    { campaigns: [selected], detail },
+  );
+
+  await controller.load();
+  await controller.saveCampaignInitialStop("C-1", 1790);
+
+  assert.ok(api.paths.includes("/api/positions/1/initial-stop"));
+  assert.ok(api.paths.includes("/api/positions/2/initial-stop"));
+  assert.equal(api.bodies[api.paths.indexOf("/api/positions/1/initial-stop")].initial_stop_price, 1790);
+});
+
+test("campaign page size is calculated from the available list height", () => {
+  assert.equal(calculateCampaignPageSize({ availableHeight: 430, groupCount: 2 }), 8);
+  assert.equal(calculateCampaignPageSize({ availableHeight: 160, groupCount: 1 }), 2);
 });
 
 test("?trade= resolves the owning campaign", async () => {
@@ -201,7 +313,7 @@ test("?trade= opens the matching order detail instead of the campaign review", a
   const selectedCampaign = campaign("C-1", {
     source_trade_ids: ["T-9"],
     position_summaries: [selectedPosition],
-    review_text: "来源 T-9\n订单级复盘",
+    review_text: "主订单级复盘",
   });
   const { view, controller } = controllerWith(
     { search: "?trade=T-9" },
@@ -211,10 +323,9 @@ test("?trade= opens the matching order detail instead of the campaign review", a
 
   await controller.load();
 
-  assert.match(view.getElementById("orderDetail").innerHTML, /保存订单复盘/);
-  assert.match(view.getElementById("orderDetail").innerHTML, /订单级复盘/);
+  assert.match(view.getElementById("orderDetail").innerHTML, /id="detailReview"/);
+  assert.match(view.getElementById("orderDetail").innerHTML, /主订单级复盘/);
   assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /代表订单复盘/);
-  assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /来源 T-9/);
 });
 
 test("?campaign= keeps the requested campaign selected", async () => {
@@ -230,7 +341,7 @@ test("?campaign= keeps the requested campaign selected", async () => {
   assert.match(html.match(/<tr class="([^"]*)" data-campaign-id="C-2"/)[1], /active/);
 });
 
-test("multi-Position campaigns render child rows only when expanded", async () => {
+test("multi-Position campaigns are expanded as one main-order row per campaign", async () => {
   const { view, controller } = controllerWith(
     { search: "" },
     {},
@@ -248,16 +359,9 @@ test("multi-Position campaigns render child rows only when expanded", async () =
 
   const childRows = () => (view.getElementById("orderRows").innerHTML.match(/campaign-detail-row/g) || []).length;
 
-  // Collapsed: only the summary row renders.
+  assert.match(view.getElementById("orderRows").innerHTML, /data-campaign-id="C-1"/);
   assert.equal(childRows(), 0);
-
-  // Expanded: one child row per Position.
-  controller.toggleExpand("C-1");
-  assert.equal(childRows(), 2);
-
-  // Collapse again removes them.
-  controller.toggleExpand("C-1");
-  assert.equal(childRows(), 0);
+  assert.doesNotMatch(view.getElementById("orderRows").innerHTML, /data-campaign-expand/);
 });
 
 test("soft delete removes the selected trade", async () => {
@@ -279,10 +383,19 @@ test("soft delete removes the selected trade", async () => {
   assert.ok(api.paths.includes("/api/trades/T-1"));
 });
 
+test("deleted order filter is included in the campaigns query", () => {
+  assert.equal(
+    buildCampaignsQuery({ deleted: "deleted", page: 1, pageSize: 12 }),
+    "deleted=deleted&page=1&page_size=12",
+  );
+  assert.match(ordersHtml, /id="deletedFilter"/);
+  assert.match(ordersSource, /restoreSelectedTrade/);
+});
+
 test("campaign list uses server-side pagination state", async () => {
   const { api, controller } = controllerWith({ search: "?page=3" }, {}, { campaigns: [campaign("C-1")] });
   await controller.loadList();
-  assert.equal(api.paths[0], "/api/campaigns?page=3&page_size=50");
+  assert.equal(api.paths[0], "/api/campaigns?page=3&page_size=12");
 });
 
 test("normalizeListState clamps page and page size", () => {
@@ -327,9 +440,10 @@ test("combined campaign summary renders and saves campaign classification", asyn
   );
   await controller.loadList();
 
-  const summary = view.getElementById("orderRows").innerHTML.split("campaign-detail-row")[0];
-  assert.match(summary, /data-campaign-classification="trade_type"[^>]*data-campaign-id="C-1"/);
-  assert.match(summary, /data-campaign-classification="strategy"[^>]*data-campaign-id="C-1"/);
+  const summary = view.getElementById("orderRows").innerHTML;
+  assert.match(summary, /data-campaign-id="C-1"/);
+  assert.match(summary, /campaign-kind-mark/);
+  assert.doesNotMatch(summary, /data-campaign-classification=/);
   assert.doesNotMatch(summary, /data-trade-id="T-2"/);
 
   await controller.saveCampaignClassification("C-1", "strategy", "range");
@@ -342,16 +456,171 @@ test("combined campaign summary renders and saves campaign classification", asyn
   });
 });
 
-test("order table places trade scene and strategy after campaign PnL", () => {
+test("order table keeps scene and strategy out of the main-order index", () => {
   const renderSource = ordersSource.slice(ordersSource.indexOf("function renderCampaignPositionRow"), ordersSource.indexOf("function bindRowInteractions"));
-  assert.match(renderSource, /组合盈亏[\s\S]*交易场景[\s\S]*交易策略/);
-  assert.match(renderSource, /<th>组合盈亏<\/th>\s*<th>交易场景<\/th>\s*<th>交易策略<\/th>/);
+  assert.match(renderSource, /<tr><th>开仓时间<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
+  assert.doesNotMatch(renderSource, /<th>交易场景<\/th>|<th>交易策略<\/th>/);
+});
+
+test("main-order rows group by Beijing date and restart their sequence per day", async () => {
+  const previousRMultiple = globalThis.RMultipleUI;
+  globalThis.RMultipleUI = { formatCampaignR: (value) => `${Number(value.campaign_r) > 0 ? "+" : ""}${Number(value.campaign_r).toFixed(2)}R` };
+  const { view, controller } = controllerWith(
+    { search: "" },
+    {},
+    {
+      campaigns: [
+        campaign("C-DAY-1", { opened_at_utc: "2026-10-08T01:00:00Z", campaign_r: 1.2, net_pnl: 10 }),
+        campaign("C-DAY-2", { opened_at_utc: "2026-10-08T02:00:00Z", campaign_r: -0.4, net_pnl: -4 }),
+        campaign("C-DAY-3", { opened_at_utc: "2026-10-07T03:00:00Z", campaign_r: 0.8, net_pnl: 8 }),
+      ],
+    },
+  );
+  await controller.loadList();
+  globalThis.RMultipleUI = previousRMultiple;
+
+  let html = view.getElementById("orderRows").innerHTML;
+  assert.equal((html.match(/campaign-day-row/g) || []).length, 2);
+  assert.match(html, /10月8日 周四/);
+  assert.match(html, /10月7日 周三/);
+  assert.match(html, /aria-expanded="true"/);
+
+  assert.match(html, /data-day-sequence="1"/);
+  assert.match(html, /data-day-sequence="2"/);
+  assert.equal((html.match(/data-day-sequence="1"/g) || []).length, 2);
+  assert.match(html, /\+1\.20<\/td>/);
+  assert.doesNotMatch(html, /\+1\.20R/);
+  assert.match(html, /2笔/);
+});
+
+test("campaign rows are numbered from the earliest Beijing opening time", async () => {
+  const { view, controller } = controllerWith(
+    { search: "" },
+    {},
+    {
+      campaigns: [
+        campaign("C-LATE", { opened_at_utc: "2026-10-08T03:00:00Z" }),
+        campaign("C-EARLY", { opened_at_utc: "2026-10-08T01:00:00Z" }),
+      ],
+    },
+  );
+  await controller.loadList();
+
+  const html = view.getElementById("orderRows").innerHTML;
+  assert.ok(html.indexOf('data-campaign-id="C-EARLY"') < html.indexOf('data-campaign-id="C-LATE"'));
+  assert.match(html, /data-campaign-id="C-EARLY"[^>]*data-day-sequence="1"/);
+  assert.match(html, /data-campaign-id="C-LATE"[^>]*data-day-sequence="2"/);
 });
 
 test("selected order rows use a stronger background than scratch rows", () => {
-  assert.match(ordersStyle, /\.orders-table tbody tr\.active\s*\{[\s\S]*background:\s*rgba\(61, 130, 246, 0\.28\) !important;[\s\S]*box-shadow:/);
+  assert.match(ordersStyle, /html\[data-platform="mt5"\] \.orders-table tbody tr\.active,\s*html\[data-platform="mt5"\] \.campaign-detail-row\.active\s*\{[\s\S]*background:\s*#dff5f1 !important;[\s\S]*#069d91/);
   assert.match(ordersStyle, /\.campaign-row\.scratch\s*\{[\s\S]*background:\s*rgba\(130, 148, 168, 0\.12\) !important;/);
-  assert.match(ordersStyle, /\.campaign-row\.scratch\.active\s*\{[\s\S]*background:\s*rgba\(61, 130, 246, 0\.22\) !important;[\s\S]*#f2b84b/);
+  assert.match(ordersStyle, /html\[data-platform="mt5"\] \.campaign-row\.scratch\.active\s*\{[\s\S]*background:\s*#fff0d9 !important;[\s\S]*#f49b22/);
+});
+
+test("order actions use accessible Lucide icon buttons", () => {
+  assert.match(orderDetailSource, /data-lucide="star"/);
+  assert.match(orderDetailSource, /data-lucide="shuffle"/);
+  assert.match(orderDetailSource, /check-circle/);
+  assert.match(orderDetailSource, /archive/);
+  assert.match(orderDetailSource, /aria-label=/);
+  assert.match(orderDetailSource, /lucide\?\.createIcons/);
+});
+
+test("orders workspace keeps shared light contrast and a full-width calendar grid", () => {
+  assert.match(ordersStyle, /html\[data-platform="mt5"\][\s\S]*\.choice-value-pill/);
+  assert.match(ordersStyle, /html\[data-platform="domestic_futures"\][\s\S]*\.choice-value-pill/);
+  assert.match(ordersStyle, /html\[data-platform="mt5"\][\s\S]*\.campaign-day-row td/);
+  assert.match(ordersStyle, /html\[data-platform="domestic_futures"\][\s\S]*\.campaign-day-row td/);
+  assert.match(ordersStyle, /\.checkin-calendar\s*\{[^}]*display:\s*block/);
+  assert.match(ordersStyle, /\.checkin-calendar-weekdays span\s*\{[^}]*white-space:\s*nowrap/);
+});
+
+test("scratch campaigns carry the legacy state styling and a compact PnL emphasis", async () => {
+  const { view, controller } = controllerWith(
+    { search: "" },
+    {},
+    { campaigns: [campaign("C-SCRATCH", { campaign_r: 0.05, risk_status: "complete", net_pnl: 3.2 })] },
+  );
+  await controller.loadList();
+  const html = view.getElementById("orderRows").innerHTML;
+  assert.match(html, /class="campaign-row[^\"]*scratch/);
+  assert.match(html, /campaign-scratch-mark/);
+  assert.match(html, /campaign-list-pnl[^\"]*profit-text/);
+  assert.doesNotMatch(ordersHtml, /class="table-legend"/);
+});
+
+test("the main-order list clips at the measured panel height and leaves overflow to pagination", () => {
+  assert.match(ordersStyle, /\.trades-panel \.table-wrap\s*\{[^}]*overflow:\s*hidden/);
+  assert.doesNotMatch(ordersStyle, /\.trades-panel \.table-wrap\s*\{[^}]*overflow:\s*auto/);
+  assert.match(ordersSource, /applyListPanelHeight/);
+  assert.match(ordersSource, /calculateCampaignPageSize/);
+});
+
+test("execution ledger separates entry and exit direction and closes the final complete exit", () => {
+  const records = executionRows({
+    positions: [{
+      side: "long",
+      weighted_entry_price: 100,
+      reconstruction_status: "complete",
+      entry_deals: [
+        { time_utc: "2026-10-16T01:00:00Z", time_msc: 1, price: 100, volume: 1 },
+        { time_utc: "2026-10-16T01:05:00Z", time_msc: 2, price: 101, volume: 1 },
+      ],
+      exit_deals: [
+        { time_utc: "2026-10-16T01:10:00Z", time_msc: 3, price: 102, volume: 0.5, profit: 1 },
+        { time_utc: "2026-10-16T01:15:00Z", time_msc: 4, price: 103, volume: 1.5, profit: 2 },
+      ],
+    }],
+  });
+  assert.deepEqual(records.map((record) => [record.typeLabel, record.direction]), [
+    ["开仓", "多"],
+    ["加仓", "多"],
+    ["减仓", "平多"],
+    ["平仓", "平多"],
+  ]);
+  assert.match(records[0].time, /周五/);
+  assert.doesNotMatch(records[0].time, /UTC/);
+});
+
+test("screenshot layout preserves the image's natural aspect ratio", () => {
+  const compactStyle = ordersStyle.slice(ordersStyle.lastIndexOf(".snapshot.compact-snapshot"));
+  assert.match(compactStyle, /aspect-ratio:\s*auto/);
+  assert.match(compactStyle, /width:\s*100%;[\s\S]*height:\s*auto;/);
+  assert.doesNotMatch(compactStyle, /min-height:\s*280px/);
+  assert.match(ordersStyle, /\.screenshot-preview\s*\{[\s\S]*display:\s*flex/);
+  assert.match(ordersStyle, /\.detail-hero-grid\s*\{[\s\S]*grid-template-columns:\s*fit-content\(70%\)\s+minmax\(0, 1fr\)/);
+  assert.match(ordersStyle, /\.detail-hero-grid\s*\{[\s\S]*overflow:\s*visible/);
+  assert.match(ordersStyle, /\.screenshot-editor\s*\{[\s\S]*width:\s*fit-content/);
+  assert.match(ordersStyle, /\.screenshot-editor\s*\{[\s\S]*position:\s*relative/);
+  assert.match(ordersStyle, /\.screenshot-overlay-controls\s*\{[\s\S]*left:\s*14px/);
+  assert.match(ordersStyle, /\.screenshot-preview\s*\{[\s\S]*width:\s*fit-content[\s\S]*overflow:\s*visible/);
+  assert.match(compactStyle, /max-height:\s*none/);
+  assert.match(orderDetailSource, /detailScreenshotImage/);
+  assert.match(orderDetailSource, /onLayoutChange/);
+});
+
+test("campaign tag menus stay open for multiple selections and close outside", () => {
+  assert.doesNotMatch(
+    orderDetailSource.slice(orderDetailSource.indexOf("async function saveTagSelection"), orderDetailSource.indexOf("function bindTagPickers")),
+    /closeChoicePopover\(\)/,
+  );
+  assert.match(orderDetailSource, /data-tag-trigger/);
+  assert.match(orderDetailSource, /choice-popover/);
+  assert.match(orderDetailSource, /event\.target\?\.closest\?\.\("\.choice-popover, \[data-tag-trigger\]"\)/);
+});
+
+test("screenshot layout sync is guarded against repeated renders", () => {
+  assert.match(orderDetailSource, /lastScreenshotLayout/);
+  assert.match(orderDetailSource, /naturalWidth.*naturalHeight/);
+  assert.doesNotMatch(orderDetailSource, /bindDetailInteractions\(campaign, trade, \{[^}]+\}\);\s*onLayoutChange\?\.\(\);/s);
+});
+
+test("order timestamps use Beijing time and include the weekday", () => {
+  const value = formatBeijingDateTime("2026-10-16T01:42:00Z");
+  assert.match(value, /周五/);
+  assert.match(value, /09:42/);
+  assert.match(orderDetailSource, /<th>时间 · 北京<\/th>/);
 });
 
 test("readOrdersState parses filters, pagination, and selection", () => {
@@ -366,4 +635,8 @@ test("readOrdersState parses filters, pagination, and selection", () => {
   assert.equal(state.pageSize, 20);
   assert.equal(state.trade, "T-9");
   assert.equal(state.campaign, "C-1");
+});
+
+test("order detail prefers the human-readable contract display name", () => {
+  assert.match(orderDetailSource, /campaign\.display_symbol \|\| campaign\.contract_name \|\| campaign\.symbol/);
 });

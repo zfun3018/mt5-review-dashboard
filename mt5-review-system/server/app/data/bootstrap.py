@@ -48,12 +48,16 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     }
     archive_column_added = "is_archived" not in trade_columns
     for name, definition in {
+        "platform": "TEXT NOT NULL DEFAULT 'mt5'",
+        "product_name": "TEXT NOT NULL DEFAULT ''",
+        "contract_name": "TEXT NOT NULL DEFAULT ''",
         "fee": "REAL NOT NULL DEFAULT 0",
         "trade_type": "TEXT NOT NULL DEFAULT 'unclassified'",
         "strategy": "TEXT NOT NULL DEFAULT 'strategy_unclassified'",
         "is_featured": "INTEGER NOT NULL DEFAULT 0",
         "is_archived": "INTEGER NOT NULL DEFAULT 0",
         "deleted_at": "TEXT",
+        "deleted_reason": "TEXT NOT NULL DEFAULT ''",
     }.items():
         if name not in trade_columns:
             conn.execute(f"ALTER TABLE trades ADD COLUMN {name} {definition}")
@@ -61,6 +65,29 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     if archive_column_added:
         conn.execute(
             "UPDATE trades SET is_archived = CASE WHEN is_featured = 1 THEN 0 ELSE 1 END"
+        )
+    for table_name in ("deal_events", "positions", "trade_campaigns"):
+        table_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        if not table_exists:
+            continue
+        columns = {
+            row["name"]
+            for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if "platform" not in columns:
+            conn.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN platform TEXT NOT NULL DEFAULT 'mt5'"
+            )
+    equity_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(equity_snapshots)").fetchall()
+    }
+    if "platform" not in equity_columns:
+        conn.execute(
+            "ALTER TABLE equity_snapshots ADD COLUMN platform TEXT NOT NULL DEFAULT 'mt5'"
         )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_trades_archived_close "
@@ -168,6 +195,7 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     # when query_analysis_rows filters/orders by close_time_utc /
     # closed_at_utc with direct ISO-string comparisons.
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_close_time ON trades(close_time_utc)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_platform_close ON trades(platform, close_time_utc)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(side)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_type ON trades(trade_type)")
@@ -176,6 +204,7 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
         """
         CREATE TABLE IF NOT EXISTS deal_events (
             deal_ticket TEXT PRIMARY KEY,
+            platform TEXT NOT NULL DEFAULT 'mt5',
             account TEXT NOT NULL,
             position_id TEXT NOT NULL,
             order_ticket TEXT,
@@ -200,6 +229,7 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
 
         CREATE TABLE IF NOT EXISTS positions (
             id TEXT PRIMARY KEY,
+            platform TEXT NOT NULL DEFAULT 'mt5',
             account TEXT NOT NULL,
             position_id TEXT NOT NULL,
             symbol TEXT NOT NULL,
@@ -222,18 +252,27 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
 
         CREATE TABLE IF NOT EXISTS trade_campaigns (
             id TEXT PRIMARY KEY,
+            platform TEXT NOT NULL DEFAULT 'mt5',
             account TEXT NOT NULL,
             symbol TEXT NOT NULL,
             side TEXT NOT NULL,
             opened_at_utc TEXT NOT NULL,
             closed_at_utc TEXT,
             status TEXT NOT NULL,
+            trade_pnl REAL NOT NULL DEFAULT 0,
+            commission REAL NOT NULL DEFAULT 0,
+            swap REAL NOT NULL DEFAULT 0,
+            fee REAL NOT NULL DEFAULT 0,
             net_pnl REAL NOT NULL DEFAULT 0,
             review_text TEXT NOT NULL DEFAULT '',
             trade_type TEXT NOT NULL DEFAULT 'unclassified',
             strategy TEXT NOT NULL DEFAULT 'strategy_unclassified',
             screenshot_path TEXT,
+            is_featured INTEGER NOT NULL DEFAULT 0,
             classification_conflict INTEGER NOT NULL DEFAULT 0,
+            trade_type_tags TEXT NOT NULL DEFAULT '[]',
+            strategy_tags TEXT NOT NULL DEFAULT '[]',
+            mistake_tags TEXT NOT NULL DEFAULT '[]',
             deleted_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -259,6 +298,17 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             campaign_created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS campaign_checkins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id TEXT NOT NULL REFERENCES trade_campaigns(id) ON DELETE CASCADE,
+            checkin_date TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (campaign_id, checkin_date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_campaign_checkins_date
+            ON campaign_checkins(checkin_date, campaign_id);
+
         CREATE TABLE IF NOT EXISTS analysis_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -275,26 +325,158 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
         -- closed_at_utc DESC, id DESC (SEARCH per EXPLAIN QUERY PLAN).
         CREATE INDEX IF NOT EXISTS idx_campaign_closed_at
             ON trade_campaigns(closed_at_utc, id);
+        CREATE INDEX IF NOT EXISTS idx_deal_platform_position_time
+            ON deal_events(platform, account, position_id, time_msc, deal_ticket);
+        CREATE INDEX IF NOT EXISTS idx_position_platform_lookup
+            ON positions(platform, account, symbol, side, closed_at_utc);
+        CREATE INDEX IF NOT EXISTS idx_campaign_platform_closed
+            ON trade_campaigns(platform, closed_at_utc, id);
         CREATE INDEX IF NOT EXISTS idx_campaign_positions_campaign
             ON campaign_positions(campaign_id, sort_order);
         """
     )
+    for table_name in ("deal_events", "positions", "trade_campaigns"):
+        columns = {
+            row["name"]
+            for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if "platform" not in columns:
+            conn.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN platform TEXT NOT NULL DEFAULT 'mt5'"
+            )
     conn.execute(
         "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('scratch_threshold_r', '0.15')"
     )
     conn.execute(
         "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('reading_daily_goal', '20')"
     )
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS import_batches (
+            id TEXT PRIMARY KEY,
+            platform TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            source_format TEXT NOT NULL,
+            filename TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'preview',
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            trade_date_start TEXT,
+            trade_date_end TEXT,
+            source_row_count INTEGER NOT NULL DEFAULT 0,
+            new_row_count INTEGER NOT NULL DEFAULT 0,
+            duplicate_count INTEGER NOT NULL DEFAULT 0,
+            invalid_count INTEGER NOT NULL DEFAULT 0,
+            unpaired_count INTEGER NOT NULL DEFAULT 0,
+            order_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS import_batch_days (
+            batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+            platform TEXT NOT NULL,
+            trade_date TEXT NOT NULL,
+            source_row_count INTEGER NOT NULL DEFAULT 0,
+            new_row_count INTEGER NOT NULL DEFAULT 0,
+            duplicate_count INTEGER NOT NULL DEFAULT 0,
+            invalid_count INTEGER NOT NULL DEFAULT 0,
+            unpaired_count INTEGER NOT NULL DEFAULT 0,
+            order_count INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (batch_id, trade_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS import_batch_issues (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+            platform TEXT NOT NULL,
+            row_number INTEGER,
+            trade_date TEXT,
+            code TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_batches_platform_started
+            ON import_batches(platform, started_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_import_batch_days_platform_date
+            ON import_batch_days(platform, trade_date);
+        CREATE INDEX IF NOT EXISTS idx_import_batch_issues_batch
+            ON import_batch_issues(batch_id, row_number);
+        """
+    )
+    for table_name in (
+        "trades",
+        "equity_snapshots",
+        "deal_events",
+        "positions",
+        "trade_campaigns",
+        "import_batches",
+        "import_batch_days",
+        "import_batch_issues",
+    ):
+        table_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        if not table_exists:
+            continue
+        columns = {
+            row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if "platform" in columns:
+            conn.execute(
+                f"UPDATE {table_name} SET platform = 'domestic_futures' "
+                "WHERE platform IN ('tonghuashun_futures', 'tonghuashun', 'ths')"
+            )
     campaign_columns = {
         row["name"]
         for row in conn.execute("PRAGMA table_info(trade_campaigns)").fetchall()
     }
+    campaign_columns_added = []
     for name, definition in {
+        "trade_pnl": "REAL NOT NULL DEFAULT 0",
+        "commission": "REAL NOT NULL DEFAULT 0",
+        "swap": "REAL NOT NULL DEFAULT 0",
+        "fee": "REAL NOT NULL DEFAULT 0",
+        "is_featured": "INTEGER NOT NULL DEFAULT 0",
         "campaign_r": "REAL",
         "risk_status": "TEXT",
+        "trade_type_tags": "TEXT NOT NULL DEFAULT '[]'",
+        "strategy_tags": "TEXT NOT NULL DEFAULT '[]'",
+        "mistake_tags": "TEXT NOT NULL DEFAULT '[]'",
     }.items():
         if name not in campaign_columns:
             conn.execute(f"ALTER TABLE trade_campaigns ADD COLUMN {name} {definition}")
+            campaign_columns_added.append(name)
+    if campaign_columns_added:
+        conn.execute(
+            "UPDATE trade_campaigns SET trade_type_tags = json_array(trade_type) "
+            "WHERE trade_type_tags IS NULL OR trade_type_tags = '' OR trade_type_tags = '[]'"
+        )
+        conn.execute(
+            "UPDATE trade_campaigns SET strategy_tags = json_array(strategy) "
+            "WHERE strategy_tags IS NULL OR strategy_tags = '' OR strategy_tags = '[]'"
+        )
+    conn.execute(
+        "UPDATE trade_campaigns SET is_featured = 1 "
+        "WHERE EXISTS ("
+        "SELECT 1 FROM campaign_source_trades "
+        "JOIN trades ON trades.id = campaign_source_trades.trade_id "
+        "WHERE campaign_source_trades.campaign_id = trade_campaigns.id "
+        "AND trades.is_featured = 1)"
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO campaign_checkins (campaign_id, checkin_date)
+        SELECT DISTINCT campaign_source_trades.campaign_id, reading_checkins.checkin_date
+        FROM reading_checkins
+        JOIN campaign_source_trades
+          ON campaign_source_trades.trade_id = reading_checkins.trade_id
+        JOIN trade_campaigns
+          ON trade_campaigns.id = campaign_source_trades.campaign_id
+        """
+    )
     revision = conn.execute(
         "SELECT value FROM schema_meta WHERE key = 'model_revision'"
     ).fetchone()

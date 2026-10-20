@@ -2,7 +2,6 @@ import { RequestGate } from "../shared/js/api.mjs";
 import {
   escapeAttr,
   escapeHtml,
-  formatCurveTime,
   formatMoney,
   formatPercent,
   formatR,
@@ -14,34 +13,16 @@ import {
 } from "../shared/js/formatters.mjs";
 import { renderRegionState } from "../shared/js/feedback.mjs";
 import { mountShell } from "../shared/js/shell.mjs";
+import { normalizePlatform, readPlatform } from "../shared/js/platform.mjs";
 import {
   buildAnalysisQuery,
   readDashboardState,
   resolveAnalysisWindow,
   writeDashboardState,
 } from "./dashboard-state.mjs";
-
-function smoothPath(points) {
-  if (points.length < 2) return "";
-  if (points.length === 2) {
-    return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`;
-  }
-  const commands = [`M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const current = points[index];
-    const next = points[index + 1];
-    const previous = points[index - 1] || current;
-    const following = points[index + 2] || next;
-    const cp1x = current.x + (next.x - previous.x) / 6;
-    const cp1y = current.y + (next.y - previous.y) / 6;
-    const cp2x = next.x - (following.x - current.x) / 6;
-    const cp2y = next.y - (following.y - current.y) / 6;
-    commands.push(
-      `C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${next.x.toFixed(1)} ${next.y.toFixed(1)}`,
-    );
-  }
-  return commands.join(" ");
-}
+import {loadLayout} from "./dashboard-layout.mjs";
+import {createDashboardGrid} from "./dashboard-grid.mjs";
+import {createMt5DashboardCharts} from "./mt5-dashboard-charts.mjs";
 
 function minutesInZone(date, zone) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -80,14 +61,6 @@ function minutesToClock(minutes) {
   const hour = Math.floor(minutes / 60) % 24;
   const minute = minutes % 60;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function sampleCurvePoints(points, maxPoints = 140) {
-  if (points.length <= maxPoints) return points;
-  return Array.from({ length: maxPoints }, (_, index) => {
-    const sourceIndex = Math.round((index / (maxPoints - 1)) * (points.length - 1));
-    return points[sourceIndex];
-  });
 }
 
 function metricQuality(metricKey, value, context = {}) {
@@ -143,19 +116,6 @@ function compactMetricText(value) {
   return value === "样本不足" ? "!" : value;
 }
 
-function heatColor(pnl, maxAbs) {
-  if (!pnl || !maxAbs) return "transparent";
-  const strength = Math.min(Math.abs(pnl) / maxAbs, 1);
-  const alpha = 0.3 + strength * 0.62;
-  return pnl > 0 ? `rgba(36, 190, 255, ${alpha})` : `rgba(255, 92, 122, ${alpha})`;
-}
-
-function calendarColor(pnl, monthNet) {
-  const base = Math.max(Math.abs(monthNet), Math.abs(pnl), 1);
-  const alpha = 0.18 + Math.min(Math.abs(pnl) / base, 1) * 0.36;
-  return pnl > 0 ? `rgba(26, 92, 112, ${alpha})` : `rgba(112, 28, 44, ${alpha})`;
-}
-
 function metricExplanation(metricKey, context) {
   const rMultipleUI = globalThis.RMultipleUI;
   if (rMultipleUI && typeof rMultipleUI.metricExplanation === "function") {
@@ -174,12 +134,30 @@ function metricContext(metrics = {}, extra = {}) {
   };
 }
 
+export function getDashboardWorkspaceConfig(platform = "mt5") {
+  if (normalizePlatform(platform) === "domestic_futures") {
+    return {
+      showMarketClock: false,
+      showSessions: false,
+      actionLabel: "导入数据",
+      actionIcon: "upload",
+    };
+  }
+  return {
+    showMarketClock: true,
+    showSessions: true,
+    actionLabel: "刷新数据",
+    actionIcon: "refresh-cw",
+  };
+}
+
 export function createDashboardController({
   api,
   view = globalThis.document,
   location = globalThis.location,
   history = globalThis.history,
   onRefresh = null,
+  platform = readPlatform(location),
 } = {}) {
   const gate = new RequestGate();
   let state = readDashboardState(location.search);
@@ -187,8 +165,10 @@ export function createDashboardController({
   let metricExplanationTrigger = null;
   let calendarYear = null;
   let calendarMonth = null;
-  let systemPage = 1;
-  const systemPageSize = 12;
+  const workspace = getDashboardWorkspaceConfig(platform);
+  let importSummary = null;
+  let gridController = null;
+  let chartController = null;
 
   function getElement(id) {
     return typeof view.getElementById === "function" ? view.getElementById(id) : null;
@@ -202,6 +182,50 @@ export function createDashboardController({
   function setText(id, text) {
     const node = getElement(id);
     if (node) node.textContent = text;
+  }
+
+  function renderLatestImportSummary() {
+    const node = getElement("latestImportSummary");
+    if (!node) return;
+    if (workspace.showMarketClock) {
+      node.hidden = true;
+      node.textContent = "";
+      return;
+    }
+    node.hidden = false;
+    const latest = importSummary?.latest_trade;
+    if (!latest) {
+      node.textContent = "最近导入订单：暂无";
+      return;
+    }
+    const time = String(latest.time_bj || "").replace("T", " ").slice(0, 16);
+    const contract = latest.contract_name || latest.symbol || "未知合约";
+    node.textContent = `最近导入订单：${time} · ${contract}`;
+  }
+
+  function applyWorkspaceVisibility() {
+    const marketClock = getElement("marketClock");
+    const sessionPanel = getElement("sessionPanel");
+    if (marketClock) marketClock.hidden = !workspace.showMarketClock;
+    if (sessionPanel) sessionPanel.hidden = !workspace.showSessions;
+  }
+
+  function applyDashboardLayout() {
+    const domesticRoot = getElement("domesticDashboard");
+    const legacyRoot = getElement("legacyDashboard");
+    if (domesticRoot) domesticRoot.hidden = true;
+    if (legacyRoot) legacyRoot.hidden = false;
+    if (normalizePlatform(platform) !== "mt5") return;
+    const layoutRoot = getElement("mt5DashboardLayout");
+    gridController?.destroy?.();
+    gridController = createDashboardGrid({
+      root: layoutRoot,
+      layout: loadLayout(globalThis.localStorage, "mt5"),
+      selector: "[data-layout-module]",
+      editable: false,
+      GridStack: globalThis.GridStack,
+      document: view,
+    });
   }
 
   function renderRegion(regionId, options) {
@@ -218,6 +242,7 @@ export function createDashboardController({
   // --- rendering ---
 
   function renderMarketClock() {
+    if (!workspace.showMarketClock) return;
     const now = new Date();
     const bj = minutesInZone(now, "Asia/Shanghai");
     const sessions = [
@@ -278,7 +303,6 @@ export function createDashboardController({
             <div class="r-metric-item">
               <span>${escapeHtml(label)} ${metricInfoButton(key, label, metrics)}</span>
               <strong class="${tone}">${escapeHtml(value)}</strong>
-              <small>R 完整 ${metrics.complete_count || 0} / 共 ${metrics.sample_count || 0} 个交易组合</small>
             </div>
           `,
         )
@@ -288,72 +312,12 @@ export function createDashboardController({
 
   function renderEquity() {
     const sourcePoints = payload?.equity || [];
-    const baselineEquity = sourcePoints.length ? Number(sourcePoints[0].equity || 0) : 0;
-    const points = sampleCurvePoints(sourcePoints, 140);
-    const returns = points.map((point) => Number(point.cumulative_return ?? (Number(point.equity) - baselineEquity)));
-    const rates = points.map((point, index) => Number(point.return_rate ?? (baselineEquity ? (returns[index] / baselineEquity) * 100 : 0)));
-    const delta = returns.at(-1) || 0;
+    const delta = Number(sourcePoints.at(-1)?.cumulative_return || 0);
     const deltaNode = getElement("equityDelta");
     if (deltaNode) {
       deltaNode.textContent = `${delta >= 0 ? "+" : ""}${formatMoney(delta)} 区间回报`;
       deltaNode.className = `status-pill ${profitClass(delta)}`;
     }
-
-    if (points.length < 2) {
-      setHtml("equityChart", `<div class="detail-empty">暂无收益快照</div>`);
-      return;
-    }
-
-    const chartNode = getElement("equityChart");
-    if (!chartNode) return;
-    const width = Math.max(360, Math.min(2400, chartNode.clientWidth || 1200));
-    const height = width < 520 ? 330 : 360;
-    const padding = { top: 30, right: 84, bottom: 44, left: 106 };
-    const plotWidth = width - padding.left - padding.right;
-    const plotHeight = height - padding.top - padding.bottom;
-    const amountRawMin = Math.min(...returns, 0);
-    const amountRawMax = Math.max(...returns, 0);
-    const amountSpread = Math.max(amountRawMax - amountRawMin, 0.01);
-    const amountMin = amountRawMin - amountSpread * 0.16;
-    const amountMax = amountRawMax + amountSpread * 0.16;
-    const rateRawMin = Math.min(...rates, 0);
-    const rateRawMax = Math.max(...rates, 0);
-    const rateSpread = Math.max(rateRawMax - rateRawMin, 0.01);
-    const rateMin = rateRawMin - rateSpread * 0.16;
-    const rateMax = rateRawMax + rateSpread * 0.16;
-    const yFor = (value, min, max) => padding.top + (1 - (value - min) / (max - min)) * plotHeight;
-    const coords = points.map((point, index) => ({ x: padding.left + (index / (points.length - 1)) * plotWidth, y: yFor(returns[index], amountMin, amountMax), point }));
-    const rateCoords = points.map((point, index) => ({ x: padding.left + (index / (points.length - 1)) * plotWidth, y: yFor(rates[index], rateMin, rateMax), point }));
-    const returnLine = smoothPath(coords);
-    const rateLine = smoothPath(rateCoords);
-    const areaPath = `${returnLine} L ${coords.at(-1).x.toFixed(1)} ${yFor(0, amountMin, amountMax).toFixed(1)} L ${coords[0].x.toFixed(1)} ${yFor(0, amountMin, amountMax).toFixed(1)} Z`;
-    const grid = Array.from({ length: 7 }, (_, index) => index / 6)
-      .map((ratio) => {
-        const y = padding.top + ratio * plotHeight;
-        const amountTick = amountMax - ratio * (amountMax - amountMin);
-        const rateTick = rateMax - ratio * (rateMax - rateMin);
-        return `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" /><text x="${padding.left - 10}" y="${y + 4}" text-anchor="end" class="axis-label left-axis-label">${escapeHtml(formatMoney(amountTick))}</text><text x="${width - padding.right + 10}" y="${y + 4}" class="axis-label right-axis-label">${escapeHtml(`${rateTick.toFixed(2)}%`)}</text>`;
-      })
-      .join("");
-    const first = points[0];
-    const middle = points[Math.floor(points.length / 2)];
-    const last = points[points.length - 1];
-    const timeTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => points[Math.round(ratio * (points.length - 1))]);
-    const lastCoord = coords.at(-1);
-
-    chartNode.innerHTML = `
-      <svg class="equity-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="收益累计曲线，左轴为回报，右轴为收益率">
-        <g stroke="#2b4560" stroke-width="1">${grid}</g>
-        <line x1="${padding.left}" y1="${yFor(0, amountMin, amountMax).toFixed(1)}" x2="${width - padding.right}" y2="${yFor(0, amountMin, amountMax).toFixed(1)}" stroke="#f2b84b" stroke-width="1.5" stroke-dasharray="5 6" opacity="0.95" />
-        <path d="${areaPath}" fill="rgba(32, 199, 160, 0.13)"></path>
-        <path d="${returnLine}" fill="none" stroke="#20c7a0" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
-        <path d="${rateLine}" fill="none" stroke="#f2b84b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 5"></path>
-        <circle cx="${lastCoord.x.toFixed(1)}" cy="${lastCoord.y.toFixed(1)}" r="6" fill="#f2b84b"></circle>
-        <text x="18" y="${height / 2}" transform="rotate(-90 18 ${height / 2})" class="axis-title left-axis-title">回报</text>
-        <text x="${width - 18}" y="${height / 2}" transform="rotate(90 ${width - 18} ${height / 2})" class="axis-title right-axis-title">收益率</text>
-        ${timeTicks.map((point, index) => `<text x="${(padding.left + (index / 4) * plotWidth).toFixed(1)}" y="${height - 8}" text-anchor="${index === 0 ? "start" : index === 4 ? "end" : "middle"}" class="time-label">${escapeHtml(formatCurveTime(point.time_bj))}</text>`).join("")}
-      </svg>
-    `;
   }
 
   function renderSystemEvaluationSummary() {
@@ -391,13 +355,11 @@ export function createDashboardController({
   }
 
   function renderSystemEvaluation() {
-    const rows = [...(payload?.system_evaluation || [])].reverse();
-    const pageCount = Math.max(1, Math.ceil(rows.length / systemPageSize));
-    systemPage = Math.min(systemPage, pageCount);
-    const pageRows = rows.slice((systemPage - 1) * systemPageSize, systemPage * systemPageSize);
+    const allRows = [...(payload?.system_evaluation || [])];
+    const rows = allRows.slice(-30).reverse();
     setHtml(
       "systemEvaluationRows",
-      pageRows
+      rows
         .map((row) => {
           const r = row.r_metrics || {};
           const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "!";
@@ -420,23 +382,8 @@ export function createDashboardController({
     );
     setHtml(
       "systemEvaluationPagination",
-      rows.length > systemPageSize
-        ? `<span>第 ${systemPage} / ${pageCount} 页 · 共 ${rows.length} 天</span><div><button class="button" type="button" data-system-page="prev" ${systemPage <= 1 ? "disabled" : ""}>上一页</button><button class="button" type="button" data-system-page="next" ${systemPage >= pageCount ? "disabled" : ""}>下一页</button></div>`
-        : "",
+      rows.length ? `<span>显示最近 ${rows.length} / ${allRows.length} 个交易日 · 可在表格内滚动查看</span>` : "",
     );
-    bindSystemPagination();
-  }
-
-  function bindSystemPagination() {
-    if (typeof view.querySelectorAll !== "function") return;
-    for (const button of view.querySelectorAll("[data-system-page]")) {
-      if (button.dataset.pageBound) continue;
-      button.dataset.pageBound = "1";
-      button.addEventListener("click", () => {
-        systemPage += button.dataset.systemPage === "next" ? 1 : -1;
-        renderSystemEvaluation();
-      });
-    }
   }
 
   function renderModeEvaluation() {
@@ -478,7 +425,7 @@ export function createDashboardController({
   function renderCalendar() {
     const calendar = payload?.calendar;
     if (!calendar) return;
-    setText("calendarTitle", `日历 · ${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
+    setText("calendarMonthLabel", `${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
     setHtml(
       "calendarStats",
       [
@@ -504,11 +451,10 @@ export function createDashboardController({
     const cells = days.map((day) => {
       const dayNumber = Number(day.label.slice(-2));
       const pnl = Number(day.net_pnl);
-      const style = pnl === 0 ? "" : `style="background:${calendarColor(pnl, calendar.month_net_pnl)}"`;
       const hasTrades = Number(day.order_count) > 0;
       const tone = pnl < 0 ? "loss-day" : pnl > 0 ? "profit-day" : "";
       return `
-        <div class="day-cell ${tone} ${hasTrades ? "has-trades" : ""}" ${style} data-calendar-day="${escapeAttr(day.label)}">
+        <div class="day-cell ${tone} ${hasTrades ? "has-trades" : ""}" data-calendar-day="${escapeAttr(day.label)}">
           <span class="date">${dayNumber}</span>
           <span class="pnl ${profitClass(pnl)}">${pnl === 0 ? "-" : formatMoney(pnl)}</span>
           <span class="date">${day.order_count} 单 ${formatPercent(day.win_rate)}</span>
@@ -519,42 +465,8 @@ export function createDashboardController({
     bindCalendarInteractions();
   }
 
-  function renderHeatmap() {
-    const heatmap = payload?.heatmap;
-    if (!heatmap) return;
-    const hourLabels = `
-      <div class="heatmap-row">
-        <div></div>
-        ${Array.from({ length: 24 }, (_, hour) => `<div class="heatmap-label">${hour}</div>`).join("")}
-        <div class="heatmap-total">合计</div>
-      </div>
-    `;
-    const rows = (heatmap.days || [])
-      .map((day) => {
-        const dayPnl = day.hours.reduce((sum, cell) => sum + Number(cell.net_pnl), 0);
-        const dayOrders = day.hours.reduce((sum, cell) => sum + Number(cell.order_count), 0);
-        const cells = day.hours
-          .map((cell) => {
-            const pnl = Number(cell.net_pnl);
-            const count = Number(cell.order_count);
-            return `<div class="heatmap-cell" style="background:${heatColor(pnl, heatmap.max_abs_pnl)}" title="${escapeAttr(
-              `${day.date} ${String(cell.hour).padStart(2, "0")}:00 ${formatMoney(pnl)} ${cell.order_count}单 胜率${formatPercent(cell.win_rate)}`,
-            )}">${count ? `<strong>${count}</strong>` : ""}</div>`;
-          })
-          .join("");
-        return `
-          <div class="heatmap-row">
-            <div class="heatmap-label">${escapeHtml(day.date)}</div>
-            ${cells}
-            <div class="heatmap-total ${profitClass(dayPnl)}">${formatMoney(dayPnl)}<br><span>${dayOrders}单</span></div>
-          </div>
-        `;
-      })
-      .join("");
-    setHtml("heatmap", hourLabels + rows);
-  }
-
   function renderSessions() {
+    if (!workspace.showSessions) return;
     const labels = { asia: "亚盘", europe: "欧盘", us: "美盘" };
     const sessions = payload?.sessions || {};
     setHtml(
@@ -576,6 +488,8 @@ export function createDashboardController({
   }
 
   function renderAll() {
+    applyWorkspaceVisibility();
+    renderLatestImportSummary();
     renderMarketClock();
     renderRMetricSummary();
     renderEquity();
@@ -583,8 +497,8 @@ export function createDashboardController({
     renderSystemEvaluation();
     renderModeEvaluation();
     renderCalendar();
-    renderHeatmap();
     renderSessions();
+    chartController?.update(payload || {});
     bindMetricInfoButtons();
   }
 
@@ -727,8 +641,12 @@ export function createDashboardController({
     const query = buildAnalysisQuery(state, analysisWindow);
     renderRegion("analysisRegion", { state: "loading", message: "正在读取分析数据" });
     try {
-      payload = await gate.run("analysis", (signal) => api.requestJson(`/api/analysis?${query}`, { signal }));
-      systemPage = 1;
+      const analysisRequest = gate.run("analysis", (signal) => api.requestJson(query ? `/api/analysis?${query}` : "/api/analysis", { signal }));
+      const importRequest = workspace.showMarketClock
+        ? Promise.resolve(null)
+        : api.requestJson(`/api/platforms/import-summary?platform=${encodeURIComponent(normalizePlatform(platform))}`)
+          .catch(() => null);
+      [payload, importSummary] = await Promise.all([analysisRequest, importRequest]);
       calendarYear = payload?.calendar?.year ?? null;
       calendarMonth = payload?.calendar?.month ?? null;
       renderAll();
@@ -759,9 +677,21 @@ export function createDashboardController({
   }
 
   function init() {
+    applyWorkspaceVisibility();
+    renderLatestImportSummary();
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh, share: true })
+      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh, refreshLabel: workspace.actionLabel, refreshIcon: workspace.actionIcon, refreshErrorMessage: workspace.showMarketClock ? "刷新数据失败" : "打开数据导入失败", share: true })
       : null;
+    applyDashboardLayout();
+    chartController = createMt5DashboardCharts({view});
+    const layoutLink = getElement("mt5DashboardLayoutLink");
+    if (layoutLink) {
+      layoutLink.hidden = normalizePlatform(platform) !== "mt5";
+      layoutLink.setAttribute(
+        "href",
+        `./mock-domestic-futures-layout.html?platform=mt5&return=${encodeURIComponent("/dashboard/?platform=mt5")}`,
+      );
+    }
 
     const timePreset = getElement("timePreset");
     const startDateFilter = getElement("startDateFilter");
@@ -820,6 +750,8 @@ export function createDashboardController({
 
   function dispose() {
     gate.abortAll();
+    chartController?.dispose?.();
+    gridController?.destroy?.();
   }
 
   return {

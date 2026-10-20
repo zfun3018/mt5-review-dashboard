@@ -4,7 +4,7 @@
 
 ## 发布前先理解三件事
 
-- `VERSION`：当前版本号的唯一来源，例如 `0.6.21`；
+- `VERSION`：当前版本号的唯一来源，例如 `1.0.0`；
 - `CHANGELOG.md`：这个版本交付了什么，面向用户阅读；
 - GitHub Release：对应一个版本 tag 的公开发布页面，由工作流自动创建。
 
@@ -37,8 +37,8 @@ git branch --show-current
 
 打开根目录 `VERSION`，按照 [版本路线](VERSION-ROUTE.md) 修改为新的三段版本号：
 
-- `PATCH`：修复和局部改进，例如 `0.6.21`；
-- `MINOR`：向后兼容的新功能，例如 `0.7.0`；
+- `PATCH`：修复和局部改进，例如 `1.0.1`；
+- `MINOR`：向后兼容的新功能，例如 `1.1.0`；
 - `MAJOR`：不兼容的重大变化，例如 `1.0.0`。
 
 如果没有明确的新版本内容，不要为了发布而增加版本号。
@@ -79,7 +79,7 @@ Set-Location ..
 git diff --check
 git diff -- VERSION CHANGELOG.md docs/VERSION-ROUTE.md README.md
 git add VERSION CHANGELOG.md docs/VERSION-ROUTE.md
-git commit -m "release: prepare v0.6.21"
+git commit -m "release: prepare v1.0.0"
 ```
 
 命令中的版本号必须替换为本次实际版本。README 发生变化时再把 `README.md` 加入暂存区。

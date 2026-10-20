@@ -1,8 +1,8 @@
 # MT5 本地复盘系统
 
-这是项目的运行与开发目录，提供本地 Python HTTP 服务、原生网页、SQLite 数据库适配、MT5 EA 桥接和测试工具。
+这是项目的运行与开发目录，提供本地 Python HTTP 服务、原生网页、SQLite 数据库适配、MT5 EA 桥接和测试工具。当前版本为 `v1.0.0`。
 
-首次了解项目请先看 [根目录 README](../README.md) 和 [项目技术说明](../docs/PROJECT-GUIDE.md)。版本规则见 [版本路线](../docs/VERSION-ROUTE.md)，已发布内容见 [CHANGELOG](../CHANGELOG.md)，正式版本操作见 [发布指南](../docs/RELEASE-GUIDE.md)。
+首次了解项目请先看 [根目录 README](../README.md) 和 [项目技术说明](../docs/PROJECT-GUIDE.md)。AI 协作部署请看 [AI 部署指南](../docs/AI-DEPLOYMENT-GUIDE.md)。版本规则见 [版本路线](../docs/VERSION-ROUTE.md)，已发布内容见 [CHANGELOG](../CHANGELOG.md)，正式版本操作见 [发布指南](../docs/RELEASE-GUIDE.md)。
 
 ## 运行环境
 
@@ -86,13 +86,23 @@ http://127.0.0.1:8787
 
 导入器读取桥接目录中的 `events_*.jsonl`，写入 SQLite，并补偿迟到的截图文件。
 
+## 平台工作区
+
+右上角平台按钮可以在 `MT5` 与 `国内期货` 之间直接切换。平台是当前工作区上下文，订单、Campaign、仪表盘、收益曲线和订单复盘只读取当前平台的数据。
+
+国内期货通过“设置 → 数据导入”处理标准模板或同花顺来源的 CSV/XLS 文件。CSV 支持 UTF-8、GBK 或 Windows 常见中文编码；XLS 会自动选择“成交明细”表，不会把其他汇总页当作成交数据。导入器会定位表头、标准化字段、识别重复成交行、合并“实际成交日期”和“成交时间”，再按开仓和平仓成交 FIFO 配对；未配对、无效和重复行会返回报告。导入页面展示批次历史以及按交易日期的日历，每个日期显示新增成交、订单、重复、异常和未配对数量。仪表盘会显示最近导入订单时间，国内期货订单会显示通用合约名称，例如 `V2701` 显示为 `PVC2701`；原始合约代码仍保留用于去重和计算。原始数据没有提供平仓盈亏时，系统将盈亏记为 0，并在导入结果中提示。
+
+系统提供固定的标准 CSV 模板下载入口。模板是推荐的稳定接口，但不要求用户预先手工清洗同花顺原始导出文件；所有来源都先经过统一数据处理管线，再进入订单和统计。
+
+K 线截图由用户在同花顺中手动截图，再通过订单详情的截图上传入口保存。系统不自动截取交易软件窗口。
+
 ## 四个工作区
 
 | 工作区 | 地址 | 主要用途 |
 | --- | --- | --- |
 | 分析仪表盘 | `/dashboard/` | 指标、收益曲线、月历、热力图和评估 |
 | 订单流水 | `/orders/` | Campaign/Position、复盘、分类、自定义字段和截图 |
-| 复盘画册 | `/album/` | 截图筛选、归档、随机阅读和每日打卡 |
+| 订单复盘 | `/orders/` | 全部/精选订单、组合截图、随机精选、打卡和成交流水 |
 | 设置与系统 | `/settings/` | 分类、自定义字段、分析设置、状态和备份 |
 
 根路径 `/` 是兼容入口，会把旧的 `?trade=` 或 `?campaign=` 深链导向订单流水，否则进入仪表盘。
@@ -123,12 +133,14 @@ config.local.json
 
 前端每个工作区使用自己的入口和状态模块，共享样式与工具位于 `web/shared/`。不要把 SQL 放进路由或页面，不要让读取接口隐式重建模型，不要恢复单一全局前端脚本。
 
+仪表盘的布局编辑器使用 GridStack 管理模块位置和宽高，图表使用 ECharts 管理坐标轴、数据更新和容器尺寸变化。业务数据仍由 SQLite 和分析接口提供，前端不得自行维护另一份统计结果。
+
 ## 常用接口
 
 - `GET /api/analysis?equity_days=30`：日期范围分析、收益曲线和评估；
 - `POST /api/sync`：执行一次 JSONL 增量同步；
-- `GET /api/review-album`：读取画册和标签；
-- `GET /api/review-album/random`：随机读取一笔未归档交易；
+- `GET /api/review-album`、`GET /api/review-album/random`：旧版画册兼容接口，新的页面入口统一为订单复盘；
+- `GET /api/campaign-checkins?days=90`：读取组合级打卡日历；
 - `PATCH /api/trades/{id}/review`：保存订单复盘；
 - `PATCH /api/trades/{id}/archived`：归档或恢复画册交易；
 - `GET /api/trades?page=1&page_size=50`：分页读取订单；

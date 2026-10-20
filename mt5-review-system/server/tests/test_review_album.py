@@ -100,10 +100,12 @@ class ReviewAlbumTest(unittest.TestCase):
         screenshot_path="",
         single=None,
         multi=None,
+        platform="mt5",
     ):
         storage.upsert_trade(
             {
                 "id": trade_id,
+                "platform": platform,
                 "account": "123",
                 "order_no": trade_id,
                 "position_id": trade_id,
@@ -126,6 +128,79 @@ class ReviewAlbumTest(unittest.TestCase):
             storage.update_trade_custom_value(self._last_id(trade_id), self.single["id"], {"value": str(single)})
         if multi is not None:
             storage.update_trade_custom_value(self._last_id(trade_id), self.multi["id"], {"value": multi})
+
+    @staticmethod
+    def _campaign_id_for_trade(trade_id, platform):
+        return next(
+            campaign["id"]
+            for campaign in storage.list_campaigns(platform=platform)["campaigns"]
+            if trade_id in campaign["source_trade_ids"]
+        )
+
+    def test_album_uses_campaign_tags_for_both_platforms_and_after_rebuild(self):
+        self._insert_trade(
+            "V-1",
+            "V2701",
+            "2026-08-21T01:30:00+00:00",
+            "follow",
+            "breakout",
+            platform="domestic_futures",
+        )
+
+        for platform, trade_id in (("mt5", "T-1"), ("domestic_futures", "V-1")):
+            campaign_id = self._campaign_id_for_trade(trade_id, platform)
+            storage.update_campaign_review(
+                campaign_id,
+                {
+                    "trade_type_tags": ["reversal"],
+                    "strategy_tags": ["range"],
+                    "mistake_tags": ["未等确认", "逆势交易"],
+                },
+                platform=platform,
+            )
+
+            result = storage.query_review_album(platform=platform)
+            trade = next(item for item in result["trades"] if item["id"] == trade_id)
+            self.assertEqual(trade["campaign_id"], campaign_id)
+            self.assertEqual(trade["trade_type_tags"], ["reversal"])
+            self.assertEqual(trade["strategy_tags"], ["range"])
+            self.assertEqual(trade["mistake_tags"], ["未等确认", "逆势交易"])
+            tag_keys = {tag["key"] for tag in trade["album_tags"]}
+            self.assertIn("trade_type:reversal", tag_keys)
+            self.assertIn("strategy:range", tag_keys)
+            self.assertIn("mistake:未等确认", tag_keys)
+            self.assertIn("mistake:逆势交易", tag_keys)
+            self.assertNotIn("trade_type:follow", tag_keys)
+
+            filtered = storage.query_review_album(
+                platform=platform,
+                tags=["trade_type:reversal", "strategy:range", "mistake:未等确认"],
+            )
+            self.assertEqual([item["id"] for item in filtered["trades"]], [trade_id])
+
+            storage.rebuild_campaign_models()
+            rebuilt = storage.query_review_album(platform=platform)
+            rebuilt_trade = next(item for item in rebuilt["trades"] if item["id"] == trade_id)
+            self.assertEqual(
+                {tag["key"] for tag in rebuilt_trade["album_tags"]},
+                tag_keys,
+            )
+
+            storage.update_campaign_review(
+                campaign_id,
+                {
+                    "trade_type_tags": [],
+                    "strategy_tags": [],
+                    "mistake_tags": [],
+                },
+                platform=platform,
+            )
+            cleared = storage.query_review_album(platform=platform)
+            cleared_trade = next(item for item in cleared["trades"] if item["id"] == trade_id)
+            cleared_keys = {tag["key"] for tag in cleared_trade["album_tags"]}
+            self.assertNotIn("trade_type:reversal", cleared_keys)
+            self.assertNotIn("strategy:range", cleared_keys)
+            self.assertFalse(any(key.startswith("mistake:") for key in cleared_keys))
 
     @staticmethod
     def _last_id(trade_id):
@@ -240,6 +315,71 @@ class ReviewAlbumTest(unittest.TestCase):
         self.assertTrue(storage.cancel_review_trade("T-1", checkin_date=today_date)["deleted"])
         self.assertFalse(storage.cancel_review_trade("T-1", checkin_date=today_date)["deleted"])
         self.assertEqual(storage.get_review_checkins(days=1, today=today_date)["today"]["count"], 0)
+
+    def test_featured_and_checkin_state_are_owned_by_the_merged_campaign(self):
+        campaign_id = self._campaign_id_for_trade("T-1", "mt5")
+        updated = storage.update_campaign_featured(campaign_id, True)
+        self.assertEqual(updated["id"], campaign_id)
+        self.assertEqual(updated["is_featured"], 1)
+        featured = storage.list_campaigns(platform="mt5", featured=True)
+        self.assertEqual(featured["total"], 1)
+        self.assertEqual(featured["campaigns"][0]["id"], campaign_id)
+
+        first = storage.checkin_review_campaign(campaign_id, "2026-10-08")
+        repeated = storage.checkin_review_campaign(campaign_id, "2026-10-08")
+        second = storage.checkin_review_campaign(campaign_id, "2026-10-09")
+        self.assertTrue(first["created"])
+        self.assertFalse(repeated["created"])
+        self.assertTrue(second["created"])
+        overview = storage.get_review_checkins(days=2, today="2026-10-09")
+        self.assertEqual([row["count"] for row in overview["days"]], [1, 1])
+
+        with storage.db() as conn:
+            rows = conn.execute(
+                "SELECT campaign_id, checkin_date FROM campaign_checkins "
+                "WHERE campaign_id = ? ORDER BY checkin_date",
+                (campaign_id,),
+            ).fetchall()
+        self.assertEqual(
+            [(row["campaign_id"], row["checkin_date"]) for row in rows],
+            [(campaign_id, "2026-10-08"), (campaign_id, "2026-10-09")],
+        )
+
+    def test_source_trade_checkins_are_deduplicated_at_campaign_level(self):
+        storage.upsert_trade(
+            {
+                "id": "T-1-B",
+                "platform": "mt5",
+                "account": "123",
+                "order_no": "T-1-B",
+                "position_id": "T-1",
+                "order_ticket": "T-1-B",
+                "deal_ticket": "T-1-B",
+                "symbol": "EURUSD",
+                "side": "long",
+                "lots": 0.01,
+                "open_time_utc": "2026-08-20T16:35:00+00:00",
+                "close_time_utc": "2026-08-20T17:00:00+00:00",
+                "entry_price": 1.0,
+                "exit_price": 1.5,
+                "pnl": 10.0,
+                "commission": 0.0,
+                "swap": 0.0,
+                "fee": 0.0,
+                "screenshot_path": "",
+                "review_text": "",
+                "trade_type": "follow",
+                "strategy": "breakout",
+            }
+        )
+        campaign_id = self._campaign_id_for_trade("T-1", "mt5")
+        self.assertEqual(self._campaign_id_for_trade("T-1-B", "mt5"), campaign_id)
+
+        storage.checkin_review_trade("T-1", checkin_date="2026-10-08")
+        storage.checkin_review_trade("T-1-B", checkin_date="2026-10-08")
+
+        overview = storage.get_review_checkins(days=1, today="2026-10-08")
+        self.assertEqual(overview["today"]["count"], 1)
 
     def test_album_trade_exposes_cumulative_reading_checkin_count(self):
         storage.checkin_review_trade("T-1", checkin_date="2026-10-07")

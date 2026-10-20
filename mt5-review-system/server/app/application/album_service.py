@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any, Callable
 
 from ..domain.analytics import to_beijing
@@ -23,6 +24,7 @@ class AlbumService:
         page: PageRequest | None = None,
     ) -> dict[str, Any]:
         values = dict(filters or {})
+        platform = str(values.get("platform") or "mt5")
         start_date = values.get("start_date") or values.get("start")
         end_date = values.get("end_date") or values.get("end")
         sort = str(values.get("sort") or "desc")
@@ -38,6 +40,7 @@ class AlbumService:
             self.catalogs.list_classifications(active_only=True),
             self.catalogs.list_classifications(active_only=True),
             _active_custom_fields(self.catalogs),
+            _active_mistake_tags(self.trades, platform),
         )
         selected_groups = _tag_groups(tag_values, catalog)
         repository_filters: dict[str, Any] = {
@@ -47,9 +50,10 @@ class AlbumService:
             "sort": sort,
             "archived": values.get("archived", False),
             "custom_fields": {},
+            "platform": platform,
         }
         for dimension, group_tags in selected_groups.items():
-            if dimension in {"trade_type", "strategy"}:
+            if dimension in {"trade_type", "strategy", "mistake"}:
                 repository_filters[dimension] = sorted(
                     tag.split(":", 1)[1] for tag in group_tags
                 )
@@ -69,6 +73,12 @@ class AlbumService:
             for trade in result.items
         ]
         _apply_checkin_status(page_trades, self.trades)
+        list_symbols = self.trades.list_active_symbols
+        available_symbols = (
+            list_symbols(platform)
+            if "platform" in inspect.signature(list_symbols).parameters
+            else list_symbols()
+        )
         return {
             "filters": {
                 "start": start_date or "",
@@ -84,19 +94,25 @@ class AlbumService:
             "page": result.page,
             "page_size": result.page_size,
             "available_filters": {
-                "symbols": self.trades.list_active_symbols(),
+                "symbols": available_symbols,
                 "tags": catalog["available_tags"],
                 "custom_fields": catalog["all_fields"],
             },
         }
 
-    def random(self) -> dict[str, Any]:
+    def random(self, platform: str = "mt5") -> dict[str, Any]:
         catalog = _build_catalog(
             self.catalogs.list_classifications(active_only=True),
             self.catalogs.list_classifications(active_only=True),
             _active_custom_fields(self.catalogs),
+            _active_mistake_tags(self.trades, platform),
         )
-        trade = self.trades.random_album_trade()
+        random_trade = self.trades.random_album_trade
+        trade = (
+            random_trade(platform=platform)
+            if "platform" in inspect.signature(random_trade).parameters
+            else random_trade()
+        )
         serialized = (
             _serialize_trade(self.trade_serializer(trade), catalog)
             if trade is not None
@@ -109,8 +125,11 @@ class AlbumService:
             "custom_fields": catalog["all_fields"],
         }
 
-    def checkins(self, days: int = 90, today=None) -> dict[str, Any]:
-        return self.trades.reading_checkin_overview(days=days, today=today)
+    def checkins(self, days: int = 90, today=None, platform: str = "mt5") -> dict[str, Any]:
+        reader = self.trades.reading_checkin_overview
+        if "platform" in inspect.signature(reader).parameters:
+            return reader(days=days, today=today, platform=platform)
+        return reader(days=days, today=today)
 
 
 def _values(value: list[str] | str | None) -> list[str]:
@@ -131,10 +150,21 @@ def _active_custom_fields(catalogs) -> list[dict[str, Any]]:
         return [field for field in catalogs.list_custom_fields() if field.get("active", True)]
 
 
+def _active_mistake_tags(repository, platform: str) -> list[str]:
+    reader = getattr(repository, "list_album_mistake_tags", None)
+    if not callable(reader):
+        return []
+    try:
+        return [str(value) for value in reader(platform=platform)]
+    except TypeError:
+        return [str(value) for value in reader()]
+
+
 def _build_catalog(
     all_options: list[dict[str, Any]],
     active_options: list[dict[str, Any]],
     all_fields: list[dict[str, Any]],
+    mistake_options: list[str] | None = None,
 ) -> dict[str, Any]:
     classifications = {
         (str(option["dimension"]), str(option["id"])): option
@@ -169,10 +199,23 @@ def _build_catalog(
                     "color": option["color"],
                 }
             )
+    mistake_values = {
+        str(value).strip() for value in (mistake_options or []) if str(value).strip()
+    }
+    for value in sorted(mistake_values):
+        available_tags.append(
+            {
+                "key": f"mistake:{value}",
+                "label": f"犯错标签 / {value}",
+                "dimension": "mistake",
+                "color": "#f97316",
+            }
+        )
     return {
         "classifications": classifications,
         "fields": fields,
         "all_fields": all_fields,
+        "mistakes": mistake_values,
         "available_tags": available_tags,
     }
 
@@ -198,6 +241,11 @@ def _tag_groups(
                 raise ValueError("Unknown album tag")
             groups.setdefault(f"field:{field_id}", set()).add(tag)
             continue
+        if parts[0] == "mistake" and len(parts) == 2:
+            if parts[1] not in catalog["mistakes"]:
+                raise ValueError("Unknown album tag")
+            groups.setdefault("mistake", set()).add(tag)
+            continue
         raise ValueError("Unknown album tag")
     return groups
 
@@ -207,16 +255,27 @@ def _tags_for_trade(
 ) -> list[dict[str, Any]]:
     tags = []
     for dimension in ("trade_type", "strategy"):
-        option_id = str(trade.get(dimension) or "")
-        option = catalog["classifications"].get((dimension, option_id))
-        if option:
-            dimension_label = "交易场景" if dimension == "trade_type" else "交易策略"
+        values = _owned_tag_values(trade, f"{dimension}_tags", dimension)
+        for option_id in values:
+            option = catalog["classifications"].get((dimension, option_id))
+            if option:
+                dimension_label = "交易场景" if dimension == "trade_type" else "交易策略"
+                tags.append(
+                    {
+                        "key": f"{dimension}:{option_id}",
+                        "label": f"{dimension_label} / {option['label']}",
+                        "dimension": dimension,
+                        "color": option["color"],
+                    }
+                )
+    for value in _owned_tag_values(trade, "mistake_tags", "mistake"):
+        if value in catalog["mistakes"]:
             tags.append(
                 {
-                    "key": f"{dimension}:{option_id}",
-                    "label": f"{dimension_label} / {option['label']}",
-                    "dimension": dimension,
-                    "color": option["color"],
+                    "key": f"mistake:{value}",
+                    "label": f"犯错标签 / {value}",
+                    "dimension": "mistake",
+                    "color": "#f97316",
                 }
             )
     for field_id, field in catalog["fields"].items():
@@ -238,6 +297,22 @@ def _tags_for_trade(
                     }
                 )
     return tags
+
+
+def _owned_tag_values(
+    trade: dict[str, Any], owned_key: str, fallback_key: str
+) -> list[str]:
+    raw = trade[owned_key] if owned_key in trade else trade.get(fallback_key)
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        raw = []
+    result = []
+    for value in raw:
+        normalized = str(value or "").strip()
+        if normalized and normalized not in result:
+            result.append(normalized)
+    return result
 
 
 def _serialize_trade(

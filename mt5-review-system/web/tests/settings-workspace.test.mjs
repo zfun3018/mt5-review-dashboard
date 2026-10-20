@@ -159,6 +159,81 @@ test("settings mounts the shared shell and activates the settings route", () => 
   assert.match(settingsSource, /shell\.mjs/);
   assert.match(settingsSource, /activeRoute:\s*"\/settings\/"/);
   assert.match(settingsHtml, /设置/);
+  assert.match(settingsHtml, /futuresImportCalendar/);
+  assert.match(settingsHtml, /futuresImportHistory/);
+  assert.match(settingsHtml, /downloadFuturesTemplate/);
+});
+
+test("data import view renders a trading-date calendar and batch history", async () => {
+  const { controller, view } = controllerWith({
+    "/api/platforms/import-batches?year=2026&month=10": {
+      batches: [{
+        id: "IMP-1",
+        filename: "trades.xls",
+        started_at: "2026-10-19T08:00:00Z",
+        status: "committed",
+        new_row_count: 4,
+        duplicate_count: 1,
+        invalid_count: 0,
+        unpaired_count: 0,
+        order_count: 2,
+      }],
+    },
+    "/api/platforms/import-calendar?year=2026&month=10": {
+      calendar: {
+        "2026-10-19": { new_row_count: 4, duplicate_count: 1, invalid_count: 0, unpaired_count: 0, order_count: 2 },
+      },
+    },
+  });
+
+  await controller.refreshImportHistory(2026, 10);
+
+  assert.match(view.getElementById("futuresImportCalendar").innerHTML, /2026年10月/);
+  assert.match(view.getElementById("futuresImportCalendar").innerHTML, /4/);
+  assert.match(view.getElementById("futuresImportCalendar").innerHTML, /重1/);
+  assert.match(view.getElementById("futuresImportCalendar").innerHTML, /aria-label="交易日 2026-10-19/);
+  assert.match(view.getElementById("futuresImportHistory").innerHTML, /trades\.xls/);
+  assert.match(view.getElementById("futuresImportHistory").innerHTML, /已完成/);
+});
+
+test("domestic futures data importer accepts xls files and sends binary content", async () => {
+  const { api, view, controller } = controllerWith({
+    "/api/platforms/import-file": { imported: 1, skipped: 0, source_format: "xls" },
+  });
+  await controller.load();
+  view.getElementById("futuresDataFile").files = [{
+    name: "trades.xls",
+    arrayBuffer: async () => Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0]).buffer,
+  }];
+
+  const result = await controller.importFuturesData();
+
+  assert.equal(result.source_format, "xls");
+  const index = api.paths.indexOf("/api/platforms/import-file");
+  assert.ok(index >= 0);
+  assert.equal(api.bodies[index].filename, "trades.xls");
+  assert.equal(api.bodies[index].file_base64, "0M8R4A==");
+  assert.match(view.getElementById("futuresImportResult").textContent, /已导入 1 笔/);
+});
+
+test("data importer explains that the local service must be restarted after a route 404", async () => {
+  const { api, view, controller } = controllerWith();
+  await controller.load();
+  view.getElementById("futuresDataFile").files = [{
+    name: "trades.xls",
+    arrayBuffer: async () => Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0]).buffer,
+  }];
+  api.requestJson = async (requestPath) => {
+    if (requestPath === "/api/platforms/import-file") {
+      const error = new Error("Not found");
+      error.status = 404;
+      throw error;
+    }
+    return DEFAULT_ROUTES[requestPath];
+  };
+
+  await assert.rejects(() => controller.importFuturesData(), /Not found/);
+  assert.match(view.getElementById("futuresImportResult").textContent, /重启本地服务/);
 });
 
 test("settings loads configuration without analysis or campaigns", async () => {

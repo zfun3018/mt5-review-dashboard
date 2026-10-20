@@ -126,6 +126,78 @@ class CampaignApiTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(updated["review_text"], "按组合复盘")
 
+    def test_campaign_review_persists_multi_tags_and_allows_clearing_them(self):
+        campaign_id = self.request("/api/campaigns")[1]["campaigns"][0]["id"]
+
+        status, updated = self.request(
+            f"/api/campaigns/{campaign_id}/review",
+            method="PATCH",
+            payload={
+                "review_text": "组合标签",
+                "trade_type_tags": ["follow", "reversal"],
+                "strategy_tags": ["breakout"],
+                "mistake_tags": ["未等确认", "逆势交易"],
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["trade_type_tags"], ["follow", "reversal"])
+        self.assertEqual(updated["strategy_tags"], ["breakout"])
+        self.assertEqual(updated["mistake_tags"], ["未等确认", "逆势交易"])
+
+        clear_status, cleared = self.request(
+            f"/api/campaigns/{campaign_id}/review",
+            method="PATCH",
+            payload={
+                "review_text": "组合标签",
+                "trade_type_tags": [],
+                "strategy_tags": [],
+                "mistake_tags": [],
+            },
+        )
+
+        self.assertEqual(clear_status, 200)
+        self.assertEqual(cleared["trade_type_tags"], [])
+        self.assertEqual(cleared["strategy_tags"], [])
+        self.assertEqual(cleared["mistake_tags"], [])
+
+    def test_campaign_classification_survives_model_rebuild(self):
+        campaign_id = self.request("/api/campaigns")[1]["campaigns"][0]["id"]
+        status, updated = self.request(
+            f"/api/campaigns/{campaign_id}/review",
+            method="PATCH",
+            payload={
+                "review_text": "分类重建测试",
+                "trade_type_tags": ["reversal"],
+                "strategy_tags": ["breakout"],
+                "mistake_tags": [],
+            },
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["trade_type_tags"], ["reversal"])
+        self.assertEqual(updated["strategy_tags"], ["breakout"])
+
+        storage.rebuild_campaign_models()
+        refreshed_status, refreshed = self.request(f"/api/campaigns/{campaign_id}")
+
+        self.assertEqual(refreshed_status, 200)
+        self.assertEqual(refreshed["trade_type_tags"], ["reversal"])
+        self.assertEqual(refreshed["strategy_tags"], ["breakout"])
+
+    def test_campaign_initial_stop_patch_updates_all_positions(self):
+        campaign_id = self.request("/api/campaigns")[1]["campaigns"][0]["id"]
+
+        status, updated = self.request(
+            f"/api/campaigns/{campaign_id}/initial-stop",
+            method="PATCH",
+            payload={"initial_stop_price": 98.0},
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["initial_stop_price"], 98.0)
+        self.assertTrue(all(item["initial_stop_price"] == 98.0 for item in updated["positions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

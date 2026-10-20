@@ -26,13 +26,13 @@
 }
 
 .button-primary {
-  border-color: #3d82f6;
-  background: #245fc2;
+  border-color: var(--color-accent);
+  background: var(--color-accent-strong);
 }
 
 .button-danger {
-  border-color: #d64c63;
-  background: #862e43;
+  border-color: var(--color-negative);
+  background: var(--color-negative-strong);
 }
 
 .app-icon-button:hover,

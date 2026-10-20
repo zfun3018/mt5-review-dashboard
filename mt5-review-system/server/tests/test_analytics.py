@@ -5,6 +5,7 @@ from app.analytics import (
     build_cumulative_return_curve,
     build_equity_curve,
     build_hour_heatmap,
+    build_weekday_hour_heatmap,
     build_month_calendar,
     build_session_stats,
     calculate_duration_seconds,
@@ -13,6 +14,35 @@ from app.analytics import (
 
 
 class AnalyticsTest(unittest.TestCase):
+    def test_cumulative_return_curve_sorts_descending_rows_and_supports_all_time(self):
+        trades = [
+            {
+                "id": "T-2",
+                "close_time_utc": "2026-08-18T02:00:00+00:00",
+                "pnl": -4.0,
+                "commission": 0.0,
+                "swap": 0.0,
+                "fee": 0.0,
+            },
+            {
+                "id": "T-1",
+                "close_time_utc": "2026-08-18T01:00:00+00:00",
+                "pnl": 10.0,
+                "commission": 0.0,
+                "swap": 0.0,
+                "fee": 0.0,
+            },
+        ]
+
+        curve = build_cumulative_return_curve(
+            trades,
+            [{"time_utc": "2026-08-18T00:00:00+00:00", "balance": 10000.0}],
+            now_utc=datetime(2026, 8, 18, 4, 0, tzinfo=timezone.utc),
+            hours=None,
+        )
+
+        self.assertEqual([point["cumulative_return"] for point in curve], [0.0, 10.0, 6.0])
+
     def test_builds_cumulative_return_curve_from_trades_not_snapshot_drawdowns(self):
         trades = [
             {
@@ -83,6 +113,18 @@ class AnalyticsTest(unittest.TestCase):
         tuesday = next(row for row in heatmap["days"] if row["date"] == "2026-08-11")
         self.assertEqual(monday["hours"][22]["net_pnl"], 120.0)
         self.assertEqual(tuesday["hours"][9]["net_pnl"], -30.0)
+
+    def test_builds_weekday_hour_heatmap_across_the_selected_history(self):
+        trades = [
+            {"close_time_utc": "2026-08-10T14:30:00+00:00", "pnl": 120.0},
+            {"close_time_utc": "2026-09-21T14:30:00+00:00", "pnl": -30.0},
+        ]
+
+        heatmap = build_weekday_hour_heatmap(trades)
+
+        self.assertEqual([row["label"] for row in heatmap["days"]], ["周一", "周二", "周三", "周四", "周五", "周六", "周日"])
+        self.assertEqual(heatmap["days"][0]["hours"][22]["net_pnl"], 90.0)
+        self.assertEqual(heatmap["days"][0]["hours"][22]["order_count"], 2)
 
     def test_builds_session_stats_with_cross_midnight_us_session(self):
         trades = [

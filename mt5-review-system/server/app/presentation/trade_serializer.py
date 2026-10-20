@@ -7,6 +7,8 @@ from ..core.config import get_runtime_paths
 from ..data.catalog_repository import CatalogRepository
 from ..data.media_repository import MediaRepository
 from ..domain.analytics import to_beijing, trade_net_pnl
+from ..platform_modules.domestic_futures_contracts import contract_display
+from ..platforms import DOMESTIC_FUTURES_PLATFORM
 
 
 runtime_paths = get_runtime_paths
@@ -17,6 +19,11 @@ def _serialize_trade(
     custom_values: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     trade = dict(row)
+    if str(trade.get("platform") or "mt5") == DOMESTIC_FUTURES_PLATFORM:
+        display = contract_display(str(trade.get("symbol") or ""))
+        trade["product_name"] = display["product_name"]
+        trade["contract_name"] = display["contract_name"]
+        trade["display_symbol"] = display["contract_name"]
     trade["net_pnl"] = trade_net_pnl(trade)
     trade["open_time_bj"] = to_beijing(trade["open_time_utc"]).isoformat()
     trade["close_time_bj"] = to_beijing(trade["close_time_utc"]).isoformat()

@@ -4,7 +4,7 @@
 
 :root {
   --custom-column-width: 8rem;
-  --faint: #8194a9;
+  --faint: #91a1a3;
 }
 
 .region-anchor {
@@ -77,22 +77,31 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.table-legend {
+.orders-list-views {
   display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-left: auto;
-  color: var(--color-muted);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
 }
 
-.scratch-key {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--color-muted);
-  border-radius: 2px;
-  background: rgba(164, 179, 197, 0.3);
+.view-tab {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-xs);
+}
+
+.view-tab.active,
+.view-tab:hover {
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 /* Table */
@@ -102,9 +111,60 @@
 }
 
 .trades-panel .table-wrap {
-  max-height: calc(100vh - 250px);
-  min-height: 360px;
-  overflow: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.checkin-calendar-panel {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.checkin-calendar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.checkin-calendar-head h3 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.checkin-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.checkin-day {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.checkin-day.has-checkin {
+  border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.checkin-day strong,
+.checkin-day span {
+  display: block;
+}
+
+.checkin-day strong {
+  font-size: 11px;
 }
 
 .orders-table {
@@ -148,16 +208,16 @@
 
 .orders-table tbody tr {
   cursor: pointer;
-  background: rgba(7, 21, 37, 0.5);
+  background: transparent;
 }
 
 .orders-table tbody tr:hover {
-  background: rgba(61, 130, 246, 0.12);
+  background: #f1fbf9;
 }
 
 .orders-table tbody tr.active {
-  background: rgba(61, 130, 246, 0.28) !important;
-  box-shadow: inset 4px 0 0 #5aa4ff, inset 0 0 0 1px rgba(90, 164, 255, 0.7);
+  background: #eaf5f3 !important;
+  box-shadow: inset 4px 0 0 #069d91, inset 0 0 0 1px #b7dcd6;
 }
 
 .orders-table tbody tr.active td {
@@ -344,7 +404,7 @@ th.custom-col {
   display: inline-block;
   width: 1.1em;
   color: var(--faint);
-  font-family: "Microsoft YaHei UI", sans-serif;
+  font-family: var(--font-family-ui);
   font-size: 10px;
   font-weight: 500;
 }
@@ -495,7 +555,7 @@ th.custom-col {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   color: var(--color-muted);
-  font-family: "Bahnschrift", "Microsoft YaHei UI", sans-serif;
+  font-family: var(--font-family-ui);
   font-size: 10px;
   font-weight: 600;
   vertical-align: 1px;
@@ -546,6 +606,20 @@ th.custom-col {
 
 .campaign-row.scratch {
   background: rgba(130, 148, 168, 0.12) !important;
+}
+
+.campaign-scratch-mark {
+  display: inline-grid;
+  width: 17px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid rgba(242, 184, 75, 0.52);
+  border-radius: 4px;
+  color: #f2d18b;
+  background: rgba(242, 184, 75, 0.13);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .campaign-row.scratch:not(.active):hover {
@@ -913,6 +987,7 @@ th.custom-col {
 }
 
 .snapshot.compact-snapshot {
+  aspect-ratio: auto;
   max-height: 560px;
   min-height: 280px;
   height: auto;
@@ -928,6 +1003,10 @@ th.custom-col {
 }
 
 .snapshot.compact-snapshot img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: inherit;
   object-fit: contain;
 }
 
@@ -1281,6 +1360,22 @@ th.custom-col {
     font-size: 11px;
   }
 
+  .orders-table tr.campaign-day-row {
+    margin-bottom: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .orders-table tr.campaign-day-row td {
+    display: block;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .orders-table tr.campaign-day-row td::before {
+    display: none;
+  }
+
   .pagination {
     flex-direction: column;
     align-items: stretch;
@@ -1288,5 +1383,1184 @@ th.custom-col {
 
   .pagination-controls {
     justify-content: space-between;
+  }
+}
+
+/* Final workspace contrast layer. Both platforms intentionally share these
+   selectors so order tags and date groups cannot fall back to the legacy dark
+   palette when the page is bootstrapped on MT5. */
+html[data-platform="mt5"] .choice-cell,
+html[data-platform="domestic_futures"] .choice-cell {
+  border-color: var(--color-border);
+  background: #fff !important;
+  color: var(--color-text);
+}
+
+html[data-platform="mt5"] .choice-value-pill,
+html[data-platform="domestic_futures"] .choice-value-pill {
+  border-color: color-mix(in srgb, var(--choice, #069d91) 38%, var(--color-border));
+  background: color-mix(in srgb, var(--choice, #069d91) 14%, #fff) !important;
+  color: #075f5b !important;
+}
+
+html[data-platform="mt5"] .campaign-day-row td,
+html[data-platform="domestic_futures"] .campaign-day-row td {
+  border-bottom-color: var(--color-border);
+  background: #eaf5f3 !important;
+  color: var(--color-text);
+}
+
+html[data-platform="mt5"] .campaign-day-summary,
+html[data-platform="domestic_futures"] .campaign-day-summary {
+  color: #587178;
+}
+
+html[data-platform="mt5"] .campaign-day-summary strong:first-child,
+html[data-platform="domestic_futures"] .campaign-day-summary strong:first-child {
+  color: #12252b;
+}
+
+html[data-platform="mt5"] .campaign-day-chevron,
+html[data-platform="domestic_futures"] .campaign-day-chevron {
+  border-color: #b7dcd6;
+  background: #fff;
+  color: #075f5b;
+}
+
+.checkin-calendar {
+  display: block;
+}
+
+.checkin-calendar-weekdays span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Main-order review workspace. Source deals stay in the detail ledger; the
+   left rail only indexes the merged campaign records. */
+@media (min-width: 1081px) {
+  .app-page {
+    display: flex;
+    height: auto;
+    min-height: calc(100dvh - 60px);
+    flex-direction: column;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    overflow: visible;
+  }
+
+  .order-filters {
+    flex: 0 0 auto;
+    margin-bottom: 12px;
+  }
+}
+
+.orders-layout {
+  grid-template-columns: minmax(238px, 286px) minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 0;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.trades-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.orders-panel-head {
+  padding: 12px 14px 9px;
+}
+
+.orders-panel-head h2 {
+  font-size: 15px;
+}
+
+.trades-panel .table-wrap {
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+.orders-table th,
+.orders-table td {
+  height: 44px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.orders-table th:nth-child(1),
+.orders-table td:nth-child(1) {
+  width: auto;
+}
+
+.orders-table th:nth-child(2),
+.orders-table td:nth-child(2) {
+  width: 48px;
+  text-align: right;
+}
+
+.orders-table th:nth-child(3),
+.orders-table td:nth-child(3) {
+  width: 76px;
+  text-align: right;
+}
+
+.campaign-pnl-cell {
+  text-align: right;
+}
+
+.campaign-list-pnl {
+  display: inline-block;
+  min-width: 64px;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.campaign-list-time {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.campaign-day-row td {
+  height: 31px;
+  padding: 5px 8px;
+  border-bottom-color: rgba(151, 177, 201, 0.2);
+  background: rgba(17, 36, 53, 0.72);
+}
+
+.campaign-day-summary {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.campaign-day-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.campaign-day-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.campaign-day-chevron {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-accent);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.campaign-day-summary strong:first-child {
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.campaign-day-summary strong:last-child {
+  min-width: 58px;
+  text-align: right;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 10.5px;
+}
+
+.campaign-list-index {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  place-items: center;
+  border-radius: 4px;
+  background: rgba(151, 177, 201, 0.1);
+  color: var(--faint);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.campaign-list-time strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-row-flags {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+}
+
+.campaign-kind-mark,
+.campaign-risk-mark {
+  display: inline-grid;
+  width: 17px;
+  height: 16px;
+  place-items: center;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.campaign-kind-mark {
+  color: #b8dcfa;
+  background: rgba(100, 181, 255, 0.14);
+}
+
+.campaign-risk-mark {
+  color: var(--color-negative);
+  background: rgba(255, 125, 129, 0.14);
+}
+
+.detail-panel {
+  position: static;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.detail-host,
+.detail-body.order-detail-workspace {
+  height: auto;
+  min-height: 0;
+}
+
+.detail-body.order-detail-workspace {
+  grid-template-rows: auto auto auto auto;
+  gap: 10px;
+  padding: 13px;
+  overflow: visible;
+}
+
+.order-detail-title {
+  padding-bottom: 8px;
+}
+
+.order-detail-title h2 {
+  font-size: 20px;
+}
+
+.order-info-strip {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(17, 36, 53, 0.22);
+}
+
+.order-info-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: end;
+}
+
+.order-info-field,
+.campaign-tag-field {
+  display: grid;
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 3px;
+}
+
+.campaign-tag-field {
+  max-width: 100%;
+}
+
+.order-info-field .field-label-row,
+.campaign-tag-field .field-label {
+  margin: 0;
+}
+
+.order-info-field label,
+.campaign-tag-field .field-label {
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.campaign-tag-field .field-label small {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.order-info-field .numeric-cell-input {
+  width: 86px;
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+}
+
+.order-info-field .numeric-cell-input:focus {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: none;
+}
+
+.order-info-field.missing .numeric-cell-input {
+  border-bottom-color: rgba(242, 184, 75, 0.72);
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-label-row span {
+  color: var(--faint);
+  font-size: 9px;
+}
+
+.order-info-save {
+  min-height: 34px;
+  align-self: end;
+  color: var(--color-positive);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.detail-custom-fields {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  padding-top: 3px;
+}
+
+.choice-cell.detail-choice {
+  min-height: 30px;
+  width: max-content;
+  max-width: min(100%, 360px);
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.choice-cell.detail-choice:hover,
+.choice-cell.detail-choice:focus {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: none;
+}
+
+.choice-value-pill {
+  max-width: 145px;
+  padding: 3px 8px;
+}
+
+.detail-hero-grid {
+  display: grid;
+  grid-template-columns: fit-content(70%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  min-height: 0;
+  overflow: visible;
+}
+
+.screenshot-editor,
+.review-editor-panel,
+.execution-section {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: rgba(17, 36, 53, 0.38);
+}
+
+.screenshot-editor {
+  display: flex;
+  align-self: start;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px;
+  overflow: visible;
+}
+
+.screenshot-preview {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
+  overflow: visible;
+  border: 1px solid var(--color-border);
+  background: #081524;
+}
+
+.screenshot-overlay-controls {
+  position: absolute;
+  right: auto;
+  bottom: 14px;
+  left: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.screenshot-overlay-controls .screenshot-status,
+.screenshot-overlay-controls .ghost-btn {
+  pointer-events: auto;
+  border: 1px solid rgba(151, 177, 201, 0.3);
+  background: rgba(4, 12, 20, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.screenshot-overlay-controls .screenshot-status {
+  overflow: hidden;
+  margin-right: auto;
+  max-width: 42%;
+  padding: 3px 5px;
+  border-radius: 3px;
+  color: rgba(233, 240, 245, 0.72);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screenshot-overlay-controls .ghost-btn {
+  min-height: 22px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  color: var(--color-muted);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.screenshot-overlay-controls .ghost-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.screenshot-preview:has(.screenshot-empty),
+.screenshot-editor > .screenshot-empty {
+  min-height: 220px;
+}
+
+.snapshot.compact-snapshot {
+  display: block;
+  aspect-ratio: auto;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  max-width: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.screenshot-actions {
+  margin: 0;
+  justify-content: flex-end;
+}
+
+.screenshot-status {
+  font-size: 10px;
+}
+
+.review-editor-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  overflow: visible;
+}
+
+.review-editor-panel .section-head {
+  margin-bottom: 7px;
+}
+
+.review-editor-panel .review-editor {
+  flex: 1;
+  min-height: 260px;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+}
+
+.execution-section {
+  padding: 7px 10px;
+  overflow: visible;
+}
+
+.execution-section .section-head {
+  margin-bottom: 4px;
+}
+
+.execution-table-wrap {
+  min-width: 0;
+  overflow: auto;
+}
+
+.execution-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.execution-table th,
+.execution-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(151, 177, 201, 0.12);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.execution-table th {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.execution-table th:nth-child(1) { width: 106px; }
+.execution-table th:nth-child(2) { width: 154px; }
+.execution-table th:nth-child(3),
+.execution-table th:nth-child(4) { width: 104px; }
+.execution-table th:nth-child(5) { width: 70px; }
+.execution-table th:nth-child(6),
+.execution-table th:nth-child(7) { width: 100px; }
+
+.execution-type,
+.execution-side {
+  display: inline-flex;
+  justify-content: center;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.execution-type { color: #b8dcfa; background: rgba(100, 181, 255, 0.14); }
+.execution-type.reduce { color: #f6cf90; background: rgba(242, 189, 104, 0.13); }
+.execution-type.close { color: #98f0c7; background: rgba(85, 214, 155, 0.13); }
+.execution-side { min-width: 20px; margin-left: 5px; }
+.execution-side.long { color: #98f0c7; background: rgba(85, 214, 155, 0.13); }
+.execution-side.short { color: #ffb7b9; background: rgba(255, 125, 129, 0.13); }
+.mono-cell { color: #a9bbca; font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; white-space: nowrap; }
+
+@media (max-width: 1080px) {
+  .app-page {
+    overflow: visible;
+  }
+
+  .orders-layout {
+    height: auto;
+    flex: none;
+  }
+
+  .detail-panel {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .detail-host,
+  .detail-body.order-detail-workspace {
+    height: auto;
+  }
+
+  .detail-body.order-detail-workspace {
+    overflow: visible;
+  }
+
+  .trades-panel {
+    max-height: none !important;
+    overflow: visible;
+  }
+
+  .trades-panel .table-wrap {
+    overflow: visible;
+  }
+
+  .order-info-main {
+    align-items: stretch;
+  }
+
+  .detail-hero-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .orders-layout {
+    display: block;
+  }
+
+  .trades-panel {
+    margin-bottom: var(--space-3);
+  }
+
+  .order-info-main {
+    flex-direction: column;
+  }
+
+  .detail-hero-grid {
+    grid-template-rows: auto auto;
+  }
+}
+
+/* The domestic dashboard is a light canvas. Keep order-specific states in the
+   same palette instead of carrying the legacy night-sail surfaces forward. */
+html[data-platform="domestic_futures"] .orders-panel-head,
+html[data-platform="domestic_futures"] .orders-list-views {
+  border-color: var(--color-border);
+}
+
+html[data-platform="domestic_futures"] .orders-list-views {
+  background: #eaf1ef;
+}
+
+html[data-platform="domestic_futures"] .view-tab.active,
+html[data-platform="domestic_futures"] .view-tab:hover {
+  color: #075f5b;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(21, 69, 68, .08);
+}
+
+html[data-platform="domestic_futures"] .orders-table tbody tr {
+  background: #fff;
+}
+
+html[data-platform="domestic_futures"] .orders-table tbody tr:hover {
+  background: #edf8f6;
+}
+
+html[data-platform="domestic_futures"] .orders-table tbody tr.active,
+html[data-platform="domestic_futures"] .campaign-detail-row.active {
+  background: #dff5f1 !important;
+  box-shadow: inset 4px 0 0 #069d91, inset 0 0 0 1px rgba(6, 157, 145, .28);
+}
+
+html[data-platform="domestic_futures"] .campaign-detail-row {
+  background: #f8fbfa !important;
+}
+
+html[data-platform="domestic_futures"] .campaign-detail-row:hover {
+  background: #edf8f6 !important;
+}
+
+html[data-platform="domestic_futures"] .campaign-row.scratch {
+  background: #f5f5f1 !important;
+}
+
+html[data-platform="domestic_futures"] .campaign-row.scratch:not(.active):hover {
+  background: #efefe7 !important;
+}
+
+html[data-platform="domestic_futures"] .campaign-row.scratch.active {
+  background: #fff0d9 !important;
+  box-shadow: inset 4px 0 0 #f49b22, inset 0 0 0 1px rgba(244, 155, 34, .32);
+}
+
+html[data-platform="domestic_futures"] .campaign-row.scratch .order-main strong,
+html[data-platform="domestic_futures"] .campaign-row.scratch .campaign-r-cell,
+html[data-platform="domestic_futures"] .campaign-row.scratch .profit-text,
+html[data-platform="domestic_futures"] .campaign-row.scratch .loss-text {
+  color: #6d7e83;
+}
+
+html[data-platform="domestic_futures"] .campaign-row.scratch.active td,
+html[data-platform="domestic_futures"] .campaign-row.scratch.active .order-main strong,
+html[data-platform="domestic_futures"] .campaign-row.scratch.active .campaign-r-cell,
+html[data-platform="domestic_futures"] .campaign-row.scratch.active .profit-text,
+html[data-platform="domestic_futures"] .campaign-row.scratch.active .loss-text {
+  color: var(--color-text);
+}
+
+html[data-platform="domestic_futures"] .campaign-day-row td {
+  border-bottom-color: var(--color-border);
+  background: #f1f7f5;
+}
+
+html[data-platform="domestic_futures"] .custom-value-cell input,
+html[data-platform="domestic_futures"] .inline-stop-editor input,
+html[data-platform="domestic_futures"] .detail-panel input,
+html[data-platform="domestic_futures"] .detail-panel textarea,
+html[data-platform="domestic_futures"] .detail-panel select {
+  background: #fbfdfc;
+}
+
+html[data-platform="domestic_futures"] .catalog-value,
+html[data-platform="domestic_futures"] .campaign-expand {
+  background: #f1f8f6;
+}
+
+html[data-platform="domestic_futures"] .position-plan-risk,
+html[data-platform="domestic_futures"] .order-info-strip,
+html[data-platform="domestic_futures"] .review-editor-panel,
+html[data-platform="domestic_futures"] .execution-section {
+  border-color: var(--color-border);
+  background: #fbfdfc;
+}
+
+html[data-platform="domestic_futures"] .campaign-list-index,
+html[data-platform="domestic_futures"] .campaign-kind-mark {
+  color: #087d75;
+  background: #dff5f1;
+}
+
+html[data-platform="domestic_futures"] .campaign-risk-mark {
+  color: #c44561;
+  background: #ffe7ed;
+}
+
+html[data-platform="domestic_futures"] .choice-cell {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: #fff;
+}
+
+html[data-platform="domestic_futures"] .choice-value-pill {
+  color: #075f5b;
+  background: #e8f7f4;
+}
+
+html[data-platform="domestic_futures"] .screenshot-editor .screenshot-preview,
+html[data-platform="domestic_futures"] .snapshot,
+html[data-platform="domestic_futures"] .image-modal img {
+  background: #edf5f3;
+}
+
+html[data-platform="domestic_futures"] .screenshot-overlay-controls .screenshot-status,
+html[data-platform="domestic_futures"] .screenshot-overlay-controls .ghost-btn {
+  border-color: rgba(255, 255, 255, .72);
+  color: #fff;
+  background: rgba(18, 37, 43, .72);
+}
+
+html[data-platform="domestic_futures"] .screenshot-editor,
+html[data-platform="domestic_futures"] .detail-section,
+html[data-platform="domestic_futures"] .campaign-position-list,
+html[data-platform="domestic_futures"] .campaign-risk-summary {
+  border-color: var(--color-border);
+  background: #fbfdfc;
+}
+
+html[data-platform="domestic_futures"] .screenshot-preview,
+html[data-platform="domestic_futures"] .shot-btn {
+  border-color: var(--color-border);
+  background: #edf5f3;
+}
+
+html[data-platform="domestic_futures"] .screenshot-editor.drag-over {
+  border-color: var(--color-accent);
+  background: #edf8f6;
+}
+
+html[data-platform="domestic_futures"] .choice-popover,
+html[data-platform="domestic_futures"] .choice-search,
+html[data-platform="domestic_futures"] .choice-option {
+  border-color: var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+}
+
+html[data-platform="domestic_futures"] .choice-popover {
+  box-shadow: 0 18px 46px rgba(24, 58, 61, .16);
+}
+
+html[data-platform="domestic_futures"] .choice-option:hover,
+html[data-platform="domestic_futures"] .choice-option.selected {
+  border-color: #9bd8d0;
+  background: #edf8f6;
+}
+
+html[data-platform="domestic_futures"] .execution-table th,
+html[data-platform="domestic_futures"] .execution-table td {
+  border-bottom-color: var(--color-border);
+}
+
+html[data-platform="domestic_futures"] .execution-table tbody tr:hover {
+  background: #f1f8f6;
+}
+
+html[data-platform="domestic_futures"] .execution-type {
+  color: #087d75;
+  background: #dff5f1;
+}
+
+html[data-platform="domestic_futures"] .execution-type.reduce {
+  color: #a76c00;
+  background: #fff0d9;
+}
+
+html[data-platform="domestic_futures"] .execution-type.close,
+html[data-platform="domestic_futures"] .execution-side.long {
+  color: #087d75;
+  background: #dff5f1;
+}
+
+html[data-platform="domestic_futures"] .execution-side.short {
+  color: #c44561;
+  background: #ffe7ed;
+}
+
+html[data-platform="domestic_futures"] .mono-cell {
+  color: #587178;
+}
+
+/* Keep the left index and its check-in calendar as separate modules. The
+   index column shares the detail pane height, while the table gets its own
+   measured scroll area. */
+.orders-panel-head,
+.orders-list-views { border-color: var(--color-border); }
+
+html[data-platform="mt5"] .orders-list-views { background: #eaf1ef; }
+html[data-platform="mt5"] .view-tab.active,
+html[data-platform="mt5"] .view-tab:hover { color: #075f5b; background: #fff; box-shadow: 0 2px 5px rgba(21, 69, 68, .08); }
+html[data-platform="mt5"] .orders-table tbody tr { background: #fff; }
+html[data-platform="mt5"] .orders-table tbody tr:hover { background: #edf8f6; }
+html[data-platform="mt5"] .orders-table tbody tr.active,
+html[data-platform="mt5"] .campaign-detail-row.active { background: #dff5f1 !important; box-shadow: inset 4px 0 0 #069d91, inset 0 0 0 1px rgba(6, 157, 145, .28); }
+html[data-platform="mt5"] .campaign-detail-row { background: #f8fbfa !important; }
+html[data-platform="mt5"] .campaign-detail-row:hover { background: #edf8f6 !important; }
+html[data-platform="mt5"] .campaign-row.scratch { background: #f5f5f1 !important; }
+html[data-platform="mt5"] .campaign-row.scratch:not(.active):hover { background: #efefe7 !important; }
+html[data-platform="mt5"] .campaign-row.scratch.active { background: #fff0d9 !important; box-shadow: inset 4px 0 0 #f49b22, inset 0 0 0 1px rgba(244, 155, 34, .32); }
+html[data-platform="mt5"] .campaign-row.scratch .order-main strong,
+html[data-platform="mt5"] .campaign-row.scratch .campaign-r-cell,
+html[data-platform="mt5"] .campaign-row.scratch .profit-text,
+html[data-platform="mt5"] .campaign-row.scratch .loss-text { color: #6d7e83; }
+html[data-platform="mt5"] .campaign-row.scratch.active td,
+html[data-platform="mt5"] .campaign-row.scratch.active .order-main strong,
+html[data-platform="mt5"] .campaign-row.scratch.active .campaign-r-cell,
+html[data-platform="mt5"] .campaign-row.scratch.active .profit-text,
+html[data-platform="mt5"] .campaign-row.scratch.active .loss-text { color: var(--color-text); }
+html[data-platform="mt5"] .position-plan-risk,
+html[data-platform="mt5"] .order-info-strip,
+html[data-platform="mt5"] .review-editor-panel,
+html[data-platform="mt5"] .execution-section,
+html[data-platform="mt5"] .screenshot-editor,
+html[data-platform="mt5"] .detail-section,
+html[data-platform="mt5"] .campaign-position-list,
+html[data-platform="mt5"] .campaign-risk-summary { border-color: var(--color-border); background: #fbfdfc; }
+html[data-platform="mt5"] .catalog-value,
+html[data-platform="mt5"] .campaign-expand { background: #f1f8f6; }
+html[data-platform="mt5"] .campaign-list-index,
+html[data-platform="mt5"] .campaign-kind-mark,
+html[data-platform="mt5"] .execution-type,
+html[data-platform="mt5"] .execution-side.long { color: #087d75; background: #dff5f1; }
+html[data-platform="mt5"] .campaign-risk-mark,
+html[data-platform="mt5"] .execution-side.short { color: #c44561; background: #ffe7ed; }
+html[data-platform="mt5"] .choice-popover,
+html[data-platform="mt5"] .choice-search,
+html[data-platform="mt5"] .choice-option { border-color: var(--color-border); background: #fff; color: var(--color-text); }
+html[data-platform="mt5"] .choice-option:hover,
+html[data-platform="mt5"] .choice-option.selected { border-color: #9bd8d0; background: #edf8f6; }
+
+/* Orders uses the same light review surface on both workspaces. These rules
+   intentionally sit after the legacy order styles so old dark defaults cannot
+   leak into the campaign rows, fields, or detail action bar. */
+html[data-platform="mt5"] .campaign-detail-row,
+html[data-platform="domestic_futures"] .campaign-detail-row {
+  background: #f8fbfa !important;
+  color: var(--color-text);
+}
+
+html[data-platform="mt5"] .campaign-detail-row:hover,
+html[data-platform="domestic_futures"] .campaign-detail-row:hover {
+  background: #edf8f6 !important;
+}
+
+html[data-platform="mt5"] .campaign-detail-row.active,
+html[data-platform="domestic_futures"] .campaign-detail-row.active {
+  background: #dff5f1 !important;
+  box-shadow: inset 4px 0 0 #069d91, inset 0 0 0 1px rgba(6, 157, 145, .28);
+}
+
+html[data-platform="mt5"] .custom-value-cell input,
+html[data-platform="mt5"] .inline-stop-editor input,
+html[data-platform="mt5"] .detail-panel input,
+html[data-platform="mt5"] .detail-panel textarea,
+html[data-platform="mt5"] .detail-panel select,
+html[data-platform="domestic_futures"] .custom-value-cell input,
+html[data-platform="domestic_futures"] .inline-stop-editor input,
+html[data-platform="domestic_futures"] .detail-panel input,
+html[data-platform="domestic_futures"] .detail-panel textarea,
+html[data-platform="domestic_futures"] .detail-panel select {
+  border-color: var(--color-border);
+  background: #fbfdfc;
+  color: var(--color-text);
+}
+
+.detail-order-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.detail-icon-action {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  border-color: var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  color: #496066;
+  transition: transform 140ms ease, border-color 140ms ease, color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.detail-icon-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.detail-action-count {
+  min-width: 13px;
+  color: currentColor;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.detail-icon-action:hover,
+.detail-icon-action:focus-visible {
+  border-color: #9bd8d0;
+  color: #075f5b;
+  background: #edf8f6;
+  box-shadow: 0 5px 12px rgba(24, 58, 61, .1);
+  transform: scale(1.05);
+  outline: none;
+}
+
+.detail-icon-action.is-active {
+  border-color: #9bd8d0;
+  color: #075f5b;
+  background: #dff5f1;
+}
+
+.detail-icon-action.is-danger {
+  color: #c44561;
+}
+
+.detail-icon-action.is-danger:hover,
+.detail-icon-action.is-danger:focus-visible {
+  border-color: #f2b6c4;
+  color: #a73450;
+  background: #fff0f3;
+}
+
+.checkin-calendar-month {
+  display: grid;
+  gap: 8px;
+}
+
+.checkin-calendar-month-label {
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkin-calendar-weekdays,
+.checkin-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.checkin-calendar-weekdays span {
+  color: var(--color-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.checkin-calendar-grid .checkin-day {
+  min-height: 42px;
+  padding: 5px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fbfdfc;
+  color: var(--color-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.checkin-calendar-grid .checkin-day strong,
+.checkin-calendar-grid .checkin-day span {
+  display: block;
+}
+
+.checkin-calendar-grid .checkin-day strong {
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.checkin-calendar-grid .checkin-day span {
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.checkin-calendar-grid .checkin-day.has-checkin {
+  border-color: #9bd8d0;
+  background: #dff5f1;
+  color: #075f5b;
+}
+
+.checkin-calendar-grid .checkin-day.has-checkin span {
+  color: #075f5b;
+  font-weight: 700;
+}
+
+.checkin-calendar-grid .checkin-day.is-today {
+  box-shadow: inset 0 0 0 2px #069d91;
+}
+
+.checkin-calendar-grid .checkin-day.is-empty {
+  border-color: transparent;
+  background: transparent;
+}
+
+.orders-index-column {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+}
+
+.orders-index-column .trades-panel {
+  min-height: 0;
+}
+
+.checkin-calendar-panel {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+  background: var(--color-surface);
+}
+
+.checkin-calendar {
+  min-height: 0;
+}
+
+/* The image is the primary review surface. Review metadata stays in a narrow
+   column above the notes so the chart can use the available width without
+   changing its aspect ratio. */
+.detail-hero-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.38fr);
+  align-items: stretch;
+}
+
+.detail-review-column {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-review-column .order-info-strip {
+  flex: 0 0 auto;
+}
+
+.detail-review-column .review-editor-panel {
+  flex: 1 1 auto;
+  min-height: 240px;
+}
+
+.detail-review-column .review-editor {
+  min-height: 160px;
+}
+
+.screenshot-editor,
+.screenshot-editor .screenshot-preview {
+  width: 100%;
+}
+
+.screenshot-editor .snapshot.compact-snapshot {
+  width: 100%;
+  aspect-ratio: auto;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+@media (max-width: 1080px) {
+  .orders-index-column {
+    height: auto !important;
+    max-height: none !important;
+    grid-template-rows: auto auto;
+  }
+
+  .detail-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .orders-index-column {
+    display: block;
+  }
+
+  .orders-index-column .checkin-calendar-panel {
+    margin-top: var(--space-3);
+  }
+
+  .detail-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detail-review-column .review-editor-panel {
+    min-height: 240px;
   }
 }

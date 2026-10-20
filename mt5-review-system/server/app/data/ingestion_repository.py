@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 from .campaign_repository import CampaignRepository
 from .trade_commands import _upsert_trade_conn
+from ..platforms import DEFAULT_PLATFORM
 
 
 def _campaign_repository() -> CampaignRepository:
@@ -25,10 +26,11 @@ def _campaign_repository() -> CampaignRepository:
     )
 
 
-def list_equity_snapshots() -> list[dict[str, Any]]:
+def list_equity_snapshots(platform: str = "mt5") -> list[dict[str, Any]]:
     with db() as conn:
         rows = conn.execute(
-            "SELECT time_utc, balance, equity FROM equity_snapshots ORDER BY time_utc"
+            "SELECT platform, time_utc, balance, equity FROM equity_snapshots WHERE platform = ? ORDER BY time_utc",
+            (platform,),
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -196,15 +198,16 @@ def _upsert_equity_snapshot_conn(
     equity = float(payload.get("equity", balance))
     conn.execute(
         """
-        INSERT INTO equity_snapshots (time_utc, balance, equity)
-        VALUES (?, ?, ?)
+        INSERT INTO equity_snapshots (platform, time_utc, balance, equity)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(time_utc) DO UPDATE SET
+            platform = excluded.platform,
             balance = excluded.balance,
             equity = excluded.equity
         """,
-        (time_utc, balance, equity),
+        (DEFAULT_PLATFORM, time_utc, balance, equity),
     )
-    return {"time_utc": time_utc, "balance": balance, "equity": equity}
+    return {"platform": DEFAULT_PLATFORM, "time_utc": time_utc, "balance": balance, "equity": equity}
 
 
 def _event_to_deal(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -223,6 +226,7 @@ def _event_to_deal(payload: dict[str, Any]) -> dict[str, Any] | None:
     time_utc = str(payload["time_utc"])
     return {
         "deal_ticket": str(payload["deal_ticket"]),
+        "platform": DEFAULT_PLATFORM,
         "account": str(payload.get("account") or "MT5-LOCAL"),
         "position_id": str(payload["position_id"]),
         "order_ticket": str(payload.get("order_ticket") or ""),
@@ -257,15 +261,16 @@ def _upsert_deal_event_conn(
     conn.execute(
         """
         INSERT INTO deal_events (
-            deal_ticket, account, position_id, order_ticket, entry_kind, deal_type,
+            deal_ticket, platform, account, position_id, order_ticket, entry_kind, deal_type,
             symbol, volume, price, time_utc, time_msc, profit, commission, swap,
             fee, screenshot_path, source_kind, source_trade_id, raw_json
         ) VALUES (
-            :deal_ticket, :account, :position_id, :order_ticket, :entry_kind, :deal_type,
+            :deal_ticket, :platform, :account, :position_id, :order_ticket, :entry_kind, :deal_type,
             :symbol, :volume, :price, :time_utc, :time_msc, :profit, :commission, :swap,
             :fee, :screenshot_path, :source_kind, :source_trade_id, :raw_json
         )
         ON CONFLICT(deal_ticket) DO UPDATE SET
+            platform = excluded.platform,
             account = excluded.account,
             position_id = excluded.position_id,
             order_ticket = excluded.order_ticket,
@@ -316,6 +321,7 @@ def _event_to_trade(payload: dict[str, Any]) -> dict[str, Any] | None:
         return None
     return {
         "id": trade_id,
+        "platform": DEFAULT_PLATFORM,
         "account": str(payload.get("account", "MT5-LOCAL")),
         "order_no": str(payload.get("order_no") or payload.get("order_ticket") or trade_id),
         "position_id": str(payload.get("position_id", "")),

@@ -4,7 +4,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import closing, nullcontext
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Iterable
 
 from ..core.config import RuntimePaths
@@ -15,8 +15,18 @@ from .database import connect, transaction
 from .trade_repository import Page, _beijing_date_bounds, _escape_like
 
 
-CAMPAIGN_MODEL_REVISION = "5"
+CAMPAIGN_MODEL_REVISION = "7"
 CAMPAIGN_ID_NAMESPACE = uuid.UUID("d72ca9de-dfff-4e64-b1cc-5a8a1837c71d")
+
+
+def _json_tags(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    try:
+        parsed = json.loads(str(value or "[]"))
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return [str(item) for item in parsed if str(item).strip()] if isinstance(parsed, list) else []
 
 
 class CampaignRepository:
@@ -71,19 +81,143 @@ class CampaignRepository:
         self,
         campaign_id: str,
         *,
+        deleted: str = "active",
         conn: sqlite3.Connection | None = None,
     ) -> dict[str, Any] | None:
         if conn is None:
             with closing(connect(self.paths)) as owned_conn:
-                return self.get(campaign_id, conn=owned_conn)
-        records = self.records(conn=conn, campaign_ids=[campaign_id])
+                return self.get(campaign_id, deleted=deleted, conn=owned_conn)
+        records = self.records(conn=conn, campaign_ids=[campaign_id], deleted=deleted)
         return records[0] if records else None
+
+    def random_featured(
+        self,
+        *,
+        platform: str = "mt5",
+        conn: sqlite3.Connection | None = None,
+    ) -> dict[str, Any] | None:
+        if conn is None:
+            with closing(connect(self.paths)) as owned_conn:
+                return self.random_featured(platform=platform, conn=owned_conn)
+        row = conn.execute(
+            """
+            SELECT id
+            FROM trade_campaigns
+            WHERE platform = ?
+              AND deleted_at IS NULL
+              AND status = 'closed'
+              AND is_featured = 1
+            ORDER BY RANDOM()
+            LIMIT 1
+            """,
+            (platform,),
+        ).fetchone()
+        return self.get(str(row["id"]), conn=conn) if row else None
+
+    def campaign_checkin_summary(
+        self,
+        campaign_ids: list[str],
+        checkin_date: str | None = None,
+    ) -> dict[str, dict[str, int | bool]]:
+        ids = [str(value) for value in campaign_ids if str(value)]
+        if not ids:
+            return {}
+        day = checkin_date or to_beijing(datetime.now(timezone.utc)).date().isoformat()
+        placeholders = ",".join("?" for _ in ids)
+        with closing(connect(self.paths)) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT campaign_id,
+                       COUNT(*) AS count,
+                       MAX(CASE WHEN checkin_date = ? THEN 1 ELSE 0 END) AS checked_in
+                FROM campaign_checkins
+                WHERE campaign_id IN ({placeholders})
+                GROUP BY campaign_id
+                """,
+                [day, *ids],
+            ).fetchall()
+        return {
+            str(row["campaign_id"]): {
+                "count": int(row["count"]),
+                "checked_in": bool(row["checked_in"]),
+            }
+            for row in rows
+        }
+
+    def campaign_checkin_overview(
+        self,
+        days: int = 90,
+        today: str | date | None = None,
+        platform: str = "mt5",
+    ) -> dict[str, Any]:
+        safe_days = max(1, min(int(days), 366))
+        end = _coerce_campaign_date(today) if today is not None else to_beijing(
+            datetime.now(timezone.utc)
+        ).date()
+        start = end - timedelta(days=safe_days - 1)
+        start_value = start.isoformat()
+        end_value = end.isoformat()
+        with closing(connect(self.paths)) as conn:
+            goal_row = conn.execute(
+                "SELECT value FROM analysis_settings WHERE key = 'reading_daily_goal'"
+            ).fetchone()
+            count_rows = conn.execute(
+                """
+                SELECT checkins.checkin_date, COUNT(*) AS count
+                FROM campaign_checkins AS checkins
+                JOIN trade_campaigns AS campaigns
+                  ON campaigns.id = checkins.campaign_id
+                WHERE checkins.checkin_date BETWEEN ? AND ?
+                  AND campaigns.deleted_at IS NULL
+                  AND campaigns.platform = ?
+                GROUP BY checkins.checkin_date
+                """,
+                (start_value, end_value, platform),
+            ).fetchall()
+        goal = _normalize_campaign_goal(goal_row["value"] if goal_row else 20)
+        counts = {str(row["checkin_date"]): int(row["count"]) for row in count_rows}
+        day_rows = []
+        for offset in range(safe_days):
+            current = start + timedelta(days=offset)
+            count = counts.get(current.isoformat(), 0)
+            day_rows.append(
+                {
+                    "date": current.isoformat(),
+                    "count": count,
+                    "goal": goal,
+                    "completed": count >= goal,
+                }
+            )
+        today_value = end.isoformat()
+        today_count = counts.get(today_value, 0)
+        return {
+            "daily_goal": goal,
+            "today": {
+                "date": today_value,
+                "count": today_count,
+                "completed": today_count >= goal,
+            },
+            "days": day_rows,
+            "range": {"start": start_value, "end": end_value},
+        }
+
+    @staticmethod
+    def _source_deleted_clause(deleted: str) -> str:
+        state = str(deleted or "active").strip().lower()
+        if state == "active":
+            return "AND trades.deleted_at IS NULL"
+        if state == "deleted":
+            return "AND trades.deleted_at IS NOT NULL"
+        if state == "all":
+            return ""
+        raise ValueError("deleted must be active, deleted, or all")
 
     def query_analysis_rows(
         self,
         start_date: str | None,
         end_date: str | None,
         *,
+        platform: str = "mt5",
         conn: sqlite3.Connection | None = None,
     ) -> list[dict[str, Any]]:
         clauses = [
@@ -91,6 +225,8 @@ class CampaignRepository:
             "campaigns.status = 'closed'",
         ]
         parameters: list[Any] = []
+        clauses.append("campaigns.platform = ?")
+        parameters.append(platform)
         start_utc, end_utc = _beijing_date_bounds(start_date, end_date)
         # Direct ISO-string comparison (not julianday()) so the query can SEARCH
         # `idx_campaign_closed_at`; EXPLAIN QUERY PLAN shows a SEARCH on
@@ -109,8 +245,21 @@ class CampaignRepository:
                 for row in active_conn.execute(
                     f"""
                     SELECT campaigns.id, campaigns.status, campaigns.closed_at_utc,
+                           campaigns.closed_at_utc AS close_time_utc,
+                           campaigns.trade_pnl AS pnl, campaigns.trade_pnl,
+                           campaigns.commission, campaigns.swap, campaigns.fee,
                            campaigns.net_pnl, campaigns.trade_type, campaigns.strategy,
-                           campaigns.campaign_r, campaigns.risk_status
+                           campaigns.campaign_r, campaigns.risk_status,
+                           campaigns.screenshot_path, campaigns.is_featured,
+                           CASE WHEN EXISTS (
+                               SELECT 1
+                               FROM campaign_positions AS stop_links
+                               JOIN positions AS stop_positions
+                                 ON stop_positions.id = stop_links.position_id
+                               WHERE stop_links.campaign_id = campaigns.id
+                                 AND stop_positions.initial_stop_price IS NOT NULL
+                           ) THEN 1 ELSE 0 END AS has_initial_stop,
+                           campaigns.platform
                     FROM trade_campaigns AS campaigns
                     WHERE {' AND '.join(clauses)}
                     ORDER BY campaigns.closed_at_utc DESC, campaigns.id DESC
@@ -148,10 +297,13 @@ class CampaignRepository:
         deleted_state = str(deleted or "active").strip().lower()
         if deleted_state == "active":
             deleted_clause = "AND campaigns.deleted_at IS NULL"
+            source_deleted_clause = "AND trades.deleted_at IS NULL"
         elif deleted_state == "deleted":
-            deleted_clause = "AND campaigns.deleted_at IS NOT NULL"
+            deleted_clause = "AND (campaigns.platform = 'domestic_futures' OR campaigns.deleted_at IS NOT NULL)"
+            source_deleted_clause = "AND trades.deleted_at IS NOT NULL"
         elif deleted_state == "all":
             deleted_clause = ""
+            source_deleted_clause = ""
         else:
             raise ValueError("deleted must be active, deleted, or all")
         campaign_rows = [
@@ -176,6 +328,25 @@ class CampaignRepository:
             return []
         ordered_ids = [str(row["id"]) for row in campaign_rows]
         placeholders = ",".join("?" for _ in ordered_ids)
+        today = to_beijing(datetime.now(timezone.utc)).date().isoformat()
+        checkin_rows = conn.execute(
+            f"""
+            SELECT campaign_id,
+                   COUNT(*) AS count,
+                   MAX(CASE WHEN checkin_date = ? THEN 1 ELSE 0 END) AS checked_in
+            FROM campaign_checkins
+            WHERE campaign_id IN ({placeholders})
+            GROUP BY campaign_id
+            """,
+            [today, *ordered_ids],
+        ).fetchall()
+        checkins = {
+            str(row["campaign_id"]): {
+                "count": int(row["count"]),
+                "checked_in": bool(row["checked_in"]),
+            }
+            for row in checkin_rows
+        }
 
         memberships: dict[str, list[str]] = {campaign_id: [] for campaign_id in ordered_ids}
         for row in conn.execute(
@@ -205,7 +376,7 @@ class CampaignRepository:
             dict(row)
             for row in conn.execute(
                 f"""
-                SELECT DISTINCT deal_events.deal_ticket, deal_events.account,
+                SELECT DISTINCT deal_events.deal_ticket, deal_events.platform, deal_events.account,
                        deal_events.position_id, deal_events.order_ticket,
                        deal_events.entry_kind, deal_events.deal_type, deal_events.symbol,
                        deal_events.volume, deal_events.price, deal_events.time_utc,
@@ -214,7 +385,8 @@ class CampaignRepository:
                        deal_events.source_kind, deal_events.source_trade_id
                 FROM deal_events
                 JOIN positions
-                  ON positions.account = deal_events.account
+                  ON positions.platform = deal_events.platform
+                 AND positions.account = deal_events.account
                  AND positions.position_id = deal_events.position_id
                 JOIN campaign_positions ON campaign_positions.position_id = positions.id
                 WHERE campaign_positions.campaign_id IN ({placeholders})
@@ -255,7 +427,7 @@ class CampaignRepository:
                 FROM trades
                 JOIN campaign_source_trades ON campaign_source_trades.trade_id = trades.id
                 WHERE campaign_source_trades.campaign_id IN ({placeholders})
-                  AND trades.deleted_at IS NULL
+                  {source_deleted_clause}
                 ORDER BY trades.close_time_utc, trades.id
                 """,
                 ordered_ids,
@@ -264,10 +436,11 @@ class CampaignRepository:
         source_custom_values = self.catalog.custom_values_for_trade_ids(
             conn, [str(row["id"]) for row in source_rows]
         )
-        source_by_position: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        source_by_position: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for row in source_rows:
             row["custom_fields"] = source_custom_values.get(str(row["id"]), {})
             key = (
+                str(row.get("platform") or "mt5"),
                 str(row.get("account") or "MT5-LOCAL"),
                 str(row.get("position_id") or row["id"]),
             )
@@ -276,6 +449,11 @@ class CampaignRepository:
         records = []
         for campaign in campaign_rows:
             campaign_id = str(campaign["id"])
+            checkin = checkins.get(campaign_id, {"count": 0, "checked_in": False})
+            campaign["checkin_count"] = checkin["count"]
+            campaign["checkin_checked_in_today"] = checkin["checked_in"]
+            campaign["reading_checkin_count"] = checkin["count"]
+            campaign["reading_checked_in_today"] = checkin["checked_in"]
             members = [
                 position_domains[position_id]
                 for position_id in memberships.get(campaign_id, [])
@@ -284,6 +462,7 @@ class CampaignRepository:
             for member in members:
                 related_sources = source_by_position.get(
                     (
+                        str(member.get("platform") or "mt5"),
                         str(member.get("account") or "MT5-LOCAL"),
                         str(member.get("position_id") or ""),
                     ),
@@ -299,6 +478,28 @@ class CampaignRepository:
             grouped = group_campaigns(members)
             aggregate = grouped[0] if grouped else {}
             risk = calculate_campaign_r(campaign, members)
+            stop_values = [
+                member.get("initial_stop_price")
+                for member in members
+                if member.get("initial_stop_price") not in (None, "")
+            ]
+            normalized_stops = []
+            for value in stop_values:
+                try:
+                    normalized_stops.append(float(value))
+                except (TypeError, ValueError):
+                    normalized_stops = []
+                    break
+            campaign["initial_stop_price"] = (
+                stop_values[0]
+                if len(stop_values) == len(members)
+                and normalized_stops
+                and all(value == normalized_stops[0] for value in normalized_stops)
+                else None
+            )
+            campaign["trade_type_tags"] = _json_tags(campaign.get("trade_type_tags"))
+            campaign["strategy_tags"] = _json_tags(campaign.get("strategy_tags"))
+            campaign["mistake_tags"] = _json_tags(campaign.get("mistake_tags"))
             records.append(
                 {
                     **campaign,
@@ -342,7 +543,7 @@ class CampaignRepository:
             dict(row)
             for row in conn.execute(
                 """
-                SELECT deal_ticket, account, position_id, order_ticket, entry_kind,
+                SELECT deal_ticket, platform, account, position_id, order_ticket, entry_kind,
                        deal_type, symbol, volume, price, time_utc, time_msc, profit,
                        commission, swap, fee, screenshot_path, source_kind, source_trade_id
                 FROM deal_events
@@ -353,7 +554,7 @@ class CampaignRepository:
         positions = reconstruct_positions(deal_rows)
         source_kinds: dict[str, set[str]] = {}
         for deal in deal_rows:
-            key = f"{deal['account']}:{deal['position_id']}"
+            key = f"{deal.get('platform') or 'mt5'}:{deal['account']}:{deal['position_id']}"
             source_kinds.setdefault(key, set()).add(str(deal.get("source_kind") or "mt5"))
 
         previous_stops = {
@@ -364,9 +565,12 @@ class CampaignRepository:
             str(row["id"]): {
                 "trade_type": str(row["trade_type"] or "unclassified"),
                 "strategy": str(row["strategy"] or "strategy_unclassified"),
+                "trade_type_tags": _json_tags(row["trade_type_tags"]),
+                "strategy_tags": _json_tags(row["strategy_tags"]),
+                "mistake_tags": _json_tags(row["mistake_tags"]),
             }
             for row in conn.execute(
-                "SELECT id, trade_type, strategy FROM trade_campaigns"
+                "SELECT id, trade_type, strategy, trade_type_tags, strategy_tags, mistake_tags FROM trade_campaigns"
             )
         }
         previous_memberships = {
@@ -410,13 +614,14 @@ class CampaignRepository:
             conn.execute(
                 """
                 INSERT INTO positions (
-                    id, account, position_id, symbol, side, opened_at_utc, closed_at_utc,
+                    id, platform, account, position_id, symbol, side, opened_at_utc, closed_at_utc,
                     opened_sort_msc, opened_sort_ticket, closed_sort_msc, closed_sort_ticket,
                     entry_volume, exit_volume, weighted_entry_price, reconstruction_status,
                     initial_stop_price
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     account = excluded.account,
+                    platform = excluded.platform,
                     position_id = excluded.position_id,
                     symbol = excluded.symbol,
                     side = excluded.side,
@@ -434,6 +639,7 @@ class CampaignRepository:
                 """,
                 (
                     position["id"],
+                    position.get("platform") or "mt5",
                     position["account"],
                     position["position_id"],
                     position["symbol"],
@@ -453,9 +659,10 @@ class CampaignRepository:
             )
 
         source_rows = [dict(row) for row in conn.execute("SELECT * FROM trades")]
-        source_by_position: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        source_by_position: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for row in source_rows:
             key = (
+                str(row.get("platform") or "mt5"),
                 str(row.get("account") or "MT5-LOCAL"),
                 str(row.get("position_id") or row["id"]),
             )
@@ -503,7 +710,7 @@ class CampaignRepository:
             related_rows = []
             for member in campaign["positions"]:
                 related_rows.extend(
-                    source_by_position.get((member["account"], member["position_id"]), [])
+                source_by_position.get((member.get("platform") or "mt5", member["account"], member["position_id"]), [])
                 )
             active_rows = [row for row in related_rows if not row.get("deleted_at")]
             active_rows.sort(
@@ -534,9 +741,15 @@ class CampaignRepository:
             if previous_classification:
                 campaign_trade_type = previous_classification["trade_type"]
                 campaign_strategy = previous_classification["strategy"]
+                campaign_trade_type_tags = previous_classification["trade_type_tags"] or [campaign_trade_type]
+                campaign_strategy_tags = previous_classification["strategy_tags"] or [campaign_strategy]
+                campaign_mistake_tags = previous_classification["mistake_tags"]
             else:
                 campaign_trade_type = trade_types[0] if trade_types else "unclassified"
                 campaign_strategy = strategies[0] if strategies else "strategy_unclassified"
+                campaign_trade_type_tags = trade_types or [campaign_trade_type]
+                campaign_strategy_tags = strategies or [campaign_strategy]
+                campaign_mistake_tags = []
             screenshot_path = next(
                 (
                     str(row.get("screenshot_path") or "")
@@ -545,23 +758,40 @@ class CampaignRepository:
                 ),
                 "",
             )
-            net_pnl = round(sum(trade_net_pnl(row) for row in active_rows), 2)
+            trade_pnl = round(
+                sum(float(row.get("pnl") or 0.0) for row in active_rows), 2
+            )
+            commission = round(
+                sum(float(row.get("commission") or 0.0) for row in active_rows), 2
+            )
+            swap = round(sum(float(row.get("swap") or 0.0) for row in active_rows), 2)
+            fee = round(sum(float(row.get("fee") or 0.0) for row in active_rows), 2)
+            net_pnl = round(trade_pnl + commission + swap + fee, 2)
+            is_featured = int(any(bool(row.get("is_featured")) for row in active_rows))
             risk = calculate_campaign_r(campaign, campaign["positions"])
             conn.execute(
                 """
                 INSERT INTO trade_campaigns (
-                    id, account, symbol, side, opened_at_utc, closed_at_utc, status,
-                    net_pnl, review_text, trade_type, strategy, screenshot_path,
-                    classification_conflict, campaign_r, risk_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, platform, account, symbol, side, opened_at_utc, closed_at_utc, status,
+                    trade_pnl, commission, swap, fee, net_pnl, review_text,
+                    trade_type, strategy, screenshot_path, is_featured,
+                    classification_conflict, campaign_r, risk_status,
+                    trade_type_tags, strategy_tags, mistake_tags
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     account = excluded.account,
+                    platform = excluded.platform,
                     symbol = excluded.symbol,
                     side = excluded.side,
                     opened_at_utc = excluded.opened_at_utc,
                     closed_at_utc = excluded.closed_at_utc,
                     status = excluded.status,
+                    trade_pnl = excluded.trade_pnl,
+                    commission = excluded.commission,
+                    swap = excluded.swap,
+                    fee = excluded.fee,
                     net_pnl = excluded.net_pnl,
+                    is_featured = MAX(trade_campaigns.is_featured, excluded.is_featured),
                     trade_type = excluded.trade_type,
                     strategy = excluded.strategy,
                     review_text = CASE
@@ -575,24 +805,41 @@ class CampaignRepository:
                     classification_conflict = excluded.classification_conflict,
                     campaign_r = excluded.campaign_r,
                     risk_status = excluded.risk_status,
+                    deleted_at = CASE
+                        WHEN ? = 1 THEN COALESCE(trade_campaigns.deleted_at, CURRENT_TIMESTAMP)
+                        ELSE NULL
+                    END,
+                    trade_type_tags = excluded.trade_type_tags,
+                    strategy_tags = excluded.strategy_tags,
+                    mistake_tags = excluded.mistake_tags,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
                     campaign_id,
+                    campaign.get("platform") or "mt5",
                     campaign["account"],
                     campaign["symbol"],
                     campaign["side"],
                     campaign["opened_at_utc"],
                     campaign["closed_at_utc"],
                     campaign["status"],
+                    trade_pnl,
+                    commission,
+                    swap,
+                    fee,
                     net_pnl,
                     "\n\n".join(reviews),
                     campaign_trade_type,
                     campaign_strategy,
                     screenshot_path,
+                    is_featured,
                     int(len(trade_types) > 1 or len(strategies) > 1),
                     risk["campaign_r"],
                     risk["risk_status"],
+                    json.dumps(campaign_trade_type_tags, ensure_ascii=False),
+                    json.dumps(campaign_strategy_tags, ensure_ascii=False),
+                    json.dumps(campaign_mistake_tags, ensure_ascii=False),
+                    int(bool(related_rows) and not active_rows),
                 ),
             )
             for index, member in enumerate(campaign["positions"]):
@@ -630,46 +877,47 @@ class CampaignRepository:
     def _sync_legacy_deal_events(self, conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM deal_events WHERE source_kind = 'legacy'")
         rows = [dict(row) for row in conn.execute("SELECT * FROM trades ORDER BY open_time_utc, id")]
-        grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for row in rows:
+            platform = str(row.get("platform") or "mt5")
             account = str(row.get("account") or "MT5-LOCAL")
             position_id = str(row.get("position_id") or row["id"])
-            grouped.setdefault((account, position_id), []).append(row)
+            grouped.setdefault((platform, account, position_id), []).append(row)
 
-        for (account, position_id), source_rows in grouped.items():
+        for (platform, account, position_id), source_rows in grouped.items():
             has_native = conn.execute(
                 """
                 SELECT 1 FROM deal_events
-                WHERE account = ? AND position_id = ? AND source_kind = 'mt5'
+                WHERE platform = ? AND account = ? AND position_id = ? AND source_kind = 'mt5'
                 LIMIT 1
                 """,
-                (account, position_id),
+                (platform, account, position_id),
             ).fetchone()
             if has_native:
                 continue
-            active = [row for row in source_rows if not row.get("deleted_at")]
-            if not active:
+            if not source_rows:
                 continue
-            active.sort(key=lambda row: (str(row["open_time_utc"]), str(row["id"])))
-            total_volume = sum(float(row.get("lots") or 0.0) for row in active)
+            source_rows.sort(key=lambda row: (str(row["open_time_utc"]), str(row["id"])))
+            total_volume = sum(float(row.get("lots") or 0.0) for row in source_rows)
             if total_volume <= 0:
                 continue
             entry_price = sum(
                 float(row.get("lots") or 0.0) * float(row.get("entry_price") or 0.0)
-                for row in active
+                for row in source_rows
             ) / total_volume
-            first = active[0]
+            first = source_rows[0]
             side = str(first.get("side") or "long").lower()
             conn.execute(
                 """
                 INSERT INTO deal_events (
-                    deal_ticket, account, position_id, order_ticket, entry_kind, deal_type,
+                    deal_ticket, platform, account, position_id, order_ticket, entry_kind, deal_type,
                     symbol, volume, price, time_utc, time_msc, profit, commission, swap,
                     fee, screenshot_path, source_kind, source_trade_id, raw_json
-                ) VALUES (?, ?, ?, ?, 'in', ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, '', 'legacy', ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, 'in', ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, '', 'legacy', ?, ?)
                 """,
                 (
-                    f"legacy-in:{account}:{position_id}",
+                    f"legacy-in:{platform}:{account}:{position_id}",
+                    platform,
                     account,
                     position_id,
                     str(first.get("order_ticket") or ""),
@@ -683,23 +931,24 @@ class CampaignRepository:
                     json.dumps(
                         {
                             "legacy_estimated": True,
-                            "source_trade_ids": [row["id"] for row in active],
+                            "source_trade_ids": [row["id"] for row in source_rows],
                         }
                     ),
                 ),
             )
-            for index, row in enumerate(active):
+            for index, row in enumerate(source_rows):
                 close_time = str(row["close_time_utc"])
                 conn.execute(
                     """
                     INSERT INTO deal_events (
-                        deal_ticket, account, position_id, order_ticket, entry_kind, deal_type,
+                        deal_ticket, platform, account, position_id, order_ticket, entry_kind, deal_type,
                         symbol, volume, price, time_utc, time_msc, profit, commission, swap,
                         fee, screenshot_path, source_kind, source_trade_id, raw_json
-                    ) VALUES (?, ?, ?, ?, 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'legacy', ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'legacy', ?, ?)
                     """,
                     (
-                        f"legacy-out:{row['id']}",
+                        f"legacy-out:{platform}:{row['id']}",
+                        platform,
                         account,
                         position_id,
                         str(row.get("order_ticket") or ""),
@@ -726,13 +975,35 @@ class CampaignRepository:
             "WHERE campaign_positions.campaign_id = campaigns.id)"
         ]
         parameters: list[Any] = []
+        platform = str(filters.get("platform") or "mt5").strip()
+        clauses.append("campaigns.platform = ?")
+        parameters.append(platform)
         deleted = str(filters.get("deleted") or "active").strip().lower()
         if deleted == "active":
             clauses.append("campaigns.deleted_at IS NULL")
+            if platform == "domestic_futures":
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM campaign_source_trades "
+                    "JOIN trades ON trades.id = campaign_source_trades.trade_id "
+                    "WHERE campaign_source_trades.campaign_id = campaigns.id "
+                    "AND trades.deleted_at IS NULL)"
+                )
         elif deleted == "deleted":
-            clauses.append("campaigns.deleted_at IS NOT NULL")
+            if platform == "domestic_futures":
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM campaign_source_trades "
+                    "JOIN trades ON trades.id = campaign_source_trades.trade_id "
+                    "WHERE campaign_source_trades.campaign_id = campaigns.id "
+                    "AND trades.deleted_at IS NOT NULL)"
+                )
+            else:
+                clauses.append("campaigns.deleted_at IS NOT NULL")
         elif deleted != "all":
             raise ValueError("deleted must be active, deleted, or all")
+
+        featured = filters.get("featured", filters.get("is_featured"))
+        if featured in (True, 1, "1", "true", "True"):
+            clauses.append("campaigns.is_featured = 1")
 
         needle = str(filters.get("query") or filters.get("q") or "").strip().casefold()
         if needle:
@@ -748,8 +1019,16 @@ class CampaignRepository:
         for key in ("symbol", "side", "trade_type", "strategy", "status"):
             value = str(filters.get(key) or "").strip()
             if value and value != "all":
-                clauses.append(f"campaigns.{key} = ?")
-                parameters.append(value)
+                if key in {"trade_type", "strategy"}:
+                    clauses.append(
+                        f"(campaigns.{key} = ? OR EXISTS ("
+                        f"SELECT 1 FROM json_each(COALESCE(campaigns.{key}_tags, '[]')) "
+                        "WHERE json_each.value = ?))"
+                    )
+                    parameters.extend([value, value])
+                else:
+                    clauses.append(f"campaigns.{key} = ?")
+                    parameters.append(value)
 
         start_utc, end_utc = _beijing_date_bounds(
             filters.get("start_date") or filters.get("start"),
@@ -771,7 +1050,8 @@ class CampaignRepository:
                 "OR positions.weighted_entry_price IS NULL "
                 "OR positions.reconstruction_status NOT IN ('complete', 'legacy_estimated') "
                 "OR EXISTS (SELECT 1 FROM deal_events AS entry_deals "
-                "WHERE entry_deals.account = positions.account "
+                "WHERE entry_deals.platform = positions.platform "
+                "AND entry_deals.account = positions.account "
                 "AND entry_deals.position_id = positions.position_id "
                 "AND PYTHON_STRIP_LOWER(entry_deals.entry_kind) "
                 "IN ('in', 'deal_entry_in', '0') "
@@ -791,3 +1071,20 @@ def _legacy_time_msc(value: str, fallback: int = 0) -> int:
         return int(parsed.timestamp() * 1000)
     except (TypeError, ValueError):
         return int(fallback)
+
+
+def _coerce_campaign_date(value: str | date) -> date:
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("today must be YYYY-MM-DD") from exc
+
+
+def _normalize_campaign_goal(value: Any) -> int:
+    try:
+        goal = int(value)
+    except (TypeError, ValueError):
+        return 20
+    return max(1, min(goal, 500))

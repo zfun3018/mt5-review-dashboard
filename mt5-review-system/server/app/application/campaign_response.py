@@ -4,6 +4,10 @@ from typing import Any, Callable
 
 from ..domain.analytics import to_beijing
 from ..domain.campaigns import calculate_position_risk
+from ..core.config import get_runtime_paths
+from ..data.media_repository import MediaRepository
+from ..platform_modules.domestic_futures_contracts import contract_display
+from ..platforms import DOMESTIC_FUTURES_PLATFORM
 
 
 TradeSerializer = Callable[[dict[str, Any]], dict[str, Any]]
@@ -82,11 +86,16 @@ class CampaignResponseSerializer:
         self, record: dict[str, Any], *, include_positions: bool
     ) -> dict[str, Any]:
         serialized = {key: value for key, value in record.items() if key != "positions"}
+        serialized.update(_campaign_contract_display(record))
         campaign_id = str(serialized.get("id") or "")
         serialized["display_order_kind"] = "Campaign"
         serialized["display_order_no"] = campaign_id[:8]
         serialized["campaign_total_pnl"] = float(serialized.get("net_pnl") or 0.0)
         serialized["net_pnl"] = float(serialized.get("net_pnl") or 0.0)
+        screenshot_path = str(serialized.get("screenshot_path") or "")
+        screenshot_exists = MediaRepository(get_runtime_paths()).exists(screenshot_path)
+        serialized["screenshot_missing"] = bool(screenshot_path) and not screenshot_exists
+        serialized["screenshot_url"] = f"/media/{screenshot_path}" if screenshot_exists else ""
         serialized["open_time_utc"] = serialized.get("opened_at_utc")
         serialized["close_time_utc"] = serialized.get("closed_at_utc")
         serialized["position_summaries"] = [
@@ -113,3 +122,33 @@ class CampaignResponseSerializer:
                 for position in record.get("positions", [])
             ]
         return serialized
+
+
+def _campaign_contract_display(record: dict[str, Any]) -> dict[str, str]:
+    """Expose human-readable contract fields without changing the stable symbol code."""
+    source_trades = [
+        source
+        for position in record.get("positions", [])
+        for source in position.get("source_trades", [])
+        if isinstance(source, dict)
+    ]
+    representative = source_trades[-1] if source_trades else {}
+    symbol = str(record.get("symbol") or representative.get("symbol") or "")
+    if str(record.get("platform") or "mt5") == DOMESTIC_FUTURES_PLATFORM:
+        display = contract_display(symbol)
+        return {
+            "product_name": display["product_name"],
+            "contract_name": display["contract_name"],
+            "display_symbol": display["contract_name"],
+        }
+    product_name = str(
+        representative.get("product_name") or record.get("product_name") or ""
+    )
+    contract_name = str(
+        representative.get("contract_name") or record.get("contract_name") or ""
+    )
+    return {
+        "product_name": product_name,
+        "contract_name": contract_name,
+        "display_symbol": contract_name or product_name or symbol,
+    }

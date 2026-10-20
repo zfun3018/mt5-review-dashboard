@@ -19,6 +19,7 @@ from typing import Any
 
 from ..domain.analytics import calculate_duration_seconds
 from ..domain.analytics import to_beijing
+from ..platforms import normalize_platform
 from .campaign_repository import CampaignRepository
 from .catalog_commands import _ensure_classification_option, _validate_classification_assignment
 from .catalog_repository import CatalogRepository
@@ -50,17 +51,18 @@ def _custom_values_for_trade_ids(
     )
 
 
-def list_trades(include_deleted: bool = False) -> list[dict[str, Any]]:
+def list_trades(include_deleted: bool = False, platform: str = "mt5") -> list[dict[str, Any]]:
     with db() as conn:
-        deleted_clause = "" if include_deleted else "WHERE trades.deleted_at IS NULL"
+        deleted_clause = "" if include_deleted else "trades.deleted_at IS NULL AND "
         rows = conn.execute(
             f"""
             SELECT trades.*, trends.name AS trend_name, trends.color AS trend_color
             FROM trades
             LEFT JOIN trends ON trends.id = trades.trend_id
-            {deleted_clause}
+            WHERE {deleted_clause} trades.platform = ?
             ORDER BY trades.close_time_utc DESC
-            """
+            """,
+            (platform,),
         ).fetchall()
         custom_values = _custom_values_for_trade_ids(conn, [row["id"] for row in rows])
     result = [dict(row) for row in rows]
@@ -69,7 +71,11 @@ def list_trades(include_deleted: bool = False) -> list[dict[str, Any]]:
     return result
 
 
-def get_trade(trade_id: str, include_deleted: bool = False) -> dict[str, Any] | None:
+def get_trade(
+    trade_id: str,
+    include_deleted: bool = False,
+    platform: str = "mt5",
+) -> dict[str, Any] | None:
     with db() as conn:
         deleted_clause = "" if include_deleted else "AND trades.deleted_at IS NULL"
         row = conn.execute(
@@ -77,9 +83,9 @@ def get_trade(trade_id: str, include_deleted: bool = False) -> dict[str, Any] | 
             SELECT trades.*, trends.name AS trend_name, trends.color AS trend_color
             FROM trades
             LEFT JOIN trends ON trends.id = trades.trend_id
-            WHERE trades.id = ? {deleted_clause}
+            WHERE trades.id = ? AND trades.platform = ? {deleted_clause}
             """,
-            (trade_id,),
+            (trade_id, normalize_platform(platform)),
         ).fetchone()
         custom_values = _custom_values_for_trade_ids(conn, [row["id"]]) if row else {}
     if not row:
@@ -89,7 +95,12 @@ def get_trade(trade_id: str, include_deleted: bool = False) -> dict[str, Any] | 
     return result
 
 
-def replace_trade_screenshot(trade_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def replace_trade_screenshot(
+    trade_id: str,
+    payload: dict[str, Any],
+    platform: str = "mt5",
+) -> dict[str, Any]:
+    normalized_platform = normalize_platform(platform)
     image_bytes, extension = _decode_manual_screenshot(payload)
     new_path = f"screenshots/manual-{uuid.uuid4().hex}{extension}"
     new_file = get_runtime_paths().data / new_path
@@ -99,8 +110,8 @@ def replace_trade_screenshot(trade_id: str, payload: dict[str, Any]) -> dict[str
     try:
         with db() as conn:
             current = conn.execute(
-                "SELECT id, screenshot_path, raw_json FROM trades WHERE id = ? AND deleted_at IS NULL",
-                (trade_id,),
+                "SELECT id, screenshot_path, raw_json FROM trades WHERE id = ? AND platform = ? AND deleted_at IS NULL",
+                (trade_id, normalized_platform),
             ).fetchone()
             if not current:
                 raise KeyError(trade_id)
@@ -110,9 +121,9 @@ def replace_trade_screenshot(trade_id: str, payload: dict[str, Any]) -> dict[str
                 """
                 UPDATE trades
                 SET screenshot_path = ?, raw_json = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = ? AND platform = ?
                 """,
-                (new_path, raw_json, trade_id),
+                (new_path, raw_json, trade_id, normalized_platform),
             )
             _refresh_campaign_presentation_conn(
                 conn, trade_id, clear_screenshot=True
@@ -122,17 +133,18 @@ def replace_trade_screenshot(trade_id: str, payload: dict[str, Any]) -> dict[str
         raise
 
     _remove_unreferenced_screenshot(old_path, trade_id)
-    trade = get_trade(trade_id)
+    trade = get_trade(trade_id, platform=normalized_platform)
     if not trade:
         raise KeyError(trade_id)
     return trade
 
 
-def delete_trade_screenshot(trade_id: str) -> dict[str, Any]:
+def delete_trade_screenshot(trade_id: str, platform: str = "mt5") -> dict[str, Any]:
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
         current = conn.execute(
-            "SELECT id, screenshot_path, raw_json FROM trades WHERE id = ? AND deleted_at IS NULL",
-            (trade_id,),
+            "SELECT id, screenshot_path, raw_json FROM trades WHERE id = ? AND platform = ? AND deleted_at IS NULL",
+            (trade_id, normalized_platform),
         ).fetchone()
         if not current:
             raise KeyError(trade_id)
@@ -142,14 +154,14 @@ def delete_trade_screenshot(trade_id: str) -> dict[str, Any]:
             """
             UPDATE trades
             SET screenshot_path = '', raw_json = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = ? AND platform = ?
             """,
-            (raw_json, trade_id),
+            (raw_json, trade_id, normalized_platform),
         )
         _refresh_campaign_presentation_conn(conn, trade_id, clear_screenshot=True)
 
     _remove_unreferenced_screenshot(old_path, trade_id)
-    trade = get_trade(trade_id)
+    trade = get_trade(trade_id, platform=normalized_platform)
     if not trade:
         raise KeyError(trade_id)
     return trade
@@ -237,11 +249,16 @@ def _refresh_campaign_presentation_conn(
     _campaign_repository().rebuild(conn=conn)
 
 
-def update_trade_review(trade_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def update_trade_review(
+    trade_id: str,
+    payload: dict[str, Any],
+    platform: str = "mt5",
+) -> dict[str, Any]:
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
         existing = conn.execute(
-            "SELECT id, review_text, trend_id, trade_type, strategy FROM trades WHERE id = ?",
-            (trade_id,),
+            "SELECT id, review_text, trend_id, trade_type, strategy FROM trades WHERE id = ? AND platform = ?",
+            (trade_id, normalized_platform),
         ).fetchone()
         if not existing:
             raise KeyError(trade_id)
@@ -257,7 +274,7 @@ def update_trade_review(trade_id: str, payload: dict[str, Any]) -> dict[str, Any
             """
             UPDATE trades
             SET review_text = ?, trend_id = ?, trade_type = ?, strategy = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE id = ? AND platform = ?
             """,
             (
                 str(payload.get("review_text", existing["review_text"])),
@@ -265,28 +282,34 @@ def update_trade_review(trade_id: str, payload: dict[str, Any]) -> dict[str, Any
                 trade_type,
                 strategy,
                 trade_id,
+                normalized_platform,
             ),
         )
         _refresh_campaign_presentation_conn(conn, trade_id, clear_review=True)
-    trade = get_trade(trade_id)
+    trade = get_trade(trade_id, platform=normalized_platform)
     if not trade:
         raise KeyError(trade_id)
     return trade
 
 
-def update_trade_archived(trade_id: str, archived: bool) -> dict[str, Any]:
+def update_trade_archived(
+    trade_id: str,
+    archived: bool,
+    platform: str = "mt5",
+) -> dict[str, Any]:
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
         cursor = conn.execute(
             """
             UPDATE trades
             SET is_archived = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND deleted_at IS NULL
+            WHERE id = ? AND platform = ? AND deleted_at IS NULL
             """,
-            (1 if archived else 0, trade_id),
+            (1 if archived else 0, trade_id, normalized_platform),
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
-    trade = get_trade(trade_id)
+    trade = get_trade(trade_id, platform=normalized_platform)
     if not trade:
         raise KeyError(trade_id)
     return trade
@@ -295,6 +318,7 @@ def update_trade_archived(trade_id: str, archived: bool) -> dict[str, Any]:
 def checkin_review_trade(
     trade_id: str,
     checkin_date: str | None = None,
+    platform: str = "mt5",
 ) -> dict[str, Any]:
     trade_id = str(trade_id).strip()
     if not trade_id:
@@ -304,19 +328,33 @@ def checkin_review_trade(
         datetime.strptime(day, "%Y-%m-%d")
     except ValueError as exc:
         raise ValueError("checkin_date must be YYYY-MM-DD") from exc
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
         trade = conn.execute(
-            "SELECT id FROM trades WHERE id = ? AND deleted_at IS NULL",
-            (trade_id,),
+            """
+            SELECT trades.id, campaign_source_trades.campaign_id
+            FROM trades
+            LEFT JOIN campaign_source_trades
+              ON campaign_source_trades.trade_id = trades.id
+            LEFT JOIN trade_campaigns
+              ON trade_campaigns.id = campaign_source_trades.campaign_id
+             AND trade_campaigns.platform = trades.platform
+             AND trade_campaigns.deleted_at IS NULL
+            WHERE trades.id = ? AND trades.platform = ? AND trades.deleted_at IS NULL
+            ORDER BY trade_campaigns.updated_at DESC
+            LIMIT 1
+            """,
+            (trade_id, normalized_platform),
         ).fetchone()
         if not trade:
             raise KeyError(trade_id)
         cursor = conn.execute(
-            "INSERT OR IGNORE INTO reading_checkins (trade_id, checkin_date) VALUES (?, ?)",
-            (trade_id, day),
+            "INSERT OR IGNORE INTO campaign_checkins (campaign_id, checkin_date) VALUES (?, ?)",
+            (trade["campaign_id"], day),
         )
     return {
         "trade_id": trade_id,
+        "campaign_id": str(trade["campaign_id"]),
         "date": day,
         "created": cursor.rowcount == 1,
         "checked_in": True,
@@ -326,6 +364,7 @@ def checkin_review_trade(
 def cancel_review_trade(
     trade_id: str,
     checkin_date: str | None = None,
+    platform: str = "mt5",
 ) -> dict[str, Any]:
     trade_id = str(trade_id).strip()
     if not trade_id:
@@ -335,19 +374,33 @@ def cancel_review_trade(
         datetime.strptime(day, "%Y-%m-%d")
     except ValueError as exc:
         raise ValueError("checkin_date must be YYYY-MM-DD") from exc
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
         trade = conn.execute(
-            "SELECT id FROM trades WHERE id = ? AND deleted_at IS NULL",
-            (trade_id,),
+            """
+            SELECT trades.id, campaign_source_trades.campaign_id
+            FROM trades
+            JOIN campaign_source_trades
+              ON campaign_source_trades.trade_id = trades.id
+            JOIN trade_campaigns
+              ON trade_campaigns.id = campaign_source_trades.campaign_id
+             AND trade_campaigns.platform = trades.platform
+             AND trade_campaigns.deleted_at IS NULL
+            WHERE trades.id = ? AND trades.platform = ? AND trades.deleted_at IS NULL
+            ORDER BY trade_campaigns.updated_at DESC
+            LIMIT 1
+            """,
+            (trade_id, normalized_platform),
         ).fetchone()
         if not trade:
             raise KeyError(trade_id)
         cursor = conn.execute(
-            "DELETE FROM reading_checkins WHERE trade_id = ? AND checkin_date = ?",
-            (trade_id, day),
+            "DELETE FROM campaign_checkins WHERE campaign_id = ? AND checkin_date = ?",
+            (trade["campaign_id"], day),
         )
     return {
         "trade_id": trade_id,
+        "campaign_id": str(trade["campaign_id"]),
         "date": day,
         "deleted": cursor.rowcount == 1,
         "checked_in": False,
@@ -377,32 +430,64 @@ def set_review_daily_goal(daily_goal: int) -> dict[str, int]:
     return {"daily_goal": goal}
 
 
-def delete_trade(trade_id: str) -> None:
+def delete_trade(
+    trade_id: str,
+    platform: str = "mt5",
+    reason: str = "",
+) -> None:
+    normalized_platform = normalize_platform(platform)
+    normalized_reason = str(reason or "").strip()[:500]
     with db() as conn:
         cursor = conn.execute(
-            "UPDATE trades SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL",
-            (trade_id,),
+            """
+            UPDATE trades
+            SET deleted_at = CURRENT_TIMESTAMP,
+                deleted_reason = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND platform = ? AND deleted_at IS NULL
+            """,
+            (normalized_reason, trade_id, normalized_platform),
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
-        # Soft deletion bypasses SQLite's ON DELETE CASCADE, so remove the
-        # derived reading history explicitly before allowing restoration.
-        conn.execute("DELETE FROM reading_checkins WHERE trade_id = ?", (trade_id,))
+        # Remove campaign check-ins only when this deletion removes the last
+        # active source trade from the merged order. A surviving source trade
+        # keeps the campaign and its review history intact.
+        conn.execute(
+            """
+            DELETE FROM campaign_checkins
+            WHERE campaign_id IN (
+                SELECT links.campaign_id
+                FROM campaign_source_trades AS links
+                WHERE links.trade_id = ?
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM campaign_source_trades AS siblings
+                      JOIN trades AS active_trades
+                        ON active_trades.id = siblings.trade_id
+                      WHERE siblings.campaign_id = links.campaign_id
+                        AND active_trades.deleted_at IS NULL
+                  )
+            )
+            """,
+            (trade_id,),
+        )
         _campaign_repository().rebuild(conn=conn)
 
 
-def restore_trade(trade_id: str) -> dict[str, Any]:
+def restore_trade(trade_id: str, platform: str = "mt5") -> dict[str, Any]:
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
         cursor = conn.execute(
-            "UPDATE trades SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (trade_id,),
+            "UPDATE trades SET deleted_at = NULL, deleted_reason = '', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND platform = ?",
+            (trade_id, normalized_platform),
         )
         if cursor.rowcount == 0:
             raise KeyError(trade_id)
-        # Also clean legacy rows left by older soft-delete behavior.
-        conn.execute("DELETE FROM reading_checkins WHERE trade_id = ?", (trade_id,))
+        # A deleted campaign has no active order to review. Any old campaign
+        # check-ins were removed during the delete transaction.
         _campaign_repository().rebuild(conn=conn)
-    trade = get_trade(trade_id)
+    trade = get_trade(trade_id, platform=normalized_platform)
     if not trade:
         raise KeyError(trade_id)
     return trade
@@ -424,6 +509,9 @@ def _upsert_trade_conn(
     trade.setdefault("commission", 0.0)
     trade.setdefault("swap", 0.0)
     trade.setdefault("fee", 0.0)
+    trade.setdefault("platform", "mt5")
+    trade.setdefault("product_name", "")
+    trade.setdefault("contract_name", "")
     trade.setdefault("review_text", "")
     trade.setdefault("trend_id", None)
     trade.setdefault("remark", "")
@@ -441,23 +529,26 @@ def _upsert_trade_conn(
     conn.execute(
         """
         INSERT INTO trades (
-            id, account, order_no, position_id, order_ticket, deal_ticket, symbol, side, lots,
+            id, platform, account, order_no, position_id, order_ticket, deal_ticket, symbol, product_name, contract_name, side, lots,
             open_time_utc, close_time_utc, duration_seconds, entry_price, exit_price, pnl,
             commission, swap, fee, screenshot_path, review_text, trend_id, remark,
             trade_type, strategy, source, raw_json
         ) VALUES (
-            :id, :account, :order_no, :position_id, :order_ticket, :deal_ticket, :symbol, :side, :lots,
+            :id, :platform, :account, :order_no, :position_id, :order_ticket, :deal_ticket, :symbol, :product_name, :contract_name, :side, :lots,
             :open_time_utc, :close_time_utc, :duration_seconds, :entry_price, :exit_price, :pnl,
             :commission, :swap, :fee, :screenshot_path, :review_text, :trend_id, :remark,
             :trade_type, :strategy, :source, :raw_json
         )
         ON CONFLICT(id) DO UPDATE SET
+            platform = excluded.platform,
             account = excluded.account,
             order_no = excluded.order_no,
             position_id = excluded.position_id,
             order_ticket = excluded.order_ticket,
             deal_ticket = excluded.deal_ticket,
             symbol = excluded.symbol,
+            product_name = excluded.product_name,
+            contract_name = excluded.contract_name,
             side = excluded.side,
             lots = excluded.lots,
             open_time_utc = excluded.open_time_utc,

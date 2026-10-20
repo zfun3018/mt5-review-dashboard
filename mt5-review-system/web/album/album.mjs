@@ -10,6 +10,7 @@ function formatDateTime(value) {
   if (Number.isNaN(date.getTime())) return String(value).replace("T", " ").slice(0, 16);
   return new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
+    weekday: "short",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -21,6 +22,10 @@ function formatDateTime(value) {
 
 function sideLabel(side) {
   return side === "long" ? "多单" : side === "short" ? "空单" : side || "-";
+}
+
+function tradeDisplayName(trade) {
+  return trade?.display_symbol || trade?.contract_name || trade?.symbol || "未知品种";
 }
 
 function slug(value) {
@@ -390,8 +395,8 @@ export function createAlbumController({
     const archived = isArchived(trade.is_archived);
     const random = context === "random";
     const screenshot = trade.screenshot_url
-      ? `<button class="album-image-trigger" type="button" data-shot="${escapeAttr(trade.screenshot_url)}" data-trade-id="${escapeAttr(trade.id)}" data-caption="${escapeAttr(`${trade.symbol} · ${formatDateTime(trade.close_time_bj)}`)}" title="打开阅读器">
-          <img src="${escapeAttr(trade.screenshot_url)}" loading="lazy" alt="${escapeAttr(`${trade.symbol} 交易截图`)}" />
+      ? `<button class="album-image-trigger" type="button" data-shot="${escapeAttr(trade.screenshot_url)}" data-trade-id="${escapeAttr(trade.id)}" data-caption="${escapeAttr(`${tradeDisplayName(trade)} · ${formatDateTime(trade.close_time_bj)}`)}" title="打开阅读器">
+          <img src="${escapeAttr(trade.screenshot_url)}" loading="lazy" alt="${escapeAttr(`${tradeDisplayName(trade)} 交易截图`)}" />
         </button>`
       : `<div class="album-shot-missing"><strong>截图待补</strong><span>该订单仍在画册中，打开订单详情后可以补充截图。</span></div>`;
     const coreGrid = `
@@ -410,7 +415,7 @@ export function createAlbumController({
       <div class="album-meta">
         <div class="album-meta-top">
           <div>
-            <strong>${escapeHtml(trade.symbol || "未知品种")}</strong>
+            <strong>${escapeHtml(tradeDisplayName(trade))}</strong>
             <small>${escapeHtml(formatDateTime(trade.close_time_bj))} · ${escapeHtml(trade.display_order_no || trade.id)}</small>
           </div>
           <span class="album-pnl ${pnl > 0 ? "profit" : pnl < 0 ? "loss" : ""}">${escapeHtml(formatMoney(pnl))}</span>
@@ -445,7 +450,7 @@ export function createAlbumController({
       <div class="album-card-actions">
         <button class="ghost-btn album-archive-toggle${archived ? " is-archived" : ""}" type="button" data-archive-toggle="${escapeAttr(trade.id)}" title="${archived ? "恢复到全部画册" : "归档画册"}"><i data-lucide="${archived ? "archive-restore" : "archive"}" aria-hidden="true"></i>${archived ? "恢复" : "归档"}</button>
         <a class="ghost-btn" href="/orders/?trade=${encodeURIComponent(trade.id)}">打开订单</a>
-        ${trade.screenshot_url ? `<button class="ghost-btn album-image-trigger" type="button" data-shot="${escapeAttr(trade.screenshot_url)}" data-trade-id="${escapeAttr(trade.id)}" data-caption="${escapeAttr(`${trade.symbol} · ${formatDateTime(trade.close_time_bj)}`)}">打开阅读器</button>` : ""}
+        ${trade.screenshot_url ? `<button class="ghost-btn album-image-trigger" type="button" data-shot="${escapeAttr(trade.screenshot_url)}" data-trade-id="${escapeAttr(trade.id)}" data-caption="${escapeAttr(`${tradeDisplayName(trade)} · ${formatDateTime(trade.close_time_bj)}`)}">打开阅读器</button>` : ""}
       </div>`;
   }
 
@@ -654,7 +659,7 @@ export function createAlbumController({
     return `
       <header class="album-reader-order-head">
         <div>
-          <strong>${escapeHtml(trade.symbol || "未知品种")}</strong>
+          <strong>${escapeHtml(tradeDisplayName(trade))}</strong>
           <small>${escapeHtml(formatDateTime(trade.close_time_bj))} · ${escapeHtml(trade.display_order_no || trade.id)}</small>
         </div>
         <span class="album-pnl ${pnl > 0 ? "profit" : pnl < 0 ? "loss" : ""}">${escapeHtml(formatMoney(pnl))}</span>
@@ -675,8 +680,8 @@ export function createAlbumController({
     const info = getElement("albumReaderInfo");
     if (!modal || !image || !info || !trade) return;
     image.src = src || trade.screenshot_url || "";
-    image.alt = `${trade.symbol || "交易"} 交易截图大图`;
-    if (captionNode) captionNode.textContent = caption || `${trade.symbol || "交易"} · ${formatDateTime(trade.close_time_bj)}`;
+    image.alt = `${tradeDisplayName(trade)} 交易截图大图`;
+    if (captionNode) captionNode.textContent = caption || `${tradeDisplayName(trade)} · ${formatDateTime(trade.close_time_bj)}`;
     info.innerHTML = renderReaderInfo(trade, customFieldsForTrade(trade));
     const checkinButton = getElement("albumReaderCheckin");
     if (checkinButton) {
@@ -714,7 +719,7 @@ export function createAlbumController({
       if (!randomTrade && status) status.textContent = "全部画册中暂无可阅读内容";
       renderRandomTrade();
       if (randomTrade && getElement("albumImageModal")?.classList?.contains("open")) {
-        renderReader(randomTrade, randomTrade.screenshot_url, `${randomTrade.symbol || "交易"} · ${formatDateTime(randomTrade.close_time_bj)}`);
+        renderReader(randomTrade, randomTrade.screenshot_url, `${tradeDisplayName(randomTrade)} · ${formatDateTime(randomTrade.close_time_bj)}`);
       }
       return randomTrade;
     } catch (error) {

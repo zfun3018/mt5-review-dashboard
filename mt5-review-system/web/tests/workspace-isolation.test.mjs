@@ -11,9 +11,15 @@ const read = (...segments) => readFileSync(join(webRoot, ...segments), "utf8");
 const WORKSPACES = [
   { name: "dashboard", route: "/dashboard/", controller: "dashboard.mjs" },
   { name: "orders", route: "/orders/", controller: "orders.mjs" },
-  { name: "album", route: "/album/", controller: "album.mjs" },
   { name: "settings", route: "/settings/", controller: "settings.mjs" },
 ];
+
+test("legacy album entry redirects into featured order review", () => {
+  const html = read("album", "index.html");
+  assert.match(html, /window\.location\.replace/);
+  assert.match(html, /\/orders\/\?/);
+  assert.match(html, /listView/);
+});
 
 test("every workspace entry drops the coupled app.js and styles.css assets", () => {
   for (const workspace of WORKSPACES) {

@@ -53,6 +53,12 @@ CAMPAIGNS = [
         "id": "C-1",
         "status": "closed",
         "closed_at_utc": "2026-08-18T02:00:00+00:00",
+        "close_time_utc": "2026-08-18T02:00:00+00:00",
+        "pnl": 6.0,
+        "trade_pnl": 6.0,
+        "commission": 0.0,
+        "swap": 0.0,
+        "fee": 0.0,
         "net_pnl": 6.0,
         "campaign_r": 1.5,
         "trade_type": "follow",
@@ -241,6 +247,7 @@ class DashboardServiceTest(unittest.TestCase):
                 "periods",
                 "equity",
                 "calendar",
+                "monthly_pnl",
                 "heatmap",
                 "sessions",
                 "system_evaluation",
@@ -250,10 +257,10 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertNotIn("trades", payload)
         self.assertNotIn("campaigns", payload)
         self.assertEqual(payload["metrics"]["net_pnl"], 6.0)
-        self.assertEqual(payload["metrics"]["order_count"], 2)
+        self.assertEqual(payload["metrics"]["order_count"], 1)
         self.assertEqual(payload["r_metrics"]["sample_count"], 1)
         self.assertEqual(payload["r_metrics"]["expectancy_r"], 1.5)
-        self.assertEqual(payload["periods"]["today"]["order_count"], 2)
+        self.assertEqual(payload["periods"]["today"]["order_count"], 1)
         self.assertEqual(payload["equity"][-1]["cumulative_return"], 6.0)
         self.assertEqual(payload["calendar"]["year"], 2026)
         self.assertEqual(payload["calendar"]["month"], 8)
@@ -261,13 +268,35 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertIn("asia", payload["sessions"])
         self.assertEqual(payload["system_evaluation"][0]["order_count"], 1)
         self.assertEqual(payload["mode_evaluation"]["trade_type"][0]["label"], "Follow")
-        self.assertEqual(trades.analysis_calls, [("2026-08-18", "2026-08-18")])
+        self.assertEqual(trades.analysis_calls, [])
         self.assertEqual(trades.equity_calls, 1)
-        self.assertEqual(campaigns.analysis_calls, [("2026-08-18", "2026-08-18")])
+        self.assertEqual(campaigns.analysis_calls, [("2026-08-18", "2026-08-18"), (None, None)])
         self.assertEqual(campaigns.get_calls, [])
         self.assertEqual(campaigns.query_calls, [])
         self.assertEqual(catalogs.classification_calls, [(None, False)])
         self.assertEqual(settings.calls, 1)
+
+    def test_domestic_futures_analysis_exposes_domestic_extensions_from_campaigns(self):
+        trades = FakeTradeRepository()
+        campaigns = FakeCampaignRepository()
+        catalogs = FakeCatalogRepository()
+        settings = FakeSettingsRepository()
+        service = DashboardService(trades, campaigns, catalogs, settings)
+
+        payload = service.get_analysis(
+            AnalysisWindow("2026-08-18", "2026-08-18", 30),
+            platform="domestic_futures",
+        )
+
+        self.assertIn("fixed_periods", payload)
+        self.assertIn("monthly_pnl", payload)
+        self.assertIn("contract_rankings", payload)
+        self.assertIn("risk_summary", payload)
+        self.assertIn("review_coverage", payload)
+        self.assertIn("domestic_system_evaluation", payload)
+        self.assertEqual(payload["metrics"]["order_count"], 1)
+        self.assertEqual(payload["metrics"]["net_pnl"], 6.0)
+        self.assertEqual(campaigns.analysis_calls, [("2026-08-18", "2026-08-18"), (None, None)])
 
 
 class OrdersServiceTest(unittest.TestCase):

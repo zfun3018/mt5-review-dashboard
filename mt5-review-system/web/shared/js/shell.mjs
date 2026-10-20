@@ -1,13 +1,15 @@
 import { showToast } from "./feedback.mjs";
 import { sharePageScreenshot } from "./share.mjs";
+import { PLATFORM_OPTIONS, platformLabel, readPlatform, withPlatform, writePlatform } from "./platform.mjs";
 
 // Icons are rendered by the locally vendored Lucide v1.8.0 UMD release.
 export const NAV_ITEMS = Object.freeze([
   {href: "/dashboard/", label: "复盘仪表盘", icon: "chart-no-axes-combined"},
-  {href: "/orders/", label: "订单列表", icon: "list-checks"},
-  {href: "/album/", label: "复盘图册", icon: "images"},
+  {href: "/orders/", label: "订单复盘", icon: "list-checks"},
   {href: "/settings/", label: "设置", icon: "settings"},
 ]);
+
+export { PLATFORM_OPTIONS };
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 let mountedShell = null;
@@ -28,6 +30,10 @@ function writeCollapsedPreference(collapsed) {
   } catch (_error) {
     // Private browsing or restricted storage should not block navigation.
   }
+}
+
+function platformButtonLabel(platform) {
+  return `当前平台：${platformLabel(platform)}，点击切换`;
 }
 
 function createElement(tagName, {className, text, attributes} = {}) {
@@ -161,13 +167,21 @@ function handleNavigationKeys(event) {
   }
 }
 
-export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null, share = false} = {}) {
+export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null, refreshLabel = null, refreshIcon = null, refreshErrorMessage = null, share = false, location = globalThis.location, navigate = (url) => { globalThis.location.href = url; }} = {}) {
   mountedShell?.cleanup();
   const root = document.querySelector("[data-app-shell]");
   if (!root) throw new Error("Missing [data-app-shell] mount point");
   const originalNodes = [...root.children];
   root.replaceChildren();
   root.classList.add("app-shell");
+  let activePlatform = readPlatform(location);
+  const previousPlatform = document.body?.getAttribute("data-platform");
+  document.body?.setAttribute("data-platform", activePlatform);
+  const isDomesticFutures = activePlatform === "domestic_futures";
+  const workspaceBrand = isDomesticFutures ? "国内期货" : "MT5 复盘";
+  const workspaceMark = isDomesticFutures ? "期" : "MT";
+  const actionLabel = refreshLabel || (activePlatform === "domestic_futures" ? "导入数据" : "刷新数据");
+  const actionIcon = refreshIcon || (activePlatform === "domestic_futures" ? "upload" : "refresh-cw");
   const collapsedPreference = readCollapsedPreference();
   root.setAttribute("data-navigation-collapsed", String(collapsedPreference));
   root.setAttribute("data-navigation-open", "false");
@@ -183,23 +197,40 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   });
   if (mobileViewport) navigation.setAttribute("inert", "");
   const brand = createElement("div", {className: "app-navigation__brand"});
-  const mark = createElement("span", {className: "app-navigation__mark", text: "MT"});
+  const mark = createElement("span", {className: "app-navigation__mark", text: workspaceMark});
   const brandCopy = createElement("span", {className: "app-navigation__brand-copy"});
   brandCopy.append(
-    createElement("strong", {text: "MT5 复盘"}),
-    createElement("span", {text: "交易工作台"}),
+    createElement("strong", {text: workspaceBrand}),
+    createElement("span", {text: isDomesticFutures ? "复盘工作区" : "交易工作台"}),
   );
-  brand.append(mark, brandCopy);
+  const windowControls = createElement("div", {
+    className: "app-navigation__window-controls",
+    attributes: {"data-ui": "window-controls", "aria-hidden": "true"},
+  });
+  windowControls.append(
+    createElement("span", {className: "app-navigation__window-dot app-navigation__window-dot--close"}),
+    createElement("span", {className: "app-navigation__window-dot app-navigation__window-dot--minimize"}),
+    createElement("span", {className: "app-navigation__window-dot app-navigation__window-dot--maximize"}),
+  );
+  brand.append(windowControls, mark, brandCopy);
 
   const links = createElement("nav", {
     className: "app-navigation__links",
     attributes: {"aria-label": "工作区"},
   });
+  links.append(createElement("span", {
+    className: "app-navigation__section-title",
+    text: "工作区",
+    attributes: {"data-ui": "navigation-section"},
+  }));
   const currentRoute = normalizedRoute(activeRoute);
   for (const item of NAV_ITEMS) {
     const link = createElement("a", {
       className: "app-navigation__link",
-      attributes: {href: item.href, title: item.label},
+      attributes: {
+        href: activePlatform === "mt5" ? item.href : withPlatform(item.href, activePlatform),
+        title: item.label,
+      },
     });
     if (normalizedRoute(item.href) === currentRoute) link.setAttribute("aria-current", "page");
     link.append(icon(item.icon), createElement("span", {className: "app-navigation__label", text: item.label}));
@@ -209,9 +240,9 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   const footer = createElement("div", {className: "app-navigation__footer"});
   const refreshButton = createElement("button", {
     className: "app-navigation__refresh app-navigation__link",
-    attributes: {type: "button", title: "刷新数据", "aria-label": "刷新数据"},
+    attributes: {type: "button", title: actionLabel, "aria-label": actionLabel},
   });
-  refreshButton.append(icon("refresh-cw"), createElement("span", {className: "app-navigation__label", text: "刷新数据"}));
+  refreshButton.append(icon(actionIcon), createElement("span", {className: "app-navigation__label", text: actionLabel}));
   const environment = createElement("div", {className: "app-navigation__environment"});
   environment.append(createElement("span", {text: "v0.6.7"}));
   const collapseButton = iconButton({
@@ -245,15 +276,31 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     text: title,
     attributes: {"aria-label": title},
   });
+  const toolbarLeading = createElement("div", {className: "app-page-bar__leading"});
+  const toolbarContext = createElement("span", {
+    className: "app-page-bar__context",
+    text: isDomesticFutures ? "国内期货" : `${platformLabel(activePlatform)} 复盘工作台`,
+    attributes: {"data-ui": "toolbar-context"},
+  });
+  toolbarLeading.append(menuButton, toolbarContext);
+  const toolbarTitle = createElement("div", {className: "app-page-bar__title"});
+  toolbarTitle.append(heading);
   const actionArea = createElement("div", {className: "app-page-bar__actions"});
   appendActions(actionArea, actions);
+  const platformButton = iconButton({
+    label: platformButtonLabel(activePlatform),
+    iconName: "layers-3",
+    className: "app-platform-button",
+  });
+  platformButton.setAttribute("data-share-exclude", "true");
+  actionArea.append(platformButton);
   let shareButton = null;
   if (share) {
     shareButton = iconButton({label: "分享页面", iconName: "share-2", className: "app-share-button"});
     shareButton.setAttribute("data-share-exclude", "true");
     actionArea.append(shareButton);
   }
-  pageBar.append(menuButton, heading, actionArea);
+  pageBar.append(toolbarLeading, toolbarTitle, actionArea);
   const page = createElement("main", {className: "app-page", attributes: {id: "mainContent"}});
   page.append(...originalNodes);
   main.append(pageBar, page);
@@ -266,6 +313,11 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     setCollapsed(collapsed);
     writeCollapsedPreference(collapsed);
   };
+  const onPlatformClick = () => {
+    const nextIndex = (PLATFORM_OPTIONS.findIndex(({id}) => id === activePlatform) + 1) % PLATFORM_OPTIONS.length;
+    activePlatform = writePlatform(PLATFORM_OPTIONS[nextIndex].id);
+    navigate(withPlatform(`${location?.pathname || activeRoute}${location?.search || ""}`, activePlatform));
+  };
   const onRefreshClick = async () => {
     if (!onRefresh || refreshButton.disabled) return;
     refreshButton.disabled = true;
@@ -273,7 +325,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     try {
       await onRefresh();
     } catch (error) {
-      showToast(error?.message || "刷新数据失败", {tone: "error"});
+      showToast(error?.message || refreshErrorMessage || `${actionLabel}失败`, {tone: "error"});
     } finally {
       refreshButton.disabled = false;
       refreshButton.removeAttribute("aria-busy");
@@ -304,6 +356,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   menuButton.addEventListener("click", onMenuClick);
   backdrop.addEventListener("click", onBackdropClick);
   collapseButton.addEventListener("click", onCollapseClick);
+  platformButton.addEventListener("click", onPlatformClick);
   refreshButton.addEventListener("click", onRefreshClick);
   shareButton?.addEventListener("click", onShareClick);
   document.addEventListener("keydown", handleNavigationKeys);
@@ -313,18 +366,21 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     menuButton.removeEventListener("click", onMenuClick);
     backdrop.removeEventListener("click", onBackdropClick);
     collapseButton.removeEventListener("click", onCollapseClick);
+    platformButton.removeEventListener("click", onPlatformClick);
     refreshButton.removeEventListener("click", onRefreshClick);
     shareButton?.removeEventListener("click", onShareClick);
     document.removeEventListener("keydown", handleNavigationKeys);
     mediaQuery?.removeEventListener?.("change", onViewportChange);
     document.body.classList.remove("navigation-open");
+    if (previousPlatform === null) document.body?.removeAttribute("data-platform");
+    else document.body?.setAttribute("data-platform", previousPlatform);
     root.classList.remove("app-shell");
     root.removeAttribute("data-navigation-collapsed");
     root.removeAttribute("data-navigation-open");
     root.replaceChildren(...originalNodes);
     if (mountedShell?.root === root) mountedShell = null;
   };
-  mountedShell = {root, navigation, menuButton, collapseButton, backdrop, refreshButton, shareButton, cleanup};
+  mountedShell = {root, navigation, menuButton, collapseButton, backdrop, refreshButton, platformButton, shareButton, cleanup};
   setCollapsed(collapsedPreference);
   return cleanup;
 }

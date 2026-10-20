@@ -122,7 +122,10 @@ def build_trade_period_summaries(
         "year": [],
     }
     for trade in trades:
-        closed_date = (trade.get("_bj") or to_beijing(trade["close_time_utc"])).date()
+        close_time = trade.get("close_time_utc") or trade.get("closed_at_utc")
+        if not close_time:
+            continue
+        closed_date = (trade.get("_bj") or to_beijing(close_time)).date()
         if closed_date > anchor_date:
             continue
         if closed_date >= year_start:

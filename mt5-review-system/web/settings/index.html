@@ -4,10 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>设置 · MT5 复盘</title>
+    <script src="../shared/js/platform-boot.js"></script>
     <link rel="stylesheet" href="../shared/css/tokens.css" />
     <link rel="stylesheet" href="../shared/css/base.css" />
     <link rel="stylesheet" href="../shared/css/shell.css" />
     <link rel="stylesheet" href="../shared/css/components.css" />
+    <link rel="stylesheet" href="../shared/css/domestic-futures-workspace.css" />
     <link rel="stylesheet" href="./settings.css" />
   </head>
   <body>
@@ -72,6 +74,24 @@
           <div class="settings-section">
             <div class="settings-section-head">
               <div>
+                <p class="eyebrow">DOMESTIC FUTURES DATA</p>
+                <h2>数据导入</h2>
+              </div>
+            </div>
+            <p class="settings-hint">支持 CSV 或 XLS 成交数据。系统会自动识别、去重并报告异常；K 线截图请在订单详情中手动上传。</p>
+            <div class="settings-import-row">
+              <input id="futuresDataFile" type="file" accept=".csv,.xls,text/csv,application/vnd.ms-excel" />
+              <button id="importFuturesData" class="button-primary" type="button">导入数据</button>
+              <button id="downloadFuturesTemplate" class="button" type="button">下载标准模板</button>
+            </div>
+            <div id="futuresImportResult" class="settings-import-result" aria-live="polite"></div>
+            <div id="futuresImportCalendar" class="futures-import-calendar"></div>
+            <div id="futuresImportHistory" class="futures-import-history"></div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-head">
+              <div>
                 <p class="eyebrow">LOCAL STATUS</p>
                 <h2>系统状态</h2>
               </div>
@@ -98,6 +118,9 @@
     <script type="module">
       import { createSettingsController } from "./settings.mjs";
       import { requestJson } from "../shared/js/api.mjs";
+      import { readPlatform, withPlatform } from "../shared/js/platform.mjs";
+
+      const platform = readPlatform(window.location);
 
       const controller = createSettingsController({
         api: { requestJson },
@@ -105,6 +128,10 @@
         location: window.location,
         history: window.history,
         onRefresh: async () => {
+          if (platform === "domestic_futures") {
+            window.location.href = withPlatform("/settings/?tab=data", platform);
+            return;
+          }
           await requestJson("/api/sync", { method: "POST" });
           window.location.reload();
         },

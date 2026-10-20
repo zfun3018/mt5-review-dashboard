@@ -4,15 +4,53 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>复盘仪表盘 · MT5 复盘</title>
+    <script src="../shared/js/platform-boot.js"></script>
     <link rel="stylesheet" href="../shared/css/tokens.css" />
     <link rel="stylesheet" href="../shared/css/base.css" />
     <link rel="stylesheet" href="../shared/css/shell.css" />
     <link rel="stylesheet" href="../shared/css/components.css" />
+    <link rel="stylesheet" href="../vendor/gridstack.min.css" />
     <link rel="stylesheet" href="./dashboard.css" />
+    <link rel="stylesheet" href="./domestic-futures-dashboard.css" />
+    <link rel="stylesheet" href="../shared/css/domestic-futures-workspace.css" />
   </head>
   <body>
     <div data-app-shell>
+      <section id="domesticDashboard" class="domestic-dashboard" hidden aria-label="复盘仪表盘">
+        <header class="domestic-dashboard-intro">
+          <div><p class="domestic-kicker">ACCOUNT REVIEW WORKSPACE</p><p>围绕账户结果、成本压力与复盘质量组织数据，逐笔交易请前往订单复盘。</p></div>
+          <a class="domestic-layout-link" data-dashboard-layout-link href="./mock-domestic-futures-layout.html?return=/dashboard/?platform=domestic_futures" aria-label="打开仪表盘布局编辑器"><i data-lucide="layout-grid"></i><span>调整布局</span></a>
+        </header>
+        <section class="domestic-filter-bar" data-domestic-filter aria-label="国内期货分析范围">
+          <div class="domestic-filter-group"><span class="domestic-filter-label">分析范围</span><div class="domestic-range" role="tablist" aria-label="分析范围">
+            <button type="button" role="tab" data-domestic-preset="all">全部时间</button>
+            <button type="button" role="tab" data-domestic-preset="today">今日</button>
+            <button type="button" role="tab" data-domestic-preset="7d">近 7 天</button>
+            <button type="button" role="tab" data-domestic-preset="30d">本月</button>
+            <button type="button" role="tab" data-domestic-preset="custom">自定义</button>
+          </div></div>
+          <div class="domestic-custom-dates" data-domestic-custom-dates hidden><label for="domesticStartDate">开始日期</label><input id="domesticStartDate" type="date" /><label for="domesticEndDate">结束日期</label><input id="domesticEndDate" type="date" /></div>
+          <p id="domesticDashboardStatus" class="domestic-filter-note">固定周期指标不受上方范围影响</p>
+        </section>
+        <div class="domestic-cost-note"><strong>成本口径已启用</strong><span>净盈亏 = 交易盈亏 + 手续费（含 commission、swap、fee）</span></div>
+        <div class="domestic-dashboard-stage">
+          <section class="domestic-module domestic-period-module" data-module="period-overview"><header class="domestic-panel-head"><div><p class="domestic-kicker">PERIOD SNAPSHOT</p><h3 data-module-title>固定周期指标</h3><p data-module-subtitle>独立周期统计，不受上方时间筛选影响</p></div><span class="domestic-fixed-badge"><i data-lucide="lock-keyhole"></i>固定周期</span></header><div id="domesticFixedPeriods" class="domestic-period-grid"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="net-performance"><header class="domestic-panel-head"><div><p class="domestic-kicker">NET PERFORMANCE</p><h3 data-module-title>累计净盈亏</h3><p data-module-subtitle>已包含手续费，按平仓成交时间归集</p></div></header><div id="domesticNetChart" class="domestic-net-chart" role="img" aria-label="累计净盈亏曲线"></div><div id="domesticNetSummary" class="domestic-chart-foot"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="risk-health"><header class="domestic-panel-head"><div><p class="domestic-kicker">RISK HEALTH</p><h3 data-module-title>账户风险状态</h3><p data-module-subtitle>已实现结果压力，不含保证金和未实现盈亏</p></div></header><div id="domesticRiskHealth" class="domestic-risk-content"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="monthly-pnl"><header class="domestic-panel-head"><div><p class="domestic-kicker">MONTHLY P/L</p><h3 data-module-title>按月盈亏</h3><p data-module-subtitle>按平仓月份汇总成本后的净盈亏</p></div></header><div id="domesticMonthlyChart" class="domestic-monthly-chart"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="daily-calendar"><header class="domestic-panel-head"><div><p class="domestic-kicker">DAILY P/L</p><h3 data-module-title>交易日历</h3><p data-module-subtitle>按北京时间展示每日净盈亏</p></div></header><div id="domesticCalendar"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="contract-contribution"><header class="domestic-panel-head"><div><p class="domestic-kicker">CONTRACT CONTRIBUTION</p><h3 data-module-title>合约贡献</h3><p data-module-subtitle>按净盈亏排序</p></div></header><div id="domesticContractContribution"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="contract-losses"><header class="domestic-panel-head"><div><p class="domestic-kicker">LOSS LEADERBOARD</p><h3 data-module-title>合约亏损榜</h3><p data-module-subtitle>净亏损最大的 10 个品种</p></div></header><div id="domesticContractLosses"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="data-health"><header class="domestic-panel-head"><div><p class="domestic-kicker">DATA HEALTH</p><h3 data-module-title>数据与导入</h3><p data-module-subtitle>导入数据质量概览</p></div></header><div id="domesticDataHealth"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="review-coverage"><header class="domestic-panel-head"><div><p class="domestic-kicker">REVIEW COVERAGE</p><h3 data-module-title>复盘完成度</h3><p data-module-subtitle>账户整体复盘覆盖情况</p></div></header><div id="domesticReviewCoverage"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="system-evaluation"><header class="domestic-panel-head"><div><p class="domestic-kicker">DAILY SYSTEM EVALUATION</p><h3 data-module-title>交易系统评估</h3><p data-module-subtitle>按交易日查看交易盈亏、手续费、净盈亏、胜率和盈亏比</p></div></header><div id="domesticSystemEvaluation"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="mode-evaluation"><header class="domestic-panel-head"><div><p class="domestic-kicker">TRADE MODE EVALUATION</p><h3 data-module-title>交易模式评估</h3><p data-module-subtitle>比较交易类型和策略的真实贡献</p></div></header><div id="domesticModeEvaluation"></div></section>
+        </div>
+      </section>
+      <div id="legacyDashboard" hidden>
       <section id="analysisRegion" class="region-anchor" aria-live="polite"></section>
+
+      <section id="latestImportSummary" class="latest-import-summary" aria-live="polite">最近导入订单：暂无</section>
 
       <section id="marketClock" class="market-clock" aria-label="全球交易时段"></section>
 
@@ -35,29 +73,31 @@
           <label for="endDateFilter">结束日期</label>
           <input id="endDateFilter" type="date" title="结束日期" />
         </div>
+        <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./mock-domestic-futures-layout.html?platform=mt5" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
       </section>
 
-      <section class="panel r-metric-panel" aria-label="R 指标概览">
+      <div class="mt5-dashboard-layout grid-stack" id="mt5DashboardLayout">
+      <section class="panel r-metric-panel" aria-label="R 指标概览" data-layout-module="r-metrics">
         <div class="panel-head">
           <div>
             <p class="eyebrow">R SUMMARY</p>
-            <h2>R 指标概览</h2>
+            <h2 data-layout-title>R 指标概览</h2>
+            <p class="layout-subtitle" data-layout-subtitle>按交易组合评估风险回报</p>
           </div>
         </div>
         <div id="rMetricSummary" class="r-metric-grid"></div>
       </section>
 
-      <div class="dashboard-grid">
-        <article class="panel equity-panel">
+        <article class="panel equity-panel" data-layout-module="equity">
           <div class="panel-head">
             <div>
               <p class="eyebrow">CUMULATIVE RETURN</p>
-              <h2>收益累计曲线</h2>
+              <h2 data-layout-title>收益累计曲线</h2>
+              <p class="layout-subtitle" data-layout-subtitle>按交易组合累计收益</p>
             </div>
             <div class="panel-actions">
               <div class="chart-legend" aria-label="图表图例">
-                <span class="chart-key return-key">回报</span>
-                <span class="chart-key rate-key">收益率</span>
+                <span class="chart-key return-key">累计净盈亏</span>
               </div>
               <span id="equityDelta" class="status-pill"></span>
             </div>
@@ -65,11 +105,13 @@
           <div id="equityChart" class="chart-frame"></div>
         </article>
 
-        <article class="panel calendar-panel">
+        <article class="panel calendar-panel" data-layout-module="calendar">
           <div class="panel-head">
             <div>
               <p class="eyebrow">MONTHLY P/L</p>
-              <h2 id="calendarTitle">月度盈亏日历</h2>
+              <h2 id="calendarTitle" data-layout-title>盈亏日历</h2>
+              <span id="calendarMonthLabel" class="calendar-month-label"></span>
+              <p class="layout-subtitle" data-layout-subtitle>按北京时间展示每日净盈亏</p>
             </div>
             <div class="month-nav">
               <button id="prevMonth" class="app-icon-button" type="button" title="上月" aria-label="上月">&lt;</button>
@@ -80,37 +122,48 @@
           <div id="calendarGrid" class="calendar-grid"></div>
         </article>
 
-        <article class="panel heatmap-panel">
+        <article class="panel monthly-pnl-panel" data-layout-module="monthly-pnl">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">MONTHLY P/L</p>
+              <h2 data-layout-title>月度盈亏</h2>
+              <p class="layout-subtitle" data-layout-subtitle>按平仓月份汇总成本后的净盈亏</p>
+            </div>
+          </div>
+          <div id="monthlyPnlChart" class="chart-frame chart-frame--compact"></div>
+        </article>
+
+        <article class="panel heatmap-panel" data-layout-module="heatmap">
           <div class="panel-head">
             <div>
               <p class="eyebrow">WEEK x HOUR</p>
-              <h2>周期共振热力图</h2>
+              <h2 data-layout-title>周期共振热力图</h2>
+              <p class="layout-subtitle" data-layout-subtitle>按北京时间查看交易集中区间</p>
             </div>
             <div class="legend">
               <span class="loss"></span><span>亏损</span>
               <span class="profit"></span><span>盈利</span>
             </div>
           </div>
-          <div id="heatmap" class="heatmap"></div>
+          <div id="heatmapChart" class="chart-frame chart-frame--compact" role="img" aria-label="周期共振热力图"></div>
         </article>
 
-        <article class="panel session-panel">
+        <article id="sessionPanel" class="panel session-panel" data-layout-module="sessions">
           <div class="panel-head">
             <div>
               <p class="eyebrow">BEIJING TIME</p>
-              <h2>盘面胜率</h2>
+              <h2 data-layout-title>盘面胜率</h2>
+              <p class="layout-subtitle" data-layout-subtitle>按交易时段比较净盈亏和胜率</p>
             </div>
           </div>
           <div id="sessions" class="session-list"></div>
         </article>
-      </div>
-
-      <div class="evaluation-grid">
-        <article class="panel evaluation-panel">
+        <article class="panel evaluation-panel" data-layout-module="system-evaluation">
           <div class="panel-head">
             <div>
               <p class="eyebrow">DAILY SYSTEM EVALUATION</p>
-              <h2>交易系统评估</h2>
+              <h2 data-layout-title>交易系统评估</h2>
+              <p class="layout-subtitle" data-layout-subtitle>按交易日查看交易结果质量</p>
             </div>
           </div>
           <div id="systemEvaluationSummary" class="system-summary-grid"></div>
@@ -128,11 +181,12 @@
           <div id="systemEvaluationPagination" class="evaluation-pagination" aria-label="交易系统评估分页"></div>
         </article>
 
-        <article class="panel evaluation-panel">
+        <article class="panel evaluation-panel" data-layout-module="mode-evaluation">
           <div class="panel-head">
             <div>
               <p class="eyebrow">TRADE MODE EVALUATION</p>
-              <h2>交易模式评估</h2>
+              <h2 data-layout-title>交易模式评估</h2>
+              <p class="layout-subtitle" data-layout-subtitle>比较交易场景和策略的真实贡献</p>
             </div>
           </div>
           <div id="modeEvaluation" class="mode-evaluation"></div>
@@ -157,18 +211,40 @@
     </div>
 
     <script src="../vendor/lucide.min.js"></script>
+    <script src="../vendor/echarts.min.js"></script>
+    <script src="../vendor/gridstack-all.js"></script>
     <script src="../vendor/html2canvas.min.js"></script>
     <script src="../r-multiple.js"></script>
     <script type="module">
       import { createDashboardController } from "./dashboard.mjs";
+      import { createDomesticFuturesDashboardController } from "./domestic-futures-dashboard.mjs";
       import { requestJson } from "../shared/js/api.mjs";
+      import { readPlatform, withPlatform } from "../shared/js/platform.mjs";
 
-      const controller = createDashboardController({
+      const platform = readPlatform(window.location);
+      document.body.dataset.platform = platform;
+      document.querySelector("[data-app-shell]")?.setAttribute("data-platform", platform);
+
+      document.querySelectorAll("[data-dashboard-layout-link]").forEach((layoutLink) => {
+        const domesticLink = Boolean(layoutLink.closest("#domesticDashboard"));
+        const linkPlatform = domesticLink ? "domestic_futures" : "mt5";
+        layoutLink.href = `./mock-domestic-futures-layout.html?platform=${linkPlatform}&return=${encodeURIComponent(`/dashboard/?platform=${linkPlatform}`)}`;
+        layoutLink.hidden = platform !== linkPlatform;
+      });
+      const controllerFactory = platform === "domestic_futures"
+        ? createDomesticFuturesDashboardController
+        : createDashboardController;
+      const controller = controllerFactory({
         api: { requestJson },
         view: document,
         location: window.location,
         history: window.history,
+        platform,
         onRefresh: async () => {
+          if (platform === "domestic_futures") {
+            window.location.href = withPlatform("/settings/?tab=data", platform);
+            return;
+          }
           await requestJson("/api/sync", { method: "POST" });
           window.location.reload();
         },

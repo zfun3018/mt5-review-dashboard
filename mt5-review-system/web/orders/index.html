@@ -3,11 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>订单列表 · MT5 复盘</title>
+    <title>订单复盘 · MT5 复盘</title>
+    <script src="../shared/js/platform-boot.js"></script>
     <link rel="stylesheet" href="../shared/css/tokens.css" />
     <link rel="stylesheet" href="../shared/css/base.css" />
     <link rel="stylesheet" href="../shared/css/shell.css" />
     <link rel="stylesheet" href="../shared/css/components.css" />
+    <link rel="stylesheet" href="../shared/css/domestic-futures-workspace.css" />
     <link rel="stylesheet" href="./orders.css" />
   </head>
   <body>
@@ -45,34 +47,53 @@
           <input id="riskMissingOnly" type="checkbox" />
           <span>仅看 R 缺失</span>
         </label>
+        <div class="filter-bar__group">
+          <label for="deletedFilter">订单状态</label>
+          <select id="deletedFilter">
+            <option value="active">有效订单</option>
+            <option value="deleted">已排除订单</option>
+          </select>
+        </div>
       </section>
 
       <section id="orderRegion" class="region-anchor" aria-live="polite"></section>
 
       <div class="orders-layout">
-        <article class="panel trades-panel">
-          <div class="panel-head orders-panel-head">
-            <div>
-              <p class="eyebrow">ORDERS</p>
-              <h2>订单列表</h2>
+        <div class="orders-index-column">
+          <article class="panel trades-panel">
+            <div class="panel-head orders-panel-head">
+              <div>
+                <p class="eyebrow">ORDERS</p>
+                <h2>订单复盘</h2>
+              </div>
+              <div class="orders-list-views" role="tablist" aria-label="订单范围">
+                <button id="orderViewAll" class="view-tab active" type="button" role="tab" aria-selected="true" data-order-view="all">全部订单</button>
+                <button id="orderViewFeatured" class="view-tab" type="button" role="tab" aria-selected="false" data-order-view="featured">精选订单</button>
+              </div>
             </div>
-            <span class="table-legend"><span class="scratch-key"></span>打平</span>
-          </div>
-          <div class="table-wrap">
-            <table class="orders-table">
-              <thead id="orderHead"></thead>
-              <tbody id="orderRows"></tbody>
-            </table>
-          </div>
-          <div class="pagination">
-            <span id="orderTotal" class="pagination-total"></span>
-            <div class="pagination-controls">
-              <button id="orderPrev" class="app-icon-button" type="button" title="上一页" aria-label="上一页">&lt;</button>
-              <span id="orderPage"></span>
-              <button id="orderNext" class="app-icon-button" type="button" title="下一页" aria-label="下一页">&gt;</button>
+            <div class="table-wrap">
+              <table class="orders-table">
+                <thead id="orderHead"></thead>
+                <tbody id="orderRows"></tbody>
+              </table>
             </div>
-          </div>
-        </article>
+            <div class="pagination">
+              <span id="orderTotal" class="pagination-total"></span>
+              <div class="pagination-controls">
+                <button id="orderPrev" class="app-icon-button" type="button" title="上一页" aria-label="上一页">&lt;</button>
+                <span id="orderPage"></span>
+                <button id="orderNext" class="app-icon-button" type="button" title="下一页" aria-label="下一页">&gt;</button>
+              </div>
+            </div>
+          </article>
+          <article class="panel checkin-calendar-panel" aria-labelledby="checkinCalendarTitle">
+            <div class="checkin-calendar-head">
+              <h3 id="checkinCalendarTitle">打卡日历</h3>
+              <span id="checkinCalendarSummary" class="muted-mini">读取中</span>
+            </div>
+            <div id="checkinCalendar" class="checkin-calendar" role="grid" aria-label="订单复盘打卡日历"></div>
+          </article>
+        </div>
 
         <article class="panel detail-panel">
           <div id="orderDetail" class="detail-host"></div>
@@ -91,13 +112,21 @@
     <script type="module">
       import { createOrdersController } from "./orders.mjs";
       import { requestJson } from "../shared/js/api.mjs";
+      import { readPlatform, withPlatform } from "../shared/js/platform.mjs";
+
+      const platform = readPlatform(window.location);
 
       const controller = createOrdersController({
         api: { requestJson },
         view: document,
         location: window.location,
         history: window.history,
+        platform,
         onRefresh: async () => {
+          if (platform === "domestic_futures") {
+            window.location.href = withPlatform("/settings/?tab=data", platform);
+            return;
+          }
           await requestJson("/api/sync", { method: "POST" });
           window.location.reload();
         },

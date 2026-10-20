@@ -13,7 +13,7 @@ from ..data.trade_commands import list_trades
 from ..domain.analytics import (
     build_cumulative_return_curve,
     build_equity_curve,
-    build_hour_heatmap,
+    build_weekday_hour_heatmap,
     build_month_calendar,
     build_session_stats,
     build_trade_metrics,
@@ -69,33 +69,40 @@ def _campaign_records_conn(conn):
 def get_dashboard(
     year: int | None = None,
     month: int | None = None,
+    platform: str = "mt5",
     *,
     trade_serializer: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     campaign_serializer: CampaignResponseSerializer | None = None,
 ) -> dict[str, Any]:
-    trades = list_trades()
+    trades = list_trades(platform=platform)
     serialize_trade = trade_serializer or dict
     serialize_campaign = campaign_serializer or CampaignResponseSerializer(serialize_trade)
-    snapshots = list_equity_snapshots()
+    snapshots = list_equity_snapshots(platform=platform)
     # Surface only active classifications + custom fields across all downstream
     # surfaces (filters, dashboards, mode evaluation, custom field columns).
     # Inactive entries are kept for label lookups and historical aggregation.
     classification_options = list_classification_options(active_only=True)
     custom_fields = list_custom_fields(active_only=True)
     with db() as conn:
-        campaigns = [record for record in _campaign_records_conn(conn) if record.get("status") == "closed"]
+        analysis_campaigns = _campaign_repository().query_analysis_rows(
+            None, None, platform=platform, conn=conn
+        )
+        campaigns = [
+            record for record in _campaign_records_conn(conn)
+            if record.get("status") == "closed" and record.get("platform", "mt5") == platform
+        ]
     threshold = get_analysis_settings()["scratch_threshold_r"]
-    anchor = _latest_activity_time(trades, snapshots)
+    anchor = _latest_activity_time(analysis_campaigns, snapshots)
     target = to_beijing(anchor)
     selected_year = year or target.year
     selected_month = month or target.month
 
-    periods = build_trade_period_summaries(trades, anchor)
-    period_r_metrics = build_campaign_period_metrics(campaigns, anchor, threshold)
+    periods = build_trade_period_summaries(analysis_campaigns, anchor)
+    period_r_metrics = build_campaign_period_metrics(analysis_campaigns, anchor, threshold)
     for key, metrics in period_r_metrics.items():
         periods.setdefault(key, {})["r_metrics"] = metrics
     return {
-        "summary": build_summary(trades, snapshots, anchor),
+        "summary": build_summary(analysis_campaigns, snapshots, anchor),
         "status": get_local_status(),
         "trends": list_trends(),
         "custom_fields": custom_fields,
@@ -107,17 +114,17 @@ def get_dashboard(
         ],
         "r_metrics": build_r_metrics(campaigns, threshold),
         "periods": periods,
-        "equity": build_cumulative_return_curve(trades, snapshots, now_utc=anchor, hours=24 * 30),
-        "calendar": build_month_calendar(trades, selected_year, selected_month),
-        "heatmap": build_hour_heatmap(trades, anchor_utc=anchor, days=7),
-        "sessions": build_session_stats(trades),
-        "system_evaluation": build_daily_campaign_evaluation(campaigns, threshold),
+        "equity": build_cumulative_return_curve(analysis_campaigns, snapshots, now_utc=anchor, hours=None),
+        "calendar": build_month_calendar(analysis_campaigns, selected_year, selected_month),
+        "heatmap": build_weekday_hour_heatmap(analysis_campaigns),
+        "sessions": build_session_stats(analysis_campaigns),
+        "system_evaluation": build_daily_campaign_evaluation(analysis_campaigns, threshold),
         "mode_evaluation": {
             "trade_type": labeled_campaign_mode_evaluation(
-                campaigns, "trade_type", classification_options, threshold
+                analysis_campaigns, "trade_type", classification_options, threshold
             ),
             "strategy": labeled_campaign_mode_evaluation(
-                campaigns, "strategy", classification_options, threshold
+                analysis_campaigns, "strategy", classification_options, threshold
             ),
         },
         "backups": list_backups(),
@@ -147,7 +154,7 @@ def build_summary(
     year = periods["year"]
 
     return {
-        "account": trades[0]["account"] if trades else "LOCAL-DEMO",
+        "account": trades[0].get("account", "LOCAL-DEMO") if trades else "LOCAL-DEMO",
         "net_pnl": overall["net_pnl"],
         "order_count": overall["order_count"],
         "win_rate": overall["win_rate"],

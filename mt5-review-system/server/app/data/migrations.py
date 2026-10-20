@@ -25,12 +25,15 @@ CREATE TABLE IF NOT EXISTS trends (
 
 CREATE TABLE IF NOT EXISTS trades (
     id TEXT PRIMARY KEY,
+    platform TEXT NOT NULL DEFAULT 'mt5',
     account TEXT,
     order_no TEXT,
     position_id TEXT,
     order_ticket TEXT,
     deal_ticket TEXT,
     symbol TEXT NOT NULL,
+    product_name TEXT NOT NULL DEFAULT '',
+    contract_name TEXT NOT NULL DEFAULT '',
     side TEXT NOT NULL,
     lots REAL NOT NULL,
     open_time_utc TEXT NOT NULL,
@@ -51,6 +54,7 @@ CREATE TABLE IF NOT EXISTS trades (
     is_featured INTEGER NOT NULL DEFAULT 0,
     is_archived INTEGER NOT NULL DEFAULT 0,
     deleted_at TEXT,
+    deleted_reason TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'manual',
     raw_json TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -98,6 +102,7 @@ CREATE TABLE IF NOT EXISTS trade_custom_values (
 
 CREATE TABLE IF NOT EXISTS equity_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform TEXT NOT NULL DEFAULT 'mt5',
     time_utc TEXT NOT NULL UNIQUE,
     balance REAL NOT NULL,
     equity REAL NOT NULL

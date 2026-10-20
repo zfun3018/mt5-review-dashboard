@@ -62,22 +62,10 @@ const EMPTY_CHECKINS = {
   days: [],
 };
 
-test("album exposes daily check-in controls and a heatmap", () => {
-  assert.match(albumHtml, /albumCheckinHeatmap/);
-  assert.match(albumHtml, /albumCheckinGoal/);
-  assert.match(albumHtml, /albumCheckinPrevious/);
-  assert.match(albumHtml, /albumCheckinNext/);
-  assert.match(albumHtml, /albumCheckinMonthSummary/);
-  assert.match(albumSource, /data-checkin/);
-  assert.match(albumSource, /\/api\/review-album\/checkin/);
-  assert.match(albumSource, /\/api\/review-album\/goal/);
-  assert.match(albumSource, /\/api\/review-album\/checkin\//);
-  assert.match(albumSource, /renderCheckinHeatmap/);
-  assert.match(albumSource, /album-checkin-month/);
-  assert.match(albumSource, /reading_checkin_count/);
-  assert.match(albumSource, /取消打卡/);
-  assert.match(albumStyle, /album-checkin-heatmap/);
-  assert.match(albumStyle, /album-checkin-month/);
+test("legacy album entry redirects to the featured order review", () => {
+  assert.match(albumHtml, /window\.location\.replace\(`\/orders\/\?/);
+  assert.match(albumHtml, /query\.set\("listView", "featured"\)/);
+  assert.doesNotMatch(albumHtml, /data-app-shell/);
 });
 
 test("album shows one check-in calendar month with monthly totals and paging", async () => {
@@ -116,11 +104,9 @@ test("album shows one check-in calendar month with monthly totals and paging", a
   controller.dispose();
 });
 
-test("album mounts the shared shell and keeps review writes scoped to trades", () => {
-  assert.match(albumHtml, /data-app-shell/);
-  assert.match(albumHtml, /shared\/css\/tokens\.css/);
+test("legacy album controller remains available only for API compatibility", () => {
+  assert.doesNotMatch(albumHtml, /data-app-shell/);
   assert.match(albumSource, /shell\.mjs/);
-  assert.match(albumHtml, /复盘画册/);
   assert.match(albumSource, /\/api\/review-album/);
   assert.match(albumSource, /\/api\/trades/);
   assert.doesNotMatch(albumSource, /\/api\/campaigns|\/api\/analysis|\/api\/positions/);
@@ -135,13 +121,8 @@ test("album renders date groups, labels, review text, and order links into the o
   assert.match(albumSource, /review_text/);
   assert.match(albumSource, /href="\/orders\/\?trade=/);
   assert.match(albumSource, /BEIJING CLOSE DATE/);
-  assert.match(albumHtml, /随机阅读/);
   assert.match(albumSource, /\/api\/review-album\/random/);
-  assert.match(albumSource, /data-archive-toggle/);
-  assert.match(albumSource, /\/archived/);
-  assert.match(albumHtml, /role="tablist"/);
-  assert.match(albumHtml, /data-album-view="all"/);
-  assert.match(albumHtml, /data-album-view="archived"/);
+  assert.match(albumHtml, /订单复盘/);
 });
 
 test("album renders archived trades in a separate section", async () => {
@@ -504,9 +485,9 @@ test("random reading keeps the original image-and-order layout", () => {
   assert.doesNotMatch(albumStyle, /\.album-random-result \.album-card--random\s*\{[\s\S]*display:\s*block/);
 });
 
-test("image reader keeps the order context and random navigation beside the image", () => {
-  assert.match(albumHtml, /albumImageModal[\s\S]*albumReaderNext/);
-  assert.match(albumHtml, /albumReaderInfo/);
+test("legacy image reader is no longer mounted as a standalone page", () => {
+  assert.doesNotMatch(albumHtml, /albumImageModal/);
+  assert.match(albumHtml, /\/orders\/\?/);
   assert.match(albumSource, /data-trade-id/);
   assert.match(albumSource, /function renderReader\(/);
   assert.match(albumSource, /getElement\("albumReaderNext"\)\?\.addEventListener/);
@@ -548,7 +529,13 @@ test("album review content keeps a bounded vertical scrollbar instead of clippin
   assert.match(albumStyle, /\.album-review-editor::-webkit-scrollbar\s*\{[\s\S]*width:\s*10px/);
 });
 
-test("album is listed as a shared shell destination", async () => {
+test("album prefers the human-readable contract display name", () => {
+  assert.match(albumSource, /function tradeDisplayName\(trade\)/);
+  assert.match(albumSource, /trade\??\.display_symbol \|\| trade\??\.contract_name \|\| trade\??\.symbol/);
+});
+
+test("album is no longer listed as a shared shell destination", async () => {
   const { NAV_ITEMS } = await import("../shared/js/shell.mjs");
-  assert.ok(NAV_ITEMS.some((item) => item.href === "/album/"));
+  assert.ok(!NAV_ITEMS.some((item) => item.href === "/album/"));
+  assert.ok(NAV_ITEMS.some((item) => item.href === "/orders/" && item.label === "订单复盘"));
 });

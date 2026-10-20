@@ -12,7 +12,7 @@ const SCHEMA = {
   preset: { type: "string", default: "all", values: ["all", "today", "7d", "30d", "custom"] },
   start: { type: "string", default: "" },
   end: { type: "string", default: "" },
-  equity_days: { type: "integer", default: 30, min: 1, max: 366 },
+  equity_days: { type: "integer", default: null, min: 1, max: 366 },
   year: { type: "integer", default: null },
   month: { type: "integer", default: null, min: 1, max: 12 },
 };
@@ -62,11 +62,11 @@ export function resolveAnalysisWindow(state) {
     case "30d":
       return { start: shiftDateKey(today, -29), end: today, equityDays: 30 };
     case "custom": {
-      const days = spanDays(state.start, state.end) ?? state.equity_days ?? 30;
+      const days = spanDays(state.start, state.end) ?? state.equity_days ?? null;
       return { start: state.start || "", end: state.end || "", equityDays: days };
     }
     default:
-      return { start: "", end: "", equityDays: state.equity_days ?? 30 };
+      return { start: "", end: "", equityDays: state.equity_days ?? null };
   }
 }
 
@@ -74,7 +74,7 @@ export function buildAnalysisQuery(state, window) {
   const params = new URLSearchParams();
   if (window.start) params.set("start", window.start);
   if (window.end) params.set("end", window.end);
-  params.set("equity_days", String(window.equityDays));
+  if (window.equityDays !== null && window.equityDays !== undefined) params.set("equity_days", String(window.equityDays));
   if (state.year) params.set("year", String(state.year));
   if (state.month) params.set("month", String(state.month));
   return params.toString();

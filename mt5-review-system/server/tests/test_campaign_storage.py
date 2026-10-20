@@ -1,4 +1,5 @@
 import unittest
+import base64
 from unittest.mock import patch
 
 from app import storage
@@ -105,6 +106,101 @@ class CampaignStorageTest(TemporaryStorageCase):
         self.assertEqual(counts["positions"], 2)
         self.assertEqual(counts["campaign_positions"], 2)
 
+    def test_campaign_is_the_single_persisted_order_with_merged_financials(self):
+        self._trade(
+            "P1-A",
+            "P1",
+            0.5,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            10.0,
+        )
+        self._trade(
+            "P1-B",
+            "P1",
+            0.5,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:20:00+00:00",
+            100.0,
+            104.0,
+            20.0,
+        )
+        with storage.db() as conn:
+            conn.execute(
+                "UPDATE trades SET commission = -1.5, swap = -0.5, fee = -0.25, is_featured = 1 "
+                "WHERE id = 'P1-A'"
+            )
+            conn.execute(
+                "UPDATE trades SET commission = -2.5, swap = -0.75, fee = -0.35 "
+                "WHERE id = 'P1-B'"
+            )
+            storage._campaign_repository().rebuild(conn=conn)
+
+        page = storage.list_campaigns()
+        self.assertEqual(page["total"], 1)
+        campaign = page["campaigns"][0]
+        self.assertEqual(campaign["source_trade_ids"], ["P1-A", "P1-B"])
+        self.assertEqual(campaign["trade_pnl"], 30.0)
+        self.assertEqual(campaign["commission"], -4.0)
+        self.assertEqual(campaign["swap"], -1.25)
+        self.assertEqual(campaign["fee"], -0.6)
+        self.assertEqual(campaign["net_pnl"], 24.15)
+        self.assertEqual(campaign["is_featured"], 1)
+
+        with storage.db() as conn:
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(trade_campaigns)").fetchall()
+            }
+            tables = {
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
+        self.assertTrue({"trade_pnl", "commission", "swap", "fee", "is_featured"}.issubset(columns))
+        self.assertIn("campaign_checkins", tables)
+
+    def test_dashboard_counts_one_campaign_instead_of_its_source_trades(self):
+        self._trade(
+            "P1-A",
+            "P1",
+            0.5,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            10.0,
+        )
+        self._trade(
+            "P1-B",
+            "P1",
+            0.5,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:20:00+00:00",
+            100.0,
+            104.0,
+            20.0,
+        )
+        with storage.db() as conn:
+            conn.execute(
+                "UPDATE trades SET commission = -1.5, swap = -0.5, fee = -0.25 "
+                "WHERE id = 'P1-A'"
+            )
+            conn.execute(
+                "UPDATE trades SET commission = -2.5, swap = -0.75, fee = -0.35 "
+                "WHERE id = 'P1-B'"
+            )
+            storage._campaign_repository().rebuild(conn=conn)
+
+        analysis = storage.get_analysis("2026-08-01", "2026-08-01")
+        self.assertEqual(analysis["metrics"]["order_count"], 1)
+        self.assertEqual(analysis["metrics"]["trade_pnl"], 30.0)
+        self.assertEqual(analysis["metrics"]["fee_total"], -5.85)
+        self.assertEqual(analysis["metrics"]["net_pnl"], 24.15)
+
     def test_each_position_stop_is_required_before_campaign_r_is_available(self):
         self._trade(
             "P1",
@@ -201,7 +297,7 @@ class CampaignStorageTest(TemporaryStorageCase):
         with self.assertRaises(ValueError):
             storage.update_analysis_settings({"scratch_threshold_r": -0.1})
 
-    def test_analysis_counts_one_campaign_but_keeps_cash_exit_records(self):
+    def test_analysis_counts_one_merged_campaign(self):
         self._trade(
             "P1-A",
             "P1",
@@ -239,7 +335,7 @@ class CampaignStorageTest(TemporaryStorageCase):
 
         analysis = storage.get_analysis("2026-08-01", "2026-08-01")
 
-        self.assertEqual(analysis["metrics"]["order_count"], 3)
+        self.assertEqual(analysis["metrics"]["order_count"], 1)
         self.assertEqual(analysis["r_metrics"]["sample_count"], 1)
         self.assertEqual(analysis["r_metrics"]["complete_count"], 1)
         self.assertEqual(analysis["system_evaluation"][0]["order_count"], 1)
@@ -569,6 +665,54 @@ class CampaignStorageTest(TemporaryStorageCase):
         self.assertEqual(source["review_text"], "子订单复盘")
         self.assertEqual(source["custom_fields"][str(field["id"])], "按计划")
         self.assertEqual(source["screenshot_url"], "/media/screenshots/position-source.png")
+
+    def test_campaign_screenshot_is_shared_by_all_source_rows_and_survives_rebuild(self):
+        self._trade(
+            "P1-A",
+            "P1",
+            0.5,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            1.0,
+        )
+        self._trade(
+            "P1-B",
+            "P1",
+            0.5,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:20:00+00:00",
+            100.0,
+            104.0,
+            2.0,
+        )
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
+        image_data = "data:image/png;base64," + base64.b64encode(b"png").decode()
+
+        updated = storage.replace_campaign_screenshot(
+            campaign_id,
+            {"image_data": image_data, "filename": "review.png"},
+        )
+        path = updated["screenshot_path"]
+        self.assertTrue(path.startswith("screenshots/manual-"))
+        self.assertEqual(updated["screenshot_url"], f"/media/{path}")
+        with storage.db() as conn:
+            source_paths = [
+                row["screenshot_path"]
+                for row in conn.execute(
+                    "SELECT screenshot_path FROM trades WHERE id IN ('P1-A', 'P1-B') ORDER BY id"
+                ).fetchall()
+            ]
+        self.assertEqual(source_paths, [path, path])
+
+        storage.rebuild_campaign_models()
+        rebuilt = storage.get_campaign(campaign_id)
+        self.assertEqual(rebuilt["screenshot_path"], path)
+
+        cleared = storage.delete_campaign_screenshot(campaign_id)
+        self.assertEqual(cleared["screenshot_path"], "")
+        self.assertEqual(cleared["screenshot_url"], "")
 
     def test_v4_migration_creates_one_local_sqlite_snapshot(self):
         with storage.db() as conn:

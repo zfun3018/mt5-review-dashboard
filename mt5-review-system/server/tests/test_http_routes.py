@@ -43,6 +43,19 @@ class RecordingStorage:
                 "trades": [{"id": "C-1"}],
                 "total": 1,
             },
+            "get_random_featured_campaign": {"id": "C-RANDOM"},
+            "checkin_review_campaign": {
+                "campaign_id": "C-1",
+                "date": "2026-10-08",
+                "created": True,
+                "checked_in": True,
+            },
+            "cancel_review_campaign": {
+                "campaign_id": "C-1",
+                "date": "2026-10-08",
+                "deleted": True,
+                "checked_in": False,
+            },
             "get_analysis_settings": {"scratch_threshold_r": 0.15},
             "query_review_album": {"trades": [{"id": "T-1"}], "total": 1},
             "get_random_review_album": {"trade": {"id": "T-1"}},
@@ -747,6 +760,45 @@ class HttpRouterTest(unittest.TestCase):
         self.assertEqual(len(cases), 24)
         self.assert_route_contracts(cases)
 
+    def test_campaign_checkin_can_be_cancelled_at_the_campaign_boundary(self):
+        cases = (
+            {
+                "name": "campaign check-in",
+                "method": "POST",
+                "path": "/api/campaigns/C-1/checkin",
+                "query": {"platform": ["mt5"]},
+                "body": {},
+                "call": ("checkin_review_campaign", ("C-1", None), {"platform": "mt5"}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["checkin_review_campaign"],
+            },
+            {
+                "name": "cancel campaign check-in",
+                "method": "DELETE",
+                "path": "/api/campaigns/C-1/checkin",
+                "query": {"platform": ["mt5"]},
+                "body": None,
+                "call": ("cancel_review_campaign", ("C-1", None), {"platform": "mt5"}),
+                "status": HTTPStatus.OK,
+                "payload": self.storage.results["cancel_review_campaign"],
+            },
+        )
+        self.assert_route_contracts(cases)
+
+    def test_random_featured_campaign_returns_a_campaign_record(self):
+        response = self.router.dispatch(
+            "GET",
+            "/api/campaigns/random-featured",
+            {"platform": ["mt5"]},
+            None,
+        )
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(response.payload, {"campaign": {"id": "C-RANDOM"}})
+        self.assertEqual(
+            self.storage.calls,
+            [("get_random_featured_campaign", (), {"platform": "mt5"})],
+        )
+
     def test_empty_campaign_prefix_keeps_legacy_not_found_semantics(self):
         response = self.router.dispatch("GET", "/api/campaigns/", {}, None)
 
@@ -896,6 +948,7 @@ class HttpRouterTest(unittest.TestCase):
             ("POST", "/api/custom-fields"),
             ("POST", "/api/classification-options"),
             ("POST", "/api/mt5/events"),
+            ("DELETE", "/api/trades/T-1"),
             ("PATCH", "/api/campaigns/C-1/review"),
             ("PATCH", "/api/positions/P-1/initial-stop"),
             ("PATCH", "/api/analysis-settings"),
@@ -911,6 +964,7 @@ class HttpRouterTest(unittest.TestCase):
             ("GET", "/api/trades"),
             ("GET", "/api/campaigns"),
             ("GET", "/api/campaigns/C-1"),
+            ("GET", "/api/campaigns/random-featured"),
             ("GET", "/api/analysis-settings"),
             ("GET", "/api/review-album"),
             ("GET", "/api/review-album/random"),
@@ -928,13 +982,13 @@ class HttpRouterTest(unittest.TestCase):
             ("POST", "/api/backups"),
             ("DELETE", "/api/classification-options/follow"),
             ("DELETE", "/api/trades/T-1/screenshot"),
-            ("DELETE", "/api/trades/T-1"),
+            ("DELETE", "/api/campaigns/C-1/checkin"),
             ("DELETE", "/api/trends/2"),
             ("DELETE", "/api/custom-fields/7"),
             ("DELETE", "/api/custom-fields/7/purge"),
         }
 
-        self.assertEqual(len(requires_body | does_not_require_body), 39)
+        self.assertEqual(len(requires_body | does_not_require_body), 41)
         for method, path in requires_body:
             with self.subTest(method=method, path=path, expected=True):
                 self.assertTrue(self.router.route_requires_body(method, path))
@@ -1012,6 +1066,7 @@ class HttpAdapterTest(unittest.TestCase):
         self.web.mkdir()
         self.data.mkdir()
         (self.web / "index.html").write_text("synthetic index", encoding="utf-8")
+        (self.web / "module.mjs").write_text("export const value = 1;", encoding="utf-8")
         (self.data / "sample.txt").write_text("synthetic media", encoding="utf-8")
         (self.data / "sample image.txt").write_text(
             "encoded synthetic media", encoding="utf-8"
@@ -1082,6 +1137,7 @@ class HttpAdapterTest(unittest.TestCase):
 
     def test_static_fallback_and_media_paths_stay_inside_their_roots(self):
         static_status, static_body, _ = self.request("GET", "/missing/page")
+        module_status, module_body, module_headers = self.request("GET", "/module.mjs")
         media_status, media_body, _ = self.request("GET", "/media/sample.txt")
         encoded_status, encoded_body, _ = self.request(
             "GET", "/media/sample%20image.txt"
@@ -1091,6 +1147,8 @@ class HttpAdapterTest(unittest.TestCase):
         )
 
         self.assertEqual((static_status, static_body), (HTTPStatus.OK, b"synthetic index"))
+        self.assertEqual((module_status, module_body), (HTTPStatus.OK, b"export const value = 1;"))
+        self.assertIn(("Content-Type", "text/javascript"), module_headers)
         self.assertEqual((media_status, media_body), (HTTPStatus.OK, b"synthetic media"))
         self.assertEqual(
             (encoded_status, encoded_body),

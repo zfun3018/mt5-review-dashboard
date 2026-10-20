@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  --font-family-ui: "PingFang SC", "苹方-简", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
   --color-bg: #071525;
   --color-surface: #102236;
   --color-surface-raised: #162b43;
@@ -11,6 +12,16 @@
   --color-negative: #f05b70;
   --color-warning: #f2b84b;
   --color-overlay: rgba(3, 10, 20, 0.78);
+  --color-nav: #0c192d;
+  --color-page-bar: rgba(9, 23, 39, 0.96);
+  --color-brand-text: #66e2c6;
+  --color-accent-strong: #245fc2;
+  --color-negative-strong: #862e43;
+  --color-positive-soft: rgba(32, 199, 160, 0.14);
+  --color-negative-soft: rgba(240, 91, 112, 0.14);
+  --color-warning-soft: rgba(242, 184, 75, 0.16);
+  --color-profit-swatch: rgba(61, 130, 246, 0.7);
+  --color-loss-swatch: rgba(240, 91, 112, 0.7);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

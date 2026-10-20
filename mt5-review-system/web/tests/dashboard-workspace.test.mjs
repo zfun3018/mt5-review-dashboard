@@ -121,7 +121,7 @@ const ANALYSIS = {
 };
 
 test("dashboard loads analysis without campaigns or bootstrap", async () => {
-  const api = recordingApi({ "/api/analysis?equity_days=30": ANALYSIS });
+  const api = recordingApi({ "/api/analysis": ANALYSIS });
   const controller = createDashboardController({
     api,
     view: new FakeView(),
@@ -131,7 +131,7 @@ test("dashboard loads analysis without campaigns or bootstrap", async () => {
 
   await controller.load();
 
-  assert.deepEqual(api.paths, ["/api/analysis?equity_days=30"]);
+  assert.deepEqual(api.paths, ["/api/analysis"]);
   assert.equal(
     api.paths.some((requestPath) => requestPath.includes("campaigns") || requestPath.includes("bootstrap")),
     false,
@@ -184,7 +184,7 @@ test("dashboard URL state round-trips preset, start, end, equity days, year, and
 
   const defaults = readDashboardState("");
   assert.equal(defaults.preset, "all");
-  assert.equal(defaults.equity_days, 30);
+  assert.equal(defaults.equity_days, null);
   assert.equal(defaults.year, null);
   assert.equal(defaults.month, null);
 });

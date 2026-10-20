@@ -64,6 +64,7 @@ export function formatHoldingTime(seconds) {
 export function formatTime(iso) {
   return new Date(iso).toLocaleString("zh-CN", {
     timeZone: "Asia/Shanghai",
+    weekday: "short",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -75,6 +76,7 @@ export function formatTime(iso) {
 export function formatCurveTime(iso) {
   return new Date(iso).toLocaleString("zh-CN", {
     timeZone: "Asia/Shanghai",
+    weekday: "short",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -107,6 +109,7 @@ export function formatBeijingDateTime(value) {
   if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
+    weekday: "short",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",

@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>国内期货复盘 · 仪表盘 Mock</title>
+    <script src="../vendor/lucide.min.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #12252b;
+        --muted: #6d7e83;
+        --soft: #edf3f2;
+        --line: #dbe6e4;
+        --panel: #ffffff;
+        --canvas: #f5f8f7;
+        --teal: #069d91;
+        --teal-dark: #075f5b;
+        --teal-soft: #dff5f1;
+        --orange: #f49b22;
+        --orange-soft: #fff0d9;
+        --blue: #4d86ed;
+        --blue-soft: #e5eeff;
+        --coral: #f05778;
+        --coral-soft: #ffe4ea;
+        --shadow: 0 10px 26px rgba(24, 58, 61, 0.07), 0 2px 5px rgba(24, 58, 61, 0.04);
+        --radius: 14px;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--ink); background: var(--canvas); font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+      button, select { font: inherit; }
+      button { cursor: pointer; }
+      .app { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+
+      .rail { background: #fbfcfc; border-right: 1px solid var(--line); padding: 22px 14px; display: flex; flex-direction: column; gap: 24px; }
+      .brand { display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+      .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; color: white; background: var(--teal-dark); border-radius: 10px; font-size: 16px; font-weight: 800; }
+      .brand strong { display: block; letter-spacing: .02em; }
+      .brand span { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+      .nav-label { color: #9aa9ab; font-size: 10px; font-weight: 700; letter-spacing: .14em; padding: 0 14px 7px; }
+      .nav { display: grid; gap: 4px; }
+      .nav button { width: 100%; border: 0; background: transparent; color: #53666b; display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 9px; text-align: left; }
+      .nav button:hover, .nav button.active { color: var(--teal-dark); background: #eaf5f3; }
+      .nav button.active { font-weight: 700; }
+      .nav svg { width: 17px; height: 17px; }
+      .rail-spacer { flex: 1; }
+      .data-note { border: 1px solid var(--line); background: #f0f8f6; border-radius: 11px; padding: 14px; color: #4c6b6c; font-size: 12px; line-height: 1.6; }
+      .data-note strong { color: var(--teal-dark); display: block; margin-bottom: 5px; }
+
+      .main { min-width: 0; padding: 22px 28px 34px; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+      .title-block h1 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
+      .title-block p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+      .toolbar { position: relative; display: flex; align-items: center; gap: 10px; }
+      .range { display: inline-flex; padding: 4px; gap: 2px; background: #eaf1ef; border-radius: 9px; }
+      .range button { border: 0; color: #6a7a7d; background: transparent; padding: 7px 11px; border-radius: 6px; font-size: 12px; }
+      .range button.active { color: var(--ink); background: white; box-shadow: 0 2px 5px rgba(21, 69, 68, .08); font-weight: 700; }
+      .icon-button, .action-button { min-height: 38px; border: 1px solid var(--line); background: white; color: #496066; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; }
+      .action-button { color: white; background: var(--teal); border-color: var(--teal); font-weight: 700; }
+      .action-button:hover { background: var(--teal-dark); }
+      .icon-button svg, .action-button svg { width: 16px; height: 16px; }
+      .layout-only { display: none; }
+      .layout-editing .layout-only { display: inline-flex; }
+      .module-picker { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: 190px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: white; box-shadow: 0 14px 30px rgba(24, 58, 61, .14); }
+      .module-picker[hidden] { display: none; }
+      .module-picker-head { padding: 3px 5px 8px; color: var(--muted); font-size: 11px; }
+      .module-options { display: grid; gap: 4px; }
+      .module-options button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px 7px; border: 0; border-radius: 6px; color: var(--ink); background: transparent; text-align: left; font-size: 12px; }
+      .module-options button:hover { color: var(--teal-dark); background: var(--teal-soft); }
+      .module-options button svg { width: 14px; height: 14px; color: var(--teal); }
+      .module-options-empty { padding: 8px 5px; color: var(--muted); font-size: 11px; }
+
+      .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; margin-bottom: 18px; border: 1px solid #cfe9e4; border-radius: 10px; background: #f1fbf9; color: #3b6969; font-size: 12px; }
+      .notice strong { color: var(--teal-dark); }
+      .notice .formula { color: #72888a; }
+
+      .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .kpi { min-height: 126px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 17px 14px; position: relative; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease; }
+      .kpi:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 15px 30px rgba(24, 58, 61, .10), 0 3px 8px rgba(24, 58, 61, .05); }
+      .kpi::after { content: ""; position: absolute; right: -28px; bottom: -42px; width: 104px; height: 104px; border-radius: 50%; background: var(--tint); opacity: .7; }
+      .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+      .kpi-icon { width: 28px; height: 28px; display: grid; place-items: center; color: var(--accent); background: var(--tint); border-radius: 9px; }
+      .kpi-icon svg { width: 15px; height: 15px; }
+      .kpi-value { position: relative; z-index: 1; margin-top: 14px; font-size: 25px; letter-spacing: -.04em; font-weight: 800; white-space: nowrap; }
+      .kpi-foot { position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; margin-top: 9px; color: var(--accent); font-size: 11px; }
+      .kpi-foot.negative { color: var(--coral); }
+      .kpi-foot.neutral { color: var(--muted); }
+      .kpi.net { --accent: var(--teal); --tint: var(--teal-soft); }
+      .kpi.gross { --accent: var(--orange); --tint: var(--orange-soft); }
+      .kpi.fee { --accent: var(--coral); --tint: var(--coral-soft); }
+      .kpi.count { --accent: var(--blue); --tint: var(--blue-soft); }
+      .kpi.r { --accent: #7b69d2; --tint: #eeeaff; }
+      .kpi.coverage { --accent: #1b9aa7; --tint: #e0f4f5; }
+      .period-overview { --module-span: 12; padding: 0 0 2px; background: transparent; border: 0; box-shadow: none; }
+      .period-overview:hover { transform: none; box-shadow: none; }
+      .period-overview .panel-head { padding: 0 0 12px; align-items: end; }
+      .period-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; color: var(--teal-dark); background: var(--teal-soft); border-radius: 99px; font-size: 10px; font-weight: 700; }
+      .period-badge svg { width: 13px; height: 13px; }
+      .period-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+      .period-card { min-width: 0; padding: 15px; border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 11px; background: var(--panel); box-shadow: 0 7px 18px rgba(24, 58, 61, .045); transition: transform .18s ease, box-shadow .18s ease; }
+      .period-card:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 13px 25px rgba(24, 58, 61, .09); }
+      .period-card.today { --accent: var(--blue); }
+      .period-card.week { --accent: var(--teal); }
+      .period-card.month { --accent: var(--orange); }
+      .period-card.quarter { --accent: #7b69d2; }
+      .period-card.year { --accent: var(--coral); }
+      .period-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .period-card-head strong { font-size: 13px; }
+      .period-card-head span { color: var(--muted); font-size: 10px; }
+      .period-net { margin: 13px 0 14px; color: var(--teal-dark); font-size: 23px; font-weight: 800; letter-spacing: -.04em; }
+      .period-net.negative { color: var(--coral); }
+      .period-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 8px; padding-top: 12px; border-top: 1px solid var(--soft); }
+      .period-metric span { display: block; color: var(--muted); font-size: 10px; }
+      .period-metric strong { display: block; margin-top: 3px; color: var(--ink); font-size: 12px; }
+      .period-metric strong.fee { color: var(--coral); }
+
+      .primary-grid { display: contents; }
+      .secondary-grid { display: contents; }
+      .bottom-grid { display: contents; }
+      .dashboard-stage { min-width: 0; min-height: 240px; margin-top: 18px; }
+      .view-mode .dashboard-stage { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 60px; gap: 18px; align-items: stretch; }
+      .view-mode .dashboard-stage .period-overview { grid-column: 1 / -1; grid-row: 1 / span 5; }
+      .view-mode .dashboard-stage [data-module="net-performance"] { grid-column: 1 / span 8; grid-row: 6 / span 8; }
+      .view-mode .dashboard-stage [data-module="risk-health"] { grid-column: 9 / span 4; grid-row: 6 / span 8; }
+      .view-mode .dashboard-stage [data-module="monthly-pnl"] { grid-column: 1 / span 8; grid-row: 14 / span 8; }
+      .view-mode .dashboard-stage [data-module="daily-calendar"] { grid-column: 9 / span 4; grid-row: 14 / span 8; }
+      .view-mode .dashboard-stage [data-module="contract-contribution"] { grid-column: 1 / span 4; grid-row: 22 / span 7; }
+      .view-mode .dashboard-stage [data-module="contract-losses"] { grid-column: 5 / span 4; grid-row: 22 / span 10; }
+      .view-mode .dashboard-stage [data-module="data-health"] { grid-column: 9 / span 4; grid-row: 22 / span 8; }
+      .view-mode .dashboard-stage [data-module="review-coverage"] { grid-column: 1 / span 4; grid-row: 32 / span 7; }
+      .view-mode .dashboard-stage [data-module="system-evaluation"] { grid-column: 5 / span 8; grid-row: 32 / span 9; }
+      .view-mode .dashboard-stage [data-module="mode-evaluation"] { grid-column: 1 / -1; grid-row: 41 / span 10; }
+      .view-mode .dashboard-stage .layout-module { min-height: 0; height: 100%; overflow: hidden; }
+      .view-mode #layoutReset, .view-mode #moduleAdd, .view-mode #modulePicker { display: none !important; }
+      .grid-stack-item { min-width: 0; }
+      .grid-stack-item-content { height: 100%; width: 100%; overflow: auto; border-radius: inherit; transition: transform .18s ease; }
+      .panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+      .layout-module { position: relative; }
+      .layout-module:hover { box-shadow: 0 15px 30px rgba(24, 58, 61, .10), 0 3px 8px rgba(24, 58, 61, .05); }
+      .layout-module:hover .grid-stack-item-content { transform: scale(1.005); }
+      .chart-panel, .monthly-panel, .system-evaluation, .risk-panel, .review-state, .calendar, .contracts, .loss-contracts, .import-panel, .mode-evaluation { --module-span: 4; }
+      .module-tools { display: none; position: absolute; z-index: 3; top: 9px; right: 10px; align-items: center; gap: 4px; padding: 3px; border: 1px solid #c4dfdb; border-radius: 8px; background: rgba(255, 255, 255, .94); box-shadow: 0 5px 14px rgba(10, 78, 73, .12); }
+      .module-tools button { width: 25px; height: 25px; display: grid; place-items: center; border: 0; border-radius: 5px; color: var(--teal-dark); background: transparent; }
+      .module-tools button:hover { background: var(--teal-soft); }
+      .module-tools svg { width: 14px; height: 14px; }
+      .module-handle { cursor: grab; }
+      .module-handle:active { cursor: grabbing; }
+      .layout-editing .module-tools { display: inline-flex; }
+      .layout-editing .layout-module { border: 1px dashed #70bcb5; box-shadow: 0 0 0 3px rgba(6, 157, 145, .08); }
+      .layout-editing .layout-module:hover .grid-stack-item-content { transform: none; }
+      .layout-editing .dashboard-stage { background: repeating-linear-gradient(90deg, rgba(6, 157, 145, .035) 0, rgba(6, 157, 145, .035) calc(8.333% - 1px), transparent calc(8.333% - 1px), transparent 8.333%); border-radius: 12px; }
+      .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 20px 22px 0; }
+      .panel-kicker { margin: 0 0 6px; color: var(--teal); font-size: 10px; letter-spacing: .14em; font-weight: 800; }
+      .panel h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+      .panel-sub { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+      .chart-panel { padding-bottom: 16px; }
+      .chart-total { text-align: right; }
+      .chart-total strong { display: block; color: var(--teal-dark); font-size: 21px; }
+      .chart-total span { color: var(--muted); font-size: 11px; }
+      .chart-wrap { padding: 18px 20px 0; }
+      .chart-svg { width: 100%; height: 284px; display: block; overflow: visible; }
+      .chart-gridline { stroke: #e8efed; stroke-dasharray: 3 5; }
+      .chart-axis { fill: #97a6a8; font-size: 10px; }
+      .net-area { fill: url(#netFill); }
+      .net-line { fill: none; stroke: var(--teal); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .fee-line { fill: none; stroke: var(--coral); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .75; }
+      .chart-legend { display: flex; gap: 14px; color: var(--muted); font-size: 11px; padding: 0 22px; }
+      .chart-legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--teal); }
+      .chart-legend .fee-key::before { background: var(--coral); }
+      .chart-foot { display: flex; justify-content: space-between; gap: 16px; margin: 13px 22px 0; padding-top: 12px; border-top: 1px solid var(--soft); color: var(--muted); font-size: 11px; }
+      .chart-foot strong { color: var(--ink); }
+      .monthly-chart { display: flex; gap: 10px; height: 220px; margin: 20px 22px 0; padding: 0 0 26px; border-bottom: 1px solid var(--soft); }
+      .monthly-y-axis { display: flex; flex-direction: column; justify-content: space-between; color: #9aa8aa; font-size: 10px; padding-bottom: 4px; }
+      .monthly-bars { position: relative; display: flex; align-items: stretch; justify-content: space-around; flex: 1; gap: 9px; padding: 0 4px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 53px, #e8efed 54px, transparent 55px); }
+      .monthly-bars::after { content: ""; position: absolute; left: 0; right: 0; top: 56%; border-top: 1px solid #b8c9c5; }
+      .month-column { position: relative; display: block; flex: 1; height: 100%; min-width: 20px; }
+      .month-column small { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); color: #8b9b9d; font-size: 10px; }
+      .month-bar { position: absolute; left: 50%; width: min(34px, 85%); min-height: 4px; transform: translateX(-50%); bottom: 44%; border-radius: 6px 6px 2px 2px; background: var(--teal); transition: transform .18s ease, filter .18s ease; }
+      .month-bar:hover { transform: translateX(-50%) scaleY(1.04) scaleX(1.08); filter: brightness(1.05); }
+      .month-bar.negative { top: 56%; bottom: auto; background: var(--coral); border-radius: 2px 2px 6px 6px; }
+      .month-bar.empty { background: #dce6e3; opacity: .6; }
+      .month-bar span { position: absolute; top: -19px; left: 50%; transform: translateX(-50%); color: #607477; font-size: 9px; white-space: nowrap; }
+      .month-column.current .month-bar { background: var(--orange); box-shadow: 0 0 0 3px var(--orange-soft); }
+      .monthly-foot { margin-top: 12px; }
+
+      .risk-panel { padding-bottom: 18px; }
+      .risk-score { margin: 20px 22px 18px; padding: 17px; display: flex; align-items: center; justify-content: space-between; background: #f3faf8; border: 1px solid #d8eee9; border-radius: 11px; }
+      .risk-score span { display: block; color: var(--muted); font-size: 12px; }
+      .risk-score strong { display: block; margin-top: 4px; color: var(--teal-dark); font-size: 25px; }
+      .risk-score .status { display: inline-flex; align-items: center; gap: 5px; color: var(--teal); background: var(--teal-soft); border-radius: 99px; padding: 6px 9px; font-size: 11px; font-weight: 700; }
+      .risk-score .status svg { width: 13px; height: 13px; }
+      .risk-list { display: grid; gap: 1px; margin: 0 22px; }
+      .risk-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--soft); font-size: 12px; }
+      .risk-row:last-child { border-bottom: 0; }
+      .risk-row span { color: var(--muted); }
+      .risk-row strong { color: var(--ink); }
+      .risk-row strong.good { color: var(--teal); }
+      .risk-row strong.warn { color: var(--orange); }
+      .risk-row strong.bad { color: var(--coral); }
+      .risk-progress { height: 6px; margin-top: 14px; background: #e7efed; border-radius: 99px; overflow: hidden; }
+      .risk-progress i { display: block; width: 62%; height: 100%; background: var(--orange); border-radius: inherit; }
+      .risk-caption { display: flex; justify-content: space-between; margin-top: 7px; color: var(--muted); font-size: 10px; }
+
+      .secondary-grid { display: contents; }
+      .calendar, .contracts, .loss-contracts, .import-panel { padding-bottom: 18px; }
+      .loss-contracts .table td, .loss-contracts .table th { padding-top: 8px; padding-bottom: 8px; }
+      .loss-contracts .table tbody tr:first-child td { background: #fff8f9; }
+      .month-total { color: var(--teal); font-size: 12px; font-weight: 700; }
+      .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; padding: 18px 20px 0; }
+      .calendar-grid .weekday { color: #9aa8aa; font-size: 10px; text-align: center; padding-bottom: 4px; }
+      .day { min-height: 38px; border: 1px solid transparent; border-radius: 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; }
+      .day span { color: #839396; }
+      .day b { font-size: 9px; font-weight: 700; }
+      .day.empty { opacity: 0; }
+      .day.profit { color: #147c74; background: #dcf4ef; border-color: #c8e9e3; }
+      .day.loss { color: #c84766; background: #ffebef; border-color: #f8d4dc; }
+      .day.flat { background: #f4f7f6; }
+      .table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+      .table th { padding: 10px 22px; color: #9aa8aa; font-size: 10px; font-weight: 700; text-align: left; border-bottom: 1px solid var(--soft); }
+      .table td { padding: 12px 22px; border-bottom: 1px solid #f0f4f3; white-space: nowrap; }
+      .table tr:last-child td { border-bottom: 0; }
+      .contract { display: flex; align-items: center; gap: 9px; }
+      .contract-badge { width: 28px; height: 28px; display: grid; place-items: center; color: var(--teal-dark); background: var(--teal-soft); border-radius: 8px; font-size: 10px; font-weight: 800; }
+      .contract small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
+      .profit { color: var(--teal); font-weight: 700; }
+      .loss { color: var(--coral); font-weight: 700; }
+      .mini-bar { display: inline-block; width: 58px; height: 5px; margin-right: 7px; vertical-align: middle; background: #edf1f0; border-radius: 99px; overflow: hidden; }
+      .mini-bar i { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
+      .mini-bar i.loss { background: var(--coral); }
+
+      .import-body { padding: 19px 22px 0; }
+      .import-state { display: flex; align-items: center; gap: 10px; padding: 11px 0 15px; border-bottom: 1px solid var(--soft); }
+      .import-state .check { width: 30px; height: 30px; display: grid; place-items: center; color: var(--teal); background: var(--teal-soft); border-radius: 9px; }
+      .import-state .check svg { width: 16px; height: 16px; }
+      .import-state strong { display: block; font-size: 13px; }
+      .import-state span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+      .import-list { display: grid; gap: 12px; padding-top: 15px; }
+      .import-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+      .import-row span { color: var(--muted); }
+      .import-row strong { color: var(--ink); }
+      .import-row strong.warn { color: var(--orange); }
+      .import-button { width: 100%; margin-top: 18px; justify-content: center; }
+
+      .bottom-grid { display: contents; }
+      .review-state { padding: 20px 22px; }
+      .review-state h3 { margin: 0; font-size: 14px; }
+      .review-state p { margin: 6px 0 17px; color: var(--muted); font-size: 12px; }
+      .review-meter { height: 10px; background: #edf2f1; border-radius: 99px; overflow: hidden; }
+      .review-meter i { display: block; width: 78%; height: 100%; background: var(--teal); border-radius: inherit; }
+      .review-meta { display: flex; justify-content: space-between; margin-top: 8px; color: var(--muted); font-size: 11px; }
+      .review-meta strong { color: var(--teal-dark); }
+      .todo { display: grid; gap: 9px; margin-top: 18px; }
+      .todo div { display: flex; align-items: center; gap: 8px; color: #5d6d70; font-size: 11px; }
+      .todo svg { width: 14px; height: 14px; color: var(--orange); }
+      .evaluation-grid { display: contents; }
+      .evaluation-table-wrap { overflow-x: auto; padding: 10px 0 16px; }
+      .evaluation-table { min-width: 700px; }
+      .evaluation-table td, .evaluation-table th { padding-top: 10px; padding-bottom: 10px; }
+      .mode-evaluation { padding-bottom: 18px; }
+      .mode-block { margin: 19px 22px 0; padding-bottom: 15px; border-bottom: 1px solid var(--soft); }
+      .mode-block:last-child { border-bottom: 0; padding-bottom: 0; }
+      .mode-heading { display: flex; justify-content: space-between; margin-bottom: 12px; color: var(--muted); font-size: 11px; }
+      .mode-heading strong { color: var(--ink); font-size: 13px; }
+      .mode-row { display: grid; grid-template-columns: 70px minmax(50px, 1fr) auto; align-items: center; gap: 9px; margin: 12px 0; color: #5c6d70; font-size: 11px; }
+      .mode-bar { height: 7px; background: #edf3f1; border-radius: 99px; overflow: hidden; }
+      .mode-bar i { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
+      .mode-bar.loss-fill i { background: var(--coral); }
+      .mode-row b { min-width: 52px; text-align: right; font-size: 11px; }
+      .layout-editing .module-handle { outline: 2px solid rgba(6, 157, 145, .16); }
+      .layout-editing .layout-module.drag-target { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(244, 155, 34, .16); }
+      .layout-editing .grid-stack-item > .ui-resizable-handle { display: block !important; opacity: 1 !important; pointer-events: auto; z-index: 5; }
+      .layout-editing .grid-stack-item > .ui-resizable-e,
+      .layout-editing .grid-stack-item > .ui-resizable-w { width: 8px; top: 14px; bottom: 14px; background: rgba(6, 157, 145, .22); border-radius: 4px; }
+      .layout-editing .grid-stack-item > .ui-resizable-s,
+      .layout-editing .grid-stack-item > .ui-resizable-n { height: 8px; left: 14px; right: 14px; background: rgba(6, 157, 145, .22); border-radius: 4px; }
+      .layout-editing .grid-stack-item > .ui-resizable-se,
+      .layout-editing .grid-stack-item > .ui-resizable-sw { width: 13px; height: 13px; background: var(--teal); border: 2px solid white; border-radius: 50%; }
+
+      @media (max-width: 1180px) {
+        .app { grid-template-columns: 196px minmax(0, 1fr); }
+        .main { padding: 20px; }
+        .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .period-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .secondary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .import-panel { grid-column: span 2; }
+      }
+      @media (max-width: 760px) {
+        .app { display: block; }
+        .rail { display: none; }
+        .main { padding: 16px 13px 28px; }
+        .topbar { align-items: flex-start; flex-direction: column; margin-bottom: 17px; }
+        .toolbar { width: 100%; flex-wrap: wrap; }
+        .range { flex: 1; min-width: 250px; }
+        .range button { flex: 1; padding-left: 6px; padding-right: 6px; }
+        .action-button { flex: 1; }
+        .notice { align-items: flex-start; flex-direction: column; }
+        .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .period-grid { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+        .kpi { min-height: 116px; padding: 13px; }
+        .kpi-value { font-size: 21px; }
+        .dashboard-stage { margin-top: 12px; }
+        .view-mode .dashboard-stage { display: block; }
+        .view-mode .dashboard-stage .layout-module { height: auto; min-height: 0; margin-bottom: 12px; }
+        .monthly-chart { margin-left: 16px; margin-right: 16px; gap: 6px; }
+        .monthly-bars { gap: 4px; }
+        .monthly-foot { flex-wrap: wrap; }
+        .layout-toggle-label { display: none; }
+        .module-picker { right: auto; left: 0; }
+        .layout-module:hover .grid-stack-item-content, .kpi:hover { transform: none; }
+        .panel-head { padding: 17px 16px 0; }
+        .chart-wrap { padding: 12px 12px 0; }
+        .chart-svg { height: 220px; }
+        .chart-legend, .chart-foot { margin-left: 16px; margin-right: 16px; padding-left: 0; padding-right: 0; }
+        .table th { padding-left: 16px; padding-right: 16px; }
+        .table td { padding-left: 16px; padding-right: 16px; }
+      }
+    </style>
+  </head>
+  <body class="view-mode">
+    <div class="app">
+      <aside class="rail">
+        <div class="brand">
+          <div class="brand-mark">期</div>
+          <div><strong>期货复盘</strong><span>DOMESTIC FUTURES</span></div>
+        </div>
+        <div>
+          <div class="nav-label">WORKSPACE</div>
+          <nav class="nav" aria-label="工作区">
+            <button class="active" type="button"><i data-lucide="layout-dashboard"></i>仪表盘</button>
+            <button type="button"><i data-lucide="list-filter"></i>订单流水</button>
+            <button type="button"><i data-lucide="images"></i>复盘画册</button>
+          </nav>
+        </div>
+        <div>
+          <div class="nav-label">SYSTEM</div>
+          <nav class="nav" aria-label="系统">
+            <button type="button"><i data-lucide="database"></i>数据导入</button>
+            <button type="button"><i data-lucide="settings-2"></i>设置</button>
+          </nav>
+        </div>
+        <div class="rail-spacer"></div>
+        <div class="data-note"><strong>模拟数据预览</strong>页面尚未连接真实数据库。手续费已经纳入净盈亏展示。</div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="title-block"><h1>账户复盘总览</h1><p>国内期货 · 2026 年 10 月 1 日至 19 日 · 北京时间</p></div>
+          <div class="toolbar">
+            <div class="range" role="tablist" aria-label="时间范围">
+              <button type="button">今日</button><button type="button">近 7 天</button><button class="active" type="button">本月</button><button type="button">自定义</button>
+            </div>
+            <button class="icon-button" type="button" title="刷新模拟数据" aria-label="刷新模拟数据"><i data-lucide="refresh-cw"></i></button>
+            <a class="icon-button" href="mock-domestic-futures-layout.html" title="打开布局编辑器" aria-label="打开布局编辑器"><i data-lucide="layout-grid"></i><span>调整布局</span></a>
+            <button class="action-button" type="button"><i data-lucide="upload"></i>导入数据</button>
+          </div>
+        </header>
+
+        <div class="notice"><span><strong>成本口径已启用</strong>　仪表盘所有净盈亏均已扣除手续费。</span><span class="formula">净盈亏 = 交易盈亏 + 手续费</span></div>
+
+        <section class="kpis" aria-label="账户关键指标">
+          <article class="kpi net"><div class="kpi-head"><span>净盈亏</span><span class="kpi-icon"><i data-lucide="trending-up"></i></span></div><div class="kpi-value">+¥18,460</div><div class="kpi-foot">↑ 较上月 +12.4%</div></article>
+          <article class="kpi gross"><div class="kpi-head"><span>交易盈亏</span><span class="kpi-icon"><i data-lucide="landmark"></i></span></div><div class="kpi-value">+¥24,980</div><div class="kpi-foot">扣除成本前</div></article>
+          <article class="kpi fee"><div class="kpi-head"><span>手续费</span><span class="kpi-icon"><i data-lucide="receipt-text"></i></span></div><div class="kpi-value">-¥6,520</div><div class="kpi-foot negative">占交易盈亏 26.1%</div></article>
+          <article class="kpi count"><div class="kpi-head"><span>交易笔数</span><span class="kpi-icon"><i data-lucide="hash"></i></span></div><div class="kpi-value">32</div><div class="kpi-foot neutral">18 盈利 · 14 亏损</div></article>
+          <article class="kpi r"><div class="kpi-head"><span>期望值</span><span class="kpi-icon"><i data-lucide="target"></i></span></div><div class="kpi-value">+0.22R</div><div class="kpi-foot">29 笔有完整 R 数据</div></article>
+          <article class="kpi coverage"><div class="kpi-head"><span>R 数据覆盖率</span><span class="kpi-icon"><i data-lucide="scan-line"></i></span></div><div class="kpi-value">90.6%</div><div class="kpi-foot">样本尚未达到 SQN 门槛</div></article>
+        </section>
+
+        <div class="dashboard-stage" id="dashboardStage">
+        <section class="panel period-overview layout-module" data-module="period-overview" aria-label="固定周期指标">
+          <div class="panel-head"><div><p class="panel-kicker">PERIOD SNAPSHOT</p><h2>固定周期指标</h2><p class="panel-sub">独立周期统计，不受上方时间筛选影响</p></div><span class="period-badge"><i data-lucide="lock-keyhole"></i>固定周期</span></div>
+          <div class="period-grid">
+            <article class="period-card today"><div class="period-card-head"><strong>今日</strong><span>北京时间</span></div><div class="period-net">+¥2,340</div><div class="period-metrics"><div class="period-metric"><span>交易盈亏</span><strong>+¥3,080</strong></div><div class="period-metric"><span>手续费</span><strong class="fee">-¥740</strong></div><div class="period-metric"><span>交易笔数</span><strong>3</strong></div><div class="period-metric"><span>盈亏比</span><strong>1.67</strong></div><div class="period-metric"><span>胜率</span><strong>66.7%</strong></div><div class="period-metric"><span>期望值 R</span><strong>+0.29R</strong></div></div></article>
+            <article class="period-card week"><div class="period-card-head"><strong>最近 1 周</strong><span>滚动 7 天</span></div><div class="period-net">+¥6,840</div><div class="period-metrics"><div class="period-metric"><span>交易盈亏</span><strong>+¥9,420</strong></div><div class="period-metric"><span>手续费</span><strong class="fee">-¥2,580</strong></div><div class="period-metric"><span>交易笔数</span><strong>12</strong></div><div class="period-metric"><span>盈亏比</span><strong>1.84</strong></div><div class="period-metric"><span>胜率</span><strong>58.3%</strong></div><div class="period-metric"><span>期望值 R</span><strong>+0.24R</strong></div></div></article>
+            <article class="period-card month"><div class="period-card-head"><strong>最近 1 月</strong><span>滚动 30 天</span></div><div class="period-net">+¥18,460</div><div class="period-metrics"><div class="period-metric"><span>交易盈亏</span><strong>+¥24,980</strong></div><div class="period-metric"><span>手续费</span><strong class="fee">-¥6,520</strong></div><div class="period-metric"><span>交易笔数</span><strong>32</strong></div><div class="period-metric"><span>盈亏比</span><strong>1.76</strong></div><div class="period-metric"><span>胜率</span><strong>56.3%</strong></div><div class="period-metric"><span>期望值 R</span><strong>+0.22R</strong></div></div></article>
+            <article class="period-card quarter"><div class="period-card-head"><strong>最近 3 月</strong><span>滚动 90 天</span></div><div class="period-net">+¥35,280</div><div class="period-metrics"><div class="period-metric"><span>交易盈亏</span><strong>+¥48,920</strong></div><div class="period-metric"><span>手续费</span><strong class="fee">-¥13,640</strong></div><div class="period-metric"><span>交易笔数</span><strong>78</strong></div><div class="period-metric"><span>盈亏比</span><strong>1.58</strong></div><div class="period-metric"><span>胜率</span><strong>53.8%</strong></div><div class="period-metric"><span>期望值 R</span><strong>+0.18R</strong></div></div></article>
+            <article class="period-card year"><div class="period-card-head"><strong>最近 1 年</strong><span>滚动 365 天</span></div><div class="period-net">+¥126,480</div><div class="period-metrics"><div class="period-metric"><span>交易盈亏</span><strong>+¥178,220</strong></div><div class="period-metric"><span>手续费</span><strong class="fee">-¥51,740</strong></div><div class="period-metric"><span>交易笔数</span><strong>286</strong></div><div class="period-metric"><span>盈亏比</span><strong>1.49</strong></div><div class="period-metric"><span>胜率</span><strong>52.1%</strong></div><div class="period-metric"><span>期望值 R</span><strong>+0.14R</strong></div></div></article>
+          </div>
+        </section>
+
+        <section class="primary-grid">
+          <article class="panel chart-panel layout-module" data-module="net-performance">
+            <div class="panel-head"><div><p class="panel-kicker">NET PERFORMANCE</p><h2>累计净盈亏</h2><p class="panel-sub">已包含手续费，按平仓成交时间归集</p></div><div class="chart-total"><strong>+¥18,460</strong><span>本月累计</span></div></div>
+            <div class="chart-wrap">
+              <svg class="chart-svg" viewBox="0 0 760 284" role="img" aria-label="累计净盈亏和手续费趋势图">
+                <defs><linearGradient id="netFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#069d91" stop-opacity=".25"></stop><stop offset="1" stop-color="#069d91" stop-opacity=".02"></stop></linearGradient></defs>
+                <line class="chart-gridline" x1="46" x2="744" y1="42" y2="42"></line><line class="chart-gridline" x1="46" x2="744" y1="101" y2="101"></line><line class="chart-gridline" x1="46" x2="744" y1="160" y2="160"></line><line class="chart-gridline" x1="46" x2="744" y1="219" y2="219"></line>
+                <text class="chart-axis" x="4" y="46">20k</text><text class="chart-axis" x="8" y="105">10k</text><text class="chart-axis" x="20" y="164">0</text><text class="chart-axis" x="4" y="223">-10k</text>
+                <path class="net-area" d="M46 160 L87 148 L128 157 L169 132 L210 113 L251 126 L292 101 L333 91 L374 100 L415 78 L456 85 L497 65 L538 73 L579 52 L620 61 L661 48 L702 39 L744 30 L744 160 L46 160 Z"></path>
+                <path class="net-line" d="M46 160 L87 148 L128 157 L169 132 L210 113 L251 126 L292 101 L333 91 L374 100 L415 78 L456 85 L497 65 L538 73 L579 52 L620 61 L661 48 L702 39 L744 30"></path>
+                <path class="fee-line" d="M46 160 L87 157 L128 153 L169 148 L210 143 L251 138 L292 132 L333 127 L374 122 L415 116 L456 111 L497 106 L538 100 L579 95 L620 89 L661 84 L702 79 L744 74"></path>
+                <text class="chart-axis" text-anchor="middle" x="46" y="258">10/01</text><text class="chart-axis" text-anchor="middle" x="210" y="258">10/05</text><text class="chart-axis" text-anchor="middle" x="374" y="258">10/09</text><text class="chart-axis" text-anchor="middle" x="538" y="258">10/14</text><text class="chart-axis" text-anchor="middle" x="702" y="258">10/18</text>
+              </svg>
+            </div>
+            <div class="chart-legend"><span>累计净盈亏</span><span class="fee-key">累计手续费</span></div>
+            <div class="chart-foot"><span>交易盈亏 <strong>+¥24,980</strong></span><span>手续费 <strong class="loss">-¥6,520</strong></span><span>净成本率 <strong>26.1%</strong></span></div>
+          </article>
+
+          <article class="panel risk-panel layout-module" data-module="risk-health">
+            <div class="panel-head"><div><p class="panel-kicker">RISK HEALTH</p><h2>账户风险状态</h2><p class="panel-sub">基于当前复盘窗口的已实现结果</p></div></div>
+            <div class="risk-score"><div><span>风险评分</span><strong>72 / 100</strong></div><span class="status"><i data-lucide="shield-check"></i>可控</span></div>
+            <div class="risk-list">
+              <div class="risk-row"><span>最大单笔亏损</span><strong class="bad">-¥3,120</strong></div>
+              <div class="risk-row"><span>连续亏损笔数</span><strong class="warn">3 笔</strong></div>
+              <div class="risk-row"><span>打平占比</span><strong class="good">13.8%</strong></div>
+              <div class="risk-row"><span>盈亏比</span><strong class="good">1.76</strong></div>
+              <div class="risk-row"><span>未完成 R 数据</span><strong class="warn">3 笔</strong></div>
+            </div>
+            <div style="margin: 2px 22px 0"><div class="risk-progress"><i></i></div><div class="risk-caption"><span>手续费压力</span><span>26.1% of gross P/L</span></div></div>
+          </article>
+          <article class="panel monthly-panel layout-module" data-module="monthly-pnl">
+            <div class="panel-head"><div><p class="panel-kicker">MONTHLY P/L</p><h2>月度盈亏</h2><p class="panel-sub">按平仓月份汇总成本后的净盈亏</p></div><div class="chart-total"><strong>+¥18,460</strong><span>2026 年累计</span></div></div>
+            <div class="monthly-chart" aria-label="月度盈亏柱状图">
+              <div class="monthly-y-axis"><span>20k</span><span>10k</span><span>0</span><span>-10k</span></div>
+              <div class="monthly-bars">
+                <div class="month-column"><div class="month-bar positive" style="height: 15%"><span>¥5.2k</span></div><small>1月</small></div>
+                <div class="month-column"><div class="month-bar negative" style="height: 8%"><span>-¥2.4k</span></div><small>2月</small></div>
+                <div class="month-column"><div class="month-bar positive" style="height: 25%"><span>¥8.6k</span></div><small>3月</small></div>
+                <div class="month-column"><div class="month-bar positive" style="height: 20%"><span>¥7.0k</span></div><small>4月</small></div>
+                <div class="month-column"><div class="month-bar negative" style="height: 11%"><span>-¥3.6k</span></div><small>5月</small></div>
+                <div class="month-column"><div class="month-bar positive" style="height: 29%"><span>¥10.1k</span></div><small>6月</small></div>
+                <div class="month-column"><div class="month-bar positive" style="height: 18%"><span>¥6.4k</span></div><small>7月</small></div>
+                <div class="month-column"><div class="month-bar negative" style="height: 14%"><span>-¥4.8k</span></div><small>8月</small></div>
+                <div class="month-column"><div class="month-bar positive" style="height: 22%"><span>¥7.6k</span></div><small>9月</small></div>
+                <div class="month-column current"><div class="month-bar positive" style="height: 39%"><span>¥18.5k</span></div><small>10月</small></div>
+                <div class="month-column"><div class="month-bar empty" style="height: 4%"></div><small>11月</small></div>
+                <div class="month-column"><div class="month-bar empty" style="height: 4%"></div><small>12月</small></div>
+              </div>
+            </div>
+            <div class="chart-foot monthly-foot"><span>盈利月份 <strong>7 / 10</strong></span><span>最强月份 <strong class="profit">10月 +¥18,460</strong></span><span>亏损月份 <strong class="loss">3 / 10</strong></span></div>
+          </article>
+        </section>
+
+        <section class="secondary-grid">
+          <article class="panel calendar layout-module" data-module="daily-calendar"><div class="panel-head"><div><p class="panel-kicker">DAILY P/L</p><h2>十月盈亏日历</h2></div><span class="month-total">+¥18,460</span></div><div class="calendar-grid" id="calendar"></div></article>
+          <article class="panel contracts layout-module" data-module="contract-contribution"><div class="panel-head"><div><p class="panel-kicker">CONTRACT CONTRIBUTION</p><h2>合约贡献</h2></div><span class="panel-sub">按净盈亏排序</span></div><table class="table"><thead><tr><th>合约</th><th>笔数</th><th>净盈亏</th></tr></thead><tbody><tr><td><div class="contract"><span class="contract-badge">IF</span><div><b>IF2611</b><small>中金所 · 股指</small></div></div></td><td>11</td><td class="profit">+¥8,600</td></tr><tr><td><div class="contract"><span class="contract-badge">MA</span><div><b>MA2701</b><small>郑商所 · 甲醇</small></div></div></td><td>5</td><td class="profit">+¥6,080</td></tr><tr><td><div class="contract"><span class="contract-badge">RB</span><div><b>RB2701</b><small>上期所 · 螺纹钢</small></div></div></td><td>9</td><td class="profit">+¥5,120</td></tr><tr><td><div class="contract"><span class="contract-badge">PVC</span><div><b>PVC2701</b><small>大商所 · 聚氯乙烯</small></div></div></td><td>7</td><td class="loss">-¥1,340</td></tr></tbody></table></article>
+          <article class="panel loss-contracts layout-module" data-module="contract-losses"><div class="panel-head"><div><p class="panel-kicker">LOSS LEADERBOARD</p><h2>合约亏损榜</h2></div><span class="panel-sub">最大亏损 10 个品种</span></div><table class="table loss-table"><thead><tr><th>品种</th><th>笔数</th><th>净亏损</th></tr></thead><tbody><tr><td><b>PVC2701</b></td><td>7</td><td class="loss">-¥1,340</td></tr><tr><td><b>FG2701</b></td><td>4</td><td class="loss">-¥920</td></tr><tr><td><b>SC2612</b></td><td>3</td><td class="loss">-¥760</td></tr><tr><td><b>TA2701</b></td><td>2</td><td class="loss">-¥540</td></tr><tr><td><b>JD2701</b></td><td>2</td><td class="loss">-¥360</td></tr><tr><td><b>CU2611</b></td><td>1</td><td class="loss">-¥280</td></tr><tr><td><b>RM2701</b></td><td>1</td><td class="loss">-¥210</td></tr><tr><td><b>AL2611</b></td><td>1</td><td class="loss">-¥160</td></tr><tr><td><b>AU2612</b></td><td>1</td><td class="loss">-¥120</td></tr><tr><td><b>SR2701</b></td><td>1</td><td class="loss">-¥95</td></tr></tbody></table></article>
+          <article class="panel import-panel layout-module" data-module="data-health"><div class="panel-head"><div><p class="panel-kicker">DATA HEALTH</p><h2>数据与导入</h2></div><span class="panel-sub">模拟批次</span></div><div class="import-body"><div class="import-state"><span class="check"><i data-lucide="check"></i></span><div><strong>最近导入成功</strong><span>2026-10-19 15:21 · 同花顺 CSV</span></div></div><div class="import-list"><div class="import-row"><span>成交记录</span><strong>48</strong></div><div class="import-row"><span>已匹配交易</span><strong>32</strong></div><div class="import-row"><span>重复记录</span><strong>2</strong></div><div class="import-row"><span>未配对</span><strong class="warn">1</strong></div></div><button class="action-button import-button" type="button"><i data-lucide="file-up"></i>查看导入记录</button></div></article>
+        </section>
+
+        <section class="panel review-state layout-module" data-module="review-coverage"><h3>复盘完成度</h3><p>账户整体复盘覆盖情况，不展示逐笔内容</p><div class="review-meter"><i></i></div><div class="review-meta"><span><strong>78%</strong> 已完成</span><span>25 / 32 笔</span></div><div class="todo"><div><i data-lucide="circle-alert"></i>3 笔缺少完整 R 数据</div><div><i data-lucide="image-off"></i>4 笔缺少截图</div><div><i data-lucide="tags"></i>2 笔未归类策略</div></div></section>
+        <section class="evaluation-grid">
+          <article class="panel system-evaluation layout-module" data-module="system-evaluation"><div class="panel-head"><div><p class="panel-kicker">DAILY SYSTEM EVALUATION</p><h2>交易系统评估</h2><p class="panel-sub">按交易日查看净盈亏、手续费、胜率、盈亏比和期望值</p></div><span class="panel-sub">共 10 个交易日</span></div><div class="evaluation-table-wrap"><table class="table evaluation-table"><thead><tr><th>交易日</th><th>净盈亏</th><th>手续费</th><th>笔数</th><th>盈亏比</th><th>胜率</th><th>期望值 R</th></tr></thead><tbody><tr><td>10/01</td><td class="profit">+¥1,680</td><td class="loss">-¥420</td><td>3</td><td>1.82</td><td>66.7%</td><td class="profit">+0.31R</td></tr><tr><td>10/03</td><td class="loss">-¥920</td><td class="loss">-¥310</td><td>2</td><td>0.74</td><td>50.0%</td><td class="loss">-0.18R</td></tr><tr><td>10/07</td><td class="profit">+¥2,140</td><td class="loss">-¥680</td><td>4</td><td>1.54</td><td>50.0%</td><td class="profit">+0.22R</td></tr><tr><td>10/09</td><td class="profit">+¥4,280</td><td class="loss">-¥920</td><td>5</td><td>2.08</td><td>60.0%</td><td class="profit">+0.46R</td></tr><tr><td>10/13</td><td class="loss">-¥3,120</td><td class="loss">-¥1,240</td><td>3</td><td>0.48</td><td>33.3%</td><td class="loss">-0.42R</td></tr><tr><td>10/15</td><td class="profit">+¥3,780</td><td class="loss">-¥1,020</td><td>4</td><td>2.22</td><td>75.0%</td><td class="profit">+0.51R</td></tr><tr><td>10/18</td><td class="profit">+¥2,340</td><td class="loss">-¥740</td><td>3</td><td>1.67</td><td>66.7%</td><td class="profit">+0.29R</td></tr></tbody></table></div></article>
+          <article class="panel mode-evaluation layout-module" data-module="mode-evaluation"><div class="panel-head"><div><p class="panel-kicker">TRADE MODE EVALUATION</p><h2>交易模式评估</h2><p class="panel-sub">比较交易类型和策略的真实贡献</p></div></div><div class="mode-block"><div class="mode-heading"><strong>交易类型</strong><span>净盈亏</span></div><div class="mode-row"><span>趋势跟随</span><div class="mode-bar"><i style="width: 82%"></i></div><b class="profit">+¥12,480</b></div><div class="mode-row"><span>突破</span><div class="mode-bar"><i style="width: 57%"></i></div><b class="profit">+¥7,620</b></div><div class="mode-row"><span>反转</span><div class="mode-bar loss-fill"><i style="width: 24%"></i></div><b class="loss">-¥1,640</b></div></div><div class="mode-block"><div class="mode-heading"><strong>策略</strong><span>样本数</span></div><div class="mode-row"><span>开盘突破</span><div class="mode-bar"><i style="width: 70%"></i></div><b>12</b></div><div class="mode-row"><span>回踩跟进</span><div class="mode-bar"><i style="width: 52%"></i></div><b>9</b></div><div class="mode-row"><span>逆势抄底</span><div class="mode-bar loss-fill"><i style="width: 28%"></i></div><b>5</b></div></div></article>
+        </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- The dashboard view is intentionally static. Layout editing lives in mock-domestic-futures-layout.html. -->
+    <script type="module" src="./domestic-futures-layout-view.mjs"></script>
+  </body>
+</html>

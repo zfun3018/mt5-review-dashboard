@@ -227,6 +227,16 @@ class ArchitectureContractTest(TemporaryStorageCase):
         self.assertIn('if "%MT5_REVIEW_HOST%"=="" set "MT5_REVIEW_HOST=0.0.0.0"', launcher_source)
         self.assertIn("ensure-lan-firewall.ps1", launcher_source)
 
+    def test_start_script_replaces_only_a_confirmed_local_review_service(self):
+        source = START_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Stop-ExistingReviewService", source)
+        self.assertIn("/api/health", source)
+        self.assertIn("ConvertFrom-Json", source)
+        self.assertIn("$healthPayload.mode -eq 'local'", source)
+        self.assertIn("$process.Path -notmatch '\\\\python(w)?\\.exe$'", source)
+        self.assertIn("Stop-Process -Id $processId -Force", source)
+
     def test_lan_firewall_rule_is_private_and_local_subnet_only(self):
         firewall_script = START_SCRIPT.parent / "tools" / "ensure-lan-firewall.ps1"
         source = firewall_script.read_text(encoding="utf-8")

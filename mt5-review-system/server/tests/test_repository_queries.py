@@ -157,6 +157,18 @@ class CampaignRepositoryReadTest(TemporaryStorageCase):
         self.assertEqual(analysis["metrics"]["order_count"], 1)
         self.assertEqual(after_version, before_version)
 
+    def test_analysis_rows_resolve_initial_stop_through_position_relationship(self):
+        campaign = storage.list_campaigns()["campaigns"][0]
+        position_id = storage.get_campaign(campaign["id"])["positions"][0]["id"]
+        storage.update_position_initial_stop(position_id, 98.0)
+
+        rows = TradeRepository(storage.runtime_paths()).query_analysis_rows(
+            "2026-08-01", "2026-08-01"
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["has_initial_stop"], 1)
+
     def test_campaign_query_filters_and_paginates_in_sql(self):
         insert_trade(
             storage,

@@ -10,14 +10,14 @@ from datetime import date
 class AnalysisWindow:
     start_date: str | None
     end_date: str | None
-    equity_days: int = 30
+    equity_days: int | None = None
 
     def __post_init__(self) -> None:
         start = date.fromisoformat(self.start_date) if self.start_date else None
         end = date.fromisoformat(self.end_date) if self.end_date else None
         if start and end and start > end:
             raise ValueError("start_date cannot be after end_date")
-        if (
+        if self.equity_days is not None and (
             isinstance(self.equity_days, bool)
             or not isinstance(self.equity_days, int)
             or not 1 <= self.equity_days <= 366

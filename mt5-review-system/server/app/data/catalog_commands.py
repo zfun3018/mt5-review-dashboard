@@ -14,6 +14,8 @@ import json
 import uuid
 from typing import Any
 
+from ..platforms import normalize_platform
+
 
 CLASSIFICATION_DIMENSIONS = {"trade_type", "strategy"}
 
@@ -465,9 +467,14 @@ def update_trade_custom_value(
     trade_id: str,
     field_id: int,
     payload: dict[str, Any],
+    platform: str = "mt5",
 ) -> dict[str, Any]:
+    normalized_platform = normalize_platform(platform)
     with db() as conn:
-        trade = conn.execute("SELECT id FROM trades WHERE id = ?", (trade_id,)).fetchone()
+        trade = conn.execute(
+            "SELECT id FROM trades WHERE id = ? AND platform = ?",
+            (trade_id, normalized_platform),
+        ).fetchone()
         if not trade:
             raise KeyError(trade_id)
         field = conn.execute(

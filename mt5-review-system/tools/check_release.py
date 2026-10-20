@@ -14,7 +14,7 @@ Design constraints:
 * Normal test output streams through to the user. When a gate fails, the
   runner emits a small redacted summary that *names the gate* but does not
   echo back workspace or temporary-root paths.
-* The benchmark gate enforces the v0.6.0 latency budget
+* The benchmark gate enforces the analysis latency budget
   (``/api/analysis`` p95 ≤ 200 ms) and refuses to proceed if the artifact
   is missing or stale.
 """
@@ -139,7 +139,7 @@ def _compatibility_gate() -> int:
 
 def _benchmark_gate() -> int:
     # Run a small benchmark (1k trades) to keep this gate fast, then assert
-    # the v0.6.0 latency budget from the resulting artifact. Full 10k
+    # the analysis latency budget from the resulting artifact. Full 10k
     # benchmarks remain a local acceptance step (see
     # docs/superpowers/plans/2026-09-02-v06-integration-release.md).
     BENCHMARK_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)

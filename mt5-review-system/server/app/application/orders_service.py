@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any, Callable
 
 from . import PageRequest
@@ -37,8 +38,13 @@ class OrdersService:
             "page_size": result.page_size,
         }
 
-    def get_campaign(self, campaign_id: str) -> dict[str, Any] | None:
-        record = self.campaigns.get(campaign_id)
+    def get_campaign(self, campaign_id: str, deleted: str = "active") -> dict[str, Any] | None:
+        getter = self.campaigns.get
+        record = (
+            getter(campaign_id, deleted=deleted)
+            if "deleted" in inspect.signature(getter).parameters
+            else getter(campaign_id)
+        )
         return self._serialize_campaign(record, include_positions=True) if record else None
 
     def _serialize_position(self, position: dict[str, Any]) -> dict[str, Any]:

@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote
 
 from ..responses import not_found, ok
-from . import Body, Query, first, optional_int, request_body
+from ....platforms import normalize_platform
+from . import Body, Query, first, optional_int, platform_kwargs, request_body
 
 if TYPE_CHECKING:
     from ..router import Router
@@ -12,36 +13,50 @@ if TYPE_CHECKING:
 
 def register(router: Router, storage) -> None:
     def random_review_album(path: str, query: Query, body: Body):
-        if query:
+        unknown = sorted(set(query) - {"platform"})
+        if unknown:
             raise ValueError("Random album does not accept filters")
-        return ok(storage.get_random_review_album())
+        return ok(storage.get_random_review_album(normalize_platform(first(query, "platform", "mt5"))))
 
     def review_checkins(path: str, query: Query, body: Body):
-        unknown = sorted(set(query) - {"days"})
+        unknown = sorted(set(query) - {"days", "platform"})
         if unknown:
             raise ValueError(f"Unsupported check-in filter: {unknown[0]}")
         days = optional_int(first(query, "days", "90")) or 90
-        return ok(storage.get_review_checkins(days=days))
+        kwargs = {"days": days}
+        if "platform" in query:
+            kwargs["platform"] = normalize_platform(first(query, "platform", "mt5"))
+        return ok(storage.get_review_checkins(**kwargs))
 
     def checkin_review_trade(path: str, query: Query, body: Body):
+        unknown = sorted(set(query) - {"platform"})
+        if unknown:
+            raise ValueError(f"Unsupported check-in filter: {unknown[0]}")
         payload = request_body(body)
         trade_id = str(payload.get("trade_id", "")).strip()
         if not trade_id:
             raise ValueError("trade_id is required")
         try:
-            return ok(storage.checkin_review_trade(trade_id))
+            kwargs = {}
+            if "platform" in query:
+                kwargs["platform"] = normalize_platform(first(query, "platform", "mt5"))
+            return ok(storage.checkin_review_trade(trade_id, **kwargs))
         except KeyError:
             return not_found("Trade not found")
 
     def cancel_review_trade(path: str, query: Query, body: Body):
-        if query:
-            raise ValueError("Cancel check-in does not accept filters")
+        unknown = sorted(set(query) - {"platform"})
+        if unknown:
+            raise ValueError(f"Unsupported check-in filter: {unknown[0]}")
         prefix = "/api/review-album/checkin/"
         trade_id = unquote(path[len(prefix):]).strip()
         if not trade_id:
             raise ValueError("trade_id is required")
         try:
-            return ok(storage.cancel_review_trade(trade_id))
+            kwargs = {}
+            if "platform" in query:
+                kwargs["platform"] = normalize_platform(first(query, "platform", "mt5"))
+            return ok(storage.cancel_review_trade(trade_id, **kwargs))
         except KeyError:
             return not_found("Trade not found")
 
@@ -61,6 +76,7 @@ def register(router: Router, storage) -> None:
             "archived",
             "page",
             "page_size",
+            "platform",
         }
         unknown = sorted(set(query) - allowed)
         if unknown:
@@ -78,6 +94,7 @@ def register(router: Router, storage) -> None:
                 archived=archived_value == "true",
                 page=optional_int(first(query, "page", "1")) or 1,
                 page_size=optional_int(first(query, "page_size", "24")) or 24,
+                **platform_kwargs(query),
             )
         )
 

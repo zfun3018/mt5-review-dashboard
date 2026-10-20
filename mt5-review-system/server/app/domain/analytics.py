@@ -27,14 +27,17 @@ def trade_net_pnl(trade: dict[str, Any]) -> float:
     except KeyError:
         cached = None
     if cached is None:
-        return round(
-            float(trade.get("pnl", 0.0) or 0.0)
-            + float(trade.get("commission", 0.0) or 0.0)
-            + float(trade.get("swap", 0.0) or 0.0)
-            + float(trade.get("fee", 0.0) or 0.0),
-            2,
-        )
+        return round(float(trade.get("pnl", 0.0) or 0.0) + trade_fee_total(trade), 2)
     return float(cached)
+
+
+def trade_fee_total(trade: dict[str, Any]) -> float:
+    return round(
+        float(trade.get("commission", 0.0) or 0.0)
+        + float(trade.get("swap", 0.0) or 0.0)
+        + float(trade.get("fee", 0.0) or 0.0),
+        2,
+    )
 
 
 def build_trade_metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
@@ -44,6 +47,8 @@ def build_trade_metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
     # and repeated sum()/max()/min() passes added up to a measurable chunk of
     # the /api/analysis hot path.
     total = 0
+    trade_pnl_sum = 0.0
+    fee_total = 0.0
     net_sum = 0.0
     win_sum = 0.0
     loss_sum = 0.0
@@ -53,6 +58,10 @@ def build_trade_metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
     min_val: float | None = None
     for trade in trades:
         value = trade_net_pnl(trade)
+        trade_pnl_sum += float(trade.get("pnl", trade.get("trade_pnl", 0.0)) or 0.0)
+        fee_total += trade_fee_total(trade) if any(
+            key in trade for key in ("commission", "swap", "fee")
+        ) else float(trade.get("fee_total", 0.0) or 0.0)
         total += 1
         net_sum += value
         if value > 0:
@@ -76,6 +85,8 @@ def build_trade_metrics(trades: list[dict[str, Any]]) -> dict[str, Any]:
         "resolved_count": resolved,
         "breakeven_count": total - resolved,
         "net_pnl": round(net_sum, 2),
+        "trade_pnl": round(trade_pnl_sum, 2),
+        "fee_total": round(fee_total, 2),
         "gross_profit": gross_profit,
         "gross_loss": gross_loss,
         "win_count": win_count,
@@ -282,6 +293,38 @@ def build_hour_heatmap(
     return {"days": rows, "max_abs_pnl": round(max_abs, 2)}
 
 
+def build_weekday_hour_heatmap(
+    trades: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Aggregate realized net P/L by Beijing weekday and hour.
+
+    Unlike the rolling seven-day heatmap, this view represents the complete
+    selected history. That makes it useful for comparing recurring trading
+    windows even when the latest activity is not in the last calendar week.
+    """
+    weekdays = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+    rows = [
+        {
+            "weekday": index,
+            "label": label,
+            "hours": [_empty_hour(hour) for hour in range(24)],
+        }
+        for index, label in enumerate(weekdays)
+    ]
+
+    for trade in trades:
+        closed = trade.get("_bj") or to_beijing(trade["close_time_utc"])
+        cell = rows[closed.weekday()]["hours"][closed.hour]
+        _add_trade(cell, trade_net_pnl(trade))
+
+    max_abs = 0.0
+    for row in rows:
+        for cell in row["hours"]:
+            _finalize_period(cell)
+            max_abs = max(max_abs, abs(cell["net_pnl"]))
+    return {"days": rows, "max_abs_pnl": round(max_abs, 2)}
+
+
 def build_session_stats(
     trades: list[dict[str, Any]],
     sessions: dict[str, dict[str, time]] | None = None,
@@ -317,12 +360,12 @@ def build_session_stats(
 def build_equity_curve(
     snapshots: list[dict[str, Any]],
     now_utc: datetime | None = None,
-    hours: int = 24,
+    hours: int | None = 24,
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> list[dict[str, Any]]:
     now = parse_dt(now_utc or datetime.now(timezone.utc))
-    since = now - timedelta(hours=hours)
+    since = now - timedelta(hours=hours) if hours is not None else None
     range_start = date.fromisoformat(start_date) if start_date else None
     range_end = date.fromisoformat(end_date) if end_date else None
     if range_start and range_end and range_start > range_end:
@@ -364,7 +407,7 @@ def build_cumulative_return_curve(
     trades: list[dict[str, Any]],
     snapshots: list[dict[str, Any]],
     now_utc: datetime | None = None,
-    hours: int = 24,
+    hours: int | None = 24,
     start_date: str | None = None,
     end_date: str | None = None,
     max_points: int | None = None,
@@ -380,7 +423,7 @@ def build_cumulative_return_curve(
     only the intermediate resolution is reduced.
     """
     now = parse_dt(now_utc or datetime.now(timezone.utc))
-    since = now - timedelta(hours=hours)
+    since = now - timedelta(hours=hours) if hours is not None else None
     range_start = date.fromisoformat(start_date) if start_date else None
     range_end = date.fromisoformat(end_date) if end_date else None
     if range_start and range_end and range_start > range_end:
@@ -399,16 +442,17 @@ def build_cumulative_return_curve(
                 range_end and point_date > range_end
             ):
                 continue
-        elif not (since <= timestamp <= now):
+        elif since is not None and not (since <= timestamp <= now):
             continue
         decorated.append((timestamp, beijing, trade))
 
     if not decorated:
         return []
 
-    # `decorated` preserves the ascending close-time order already produced by
-    # ``query_analysis_rows`` (ORDER BY close_time_utc ASC), so no re-sort is
-    # needed here; skipping it avoids an O(n log n) pass over the full trade set.
+    # Repository queries may optimize list views with descending order. The
+    # curve contract is chronological, so sort before accumulating realized
+    # net P/L and use the stable campaign id as the tie breaker.
+    decorated.sort(key=lambda item: (item[0], str(item[2].get("id", ""))))
     def in_window(timestamp: datetime) -> bool:
         if range_start or range_end:
             point_date = timestamp.astimezone(BEIJING_TZ).date()
@@ -416,7 +460,7 @@ def build_cumulative_return_curve(
                 (range_start and point_date < range_start)
                 or (range_end and point_date > range_end)
             )
-        return since <= timestamp <= now
+        return since is None or since <= timestamp <= now
 
     eligible_snapshots = sorted(
         (

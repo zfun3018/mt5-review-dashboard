@@ -24,13 +24,155 @@ function rMultiple() {
   return globalThis.RMultipleUI;
 }
 
+const campaignDayKeyFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const campaignDayLabelFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  month: "numeric",
+  day: "numeric",
+  weekday: "short",
+});
+const campaignTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+const CHECKIN_WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+
+function parseCalendarDate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) return null;
+  return { date, year, month, day, key: String(value) };
+}
+
+export function renderCheckinCalendarMarkup(payload = {}) {
+  const days = Array.isArray(payload?.days) ? payload.days : [];
+  const dayMap = new Map();
+  for (const item of days) {
+    const parsed = parseCalendarDate(item?.date);
+    if (parsed) dayMap.set(parsed.key, Math.max(0, Number(item?.count || 0)));
+  }
+  const focus = parseCalendarDate(payload?.today?.date)
+    || [...dayMap.keys()].map(parseCalendarDate).filter(Boolean).sort((left, right) => left.date - right.date).at(-1);
+  if (!focus) return `<div class="checkin-calendar-empty muted-mini">暂无打卡记录</div>`;
+
+  const firstDay = new Date(Date.UTC(focus.year, focus.month, 1));
+  const mondayOffset = (firstDay.getUTCDay() + 6) % 7;
+  const daysInMonth = new Date(Date.UTC(focus.year, focus.month + 1, 0)).getUTCDate();
+  const todayKey = String(payload?.today?.date || "");
+  const cells = [];
+  for (let index = 0; index < mondayOffset; index += 1) {
+    cells.push(`<div class="checkin-day is-empty" aria-hidden="true"></div>`);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const key = `${focus.year}-${String(focus.month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const count = dayMap.get(key) || 0;
+    const classes = ["checkin-day", count ? "has-checkin" : "", key === todayKey ? "is-today" : ""].filter(Boolean).join(" ");
+    cells.push(`<div class="${classes}" role="gridcell" data-date="${escapeAttr(key)}" aria-label="${escapeAttr(key)}：${count} 次">
+      <strong>${day}</strong><span>${count ? `${count}次` : "·"}</span>
+    </div>`);
+  }
+  return `<div class="checkin-calendar-month">
+    <div class="checkin-calendar-month-label">${focus.year}年${focus.month + 1}月</div>
+    <div class="checkin-calendar-weekdays" role="row">${CHECKIN_WEEKDAYS.map((label) => `<span role="columnheader">${label}</span>`).join("")}</div>
+    <div class="checkin-calendar-grid">${cells.join("")}</div>
+  </div>`;
+}
+
+function campaignDateInfo(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return { key: String(value || "unknown"), label: "日期未知", time: "--:--" };
+  }
+  const dayParts = Object.fromEntries(
+    campaignDayLabelFormatter.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return {
+    key: campaignDayKeyFormatter.format(date),
+    label: `${dayParts.month}月${dayParts.day}日 ${dayParts.weekday}`,
+    time: campaignTimeFormatter.format(date),
+  };
+}
+
+function groupCampaignsByDay(campaigns) {
+  const groups = [];
+  const byKey = new Map();
+  for (const campaign of campaigns || []) {
+    const day = campaignDateInfo(campaign.opened_at_utc);
+    let group = byKey.get(day.key);
+    if (!group) {
+      group = { ...day, campaigns: [] };
+      byKey.set(day.key, group);
+      groups.push(group);
+    }
+    group.campaigns.push(campaign);
+  }
+  for (const group of groups) {
+    group.campaigns.sort((left, right) => {
+      const leftTime = Date.parse(left.opened_at_utc || "");
+      const rightTime = Date.parse(right.opened_at_utc || "");
+      if (!Number.isFinite(leftTime)) return Number.isFinite(rightTime) ? 1 : 0;
+      if (!Number.isFinite(rightTime)) return -1;
+      return leftTime - rightTime;
+    });
+  }
+  return groups;
+}
+
+function campaignRLabel(campaign) {
+  return String(rMultiple()?.formatCampaignR?.(campaign) || "-")
+    .replaceAll("R", "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function calculateCampaignPageSize({
+  availableHeight,
+  groupCount = 1,
+  rowHeight = 44,
+  groupRowHeight = 31,
+  min = 1,
+  max = 200,
+} = {}) {
+  const height = Number(availableHeight);
+  const rows = Number(rowHeight);
+  const groups = Math.max(1, Number(groupCount) || 1);
+  if (!Number.isFinite(height) || !Number.isFinite(rows) || rows <= 0) return min;
+  const capacity = Math.floor((height - groups * Number(groupRowHeight || 0)) / rows);
+  return Math.min(max, Math.max(min, capacity));
+}
+
+export function mergePinnedCampaigns(campaigns = [], pinnedCampaign = null, pageSize = null) {
+  const source = Array.isArray(campaigns) ? campaigns : [];
+  if (!pinnedCampaign?.id) return source;
+  const visible = [
+    pinnedCampaign,
+    ...source.filter((campaign) => campaign?.id !== pinnedCampaign.id),
+  ];
+  const limit = Number(pageSize);
+  return Number.isFinite(limit) && limit > 0 ? visible.slice(0, limit) : visible;
+}
+
 export function createOrdersController({
   api,
   view = globalThis.document,
   location = globalThis.location,
   history = globalThis.history,
+  platform = "mt5",
   onRefresh = null,
   confirm = (message) => (globalThis.confirm ? globalThis.confirm(message) : true),
+  prompt = (message, initialValue = "") => (globalThis.prompt ? globalThis.prompt(message, initialValue) : initialValue),
 } = {}) {
   const gate = new RequestGate();
   let state = readOrdersState(location.search);
@@ -40,8 +182,10 @@ export function createOrdersController({
   let selectedCampaignId = state.campaign || null;
   let selectedPositionId = null;
   let selectedTradeId = null;
-  const expandedCampaignIds = new Set();
+  const collapsedDayKeys = new Set();
   const trades = new Map();
+  let capacitySyncTimer = null;
+  let capacitySyncInFlight = false;
 
   function toast(message, options) {
     if (typeof view.getElementById !== "function") return;
@@ -328,106 +472,179 @@ export function createOrdersController({
   }
 
   function renderCampaignRows() {
-    const fieldCount = customFields().length;
     setHtml(
       "orderHead",
       `
-        <tr>
-          <th>交易组合</th>
-          <th>品种 / 方向</th>
-          <th>交易数据<span>入场价 / 出场价 / 持仓时间</span></th>
-          <th>初始止损</th>
-          <th class="r-col">组合 R</th>
-          <th>组合盈亏</th>
-          <th>交易场景</th>
-          <th>交易策略</th>
-          ${customFields().map((field) => `<th class="custom-col">${escapeHtml(field.name)}<span>${fieldTypeLabel(field.field_type)}</span></th>`).join("")}
-          <th>截图</th>
-        </tr>
+        <tr><th>开仓时间</th><th>R 值</th><th>净盈亏</th></tr>
       `,
     );
-    const rows = page.campaigns
-      .map((campaign) => {
-        const trade = campaignSourceTrade(campaign);
+    const rows = groupCampaignsByDay(page.campaigns).map((group) => {
+      const groupPnl = group.campaigns.reduce((total, campaign) => total + Number(campaign.net_pnl || 0), 0);
+      const expanded = !collapsedDayKeys.has(group.key);
+      const summary = `
+        <tr class="campaign-day-row" data-day-key="${escapeAttr(group.key)}">
+          <td colspan="3">
+            <button class="campaign-day-toggle" type="button" data-day-toggle="${escapeAttr(group.key)}" aria-expanded="${expanded}">
+              <span class="campaign-day-chevron" aria-hidden="true">${expanded ? "−" : "+"}</span>
+              <span class="campaign-day-summary">
+              <strong>${escapeHtml(group.label)}</strong>
+              <span>${group.campaigns.length}笔</span>
+              <strong class="${profitClass(groupPnl)}">${formatMoney(groupPnl)}</strong>
+              </span>
+            </button>
+          </td>
+        </tr>
+      `;
+      const campaignRows = group.campaigns.map((campaign, dayIndex) => {
         const active = campaign.id === selectedCampaignId ? "active" : "";
         const riskClass = campaign.risk_status === "complete" ? "risk-complete" : `risk-${campaign.risk_status || "missing"}`;
-        const scratch = isScratchCampaign(campaign);
-        const expanded = expandedCampaignIds.has(campaign.id);
         const positions = campaignPositionSummaries(campaign);
-        const shot = trade?.screenshot_url
-          ? `<button class="shot-btn" data-shot="${escapeAttr(trade.screenshot_url)}" title="查看截图"><img src="${escapeAttr(trade.screenshot_url)}" alt="M5截图" /></button>`
-          : `<span class="muted-mini">无</span>`;
-        const customCells = customFields()
-          .map(
-            (field) => `
-              <td data-label="${escapeAttr(field.name)}" class="custom-value-cell">
-                ${trade ? customFieldsModule.renderCustomValueEditor(trade, field, "table") : `<span class="muted-mini">-</span>`}
-              </td>
-            `,
-          )
-          .join("");
-        const primaryPosition = positions.length === 1 ? positions[0] : null;
-        const stopCell = primaryPosition
-          ? stopEditorMarkup(primaryPosition)
-          : positions.length > 1
-            ? `<div class="stop-summary"><span>${positions.filter((position) => position.risk_status === "complete").length}/${positions.length} 已填</span><span class="muted-mini">展开后逐笔填写</span></div>`
-            : `<div class="stop-summary missing"><span>Position 数据待加载</span></div>`;
-        const expandControl = positions.length > 1
-          ? `<button class="campaign-expand icon-btn" type="button" data-campaign-expand="${escapeAttr(campaign.id)}" aria-expanded="${expanded ? "true" : "false"}" aria-label="${expanded ? "收起" : "展开"} Position">${expanded ? "−" : "+"}</button>`
-          : `<span class="campaign-expand-spacer" aria-hidden="true"></span>`;
-        const summaryRows = `
-          <tr class="campaign-row ${active} ${campaign.risk_status === "complete" ? "" : "has-risk-gap"} ${scratch ? "scratch" : ""}" data-campaign-id="${escapeAttr(campaign.id)}">
-            <td data-label="交易组合">
-              <div class="order-main campaign-order-cell">
-                ${expandControl}
-                <div>
-                  <strong>${escapeHtml(campaign.display_order_no || campaign.id.slice(0, 8))}</strong>
-                  <span>${escapeHtml(rMultiple()?.campaignActivityLabel?.(campaign) || "")}${scratch ? " · 打平" : ""}</span>
-                </div>
+        const scratch = isScratchCampaign(campaign);
+        const combinedMark = positions.length > 1 || Number(campaign.scale_in_count || 0) > 0
+          ? `<span class="campaign-kind-mark" title="合并订单，包含加减仓记录" aria-label="合并订单">组</span>`
+          : "";
+        const scratchMark = scratch
+          ? `<span class="campaign-scratch-mark" title="打平订单" aria-label="打平订单">平</span>`
+          : "";
+        const missingStop = campaign.risk_status !== "complete"
+          ? `<span class="campaign-risk-mark" title="初始止损未完整填写" aria-label="初始止损未完整填写">!</span>`
+          : "";
+        const timeLabel = campaignDateInfo(campaign.opened_at_utc).time;
+        return `
+          <tr class="campaign-row ${active} ${scratch ? "scratch" : ""} ${campaign.risk_status === "complete" ? "" : "has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}" data-day-sequence="${dayIndex + 1}">
+            <td data-label="开仓时间">
+              <div class="campaign-list-time">
+                <span class="campaign-list-index" aria-label="当日第 ${dayIndex + 1} 笔">${dayIndex + 1}</span>
+                <span class="campaign-row-flags">${scratchMark}${combinedMark}${missingStop}</span>
+                <strong>${escapeHtml(timeLabel)}</strong>
               </div>
             </td>
-            <td data-label="品种 / 方向">
-              <div class="symbol-cell">
-                <span class="side ${campaign.side}">${campaign.side === "long" ? "多" : "空"}</span>
-                <div class="order-main">
-                  <strong>${escapeHtml(campaign.symbol)}</strong>
-                </div>
-              </div>
-            </td>
-            <td data-label="交易数据">
-              <div class="trade-metrics-cell">
-                <span><b>入</b> ${formatTablePrice(campaign.weighted_entry_price)} <i>${formatVolume(campaign.entry_volume)}手</i></span>
-                <span><b>出</b> ${formatTablePrice(campaign.weighted_exit_price)} <i>${formatVolume(campaign.exit_volume)}手</i></span>
-                <span><b>持</b> ${escapeHtml(formatTableHoldingTime(campaign.holding_seconds))}</span>
-              </div>
-            </td>
-            <td data-label="初始止损">${stopCell}</td>
-            <td data-label="组合 R" class="campaign-r-cell ${riskClass}">${escapeHtml(rMultiple()?.formatCampaignR?.(campaign) || "-")}${scratch ? '<span class="scratch-badge">打平</span>' : ""}</td>
-            <td data-label="组合盈亏" class="${profitClass(campaign.net_pnl)}">${formatMoney(campaign.net_pnl)}</td>
-            <td data-label="交易场景">${renderCampaignClassificationSelect(campaign, "trade_type")}</td>
-            <td data-label="交易策略">${renderCampaignClassificationSelect(campaign, "strategy")}</td>
-            ${customCells}
-            <td data-label="截图">${shot}</td>
+            <td data-label="R 值" class="campaign-r-cell ${riskClass}">${escapeHtml(campaignRLabel(campaign))}</td>
+            <td data-label="净盈亏" class="campaign-pnl-cell ${profitClass(campaign.net_pnl)}"><strong class="campaign-list-pnl ${profitClass(campaign.net_pnl)}">${formatMoney(campaign.net_pnl)}</strong></td>
           </tr>
         `;
-        if (!expanded || positions.length <= 1) return summaryRows;
-        const childRows = positions.map((position, index) => renderCampaignPositionRow(campaign, position, index, fieldCount, scratch)).join("");
-        return summaryRows + childRows;
-      })
-      .join("");
-    setHtml("orderRows", rows || `<tr><td colspan="${9 + fieldCount}">没有匹配的交易组合</td></tr>`);
+      }).join("");
+      return summary + (expanded ? campaignRows : "");
+    }).join("");
+    setHtml("orderRows", rows || `<tr><td colspan="3">没有匹配的主订单</td></tr>`);
+    applyListPanelHeight();
+    bindDayToggles();
     bindRowInteractions();
+  }
+
+  function applyListPanelHeight() {
+    const panel = view.querySelector?.(".trades-panel");
+    const indexColumn = view.querySelector?.(".orders-index-column");
+    const detailPanel = view.querySelector?.(".detail-panel");
+    if (!panel || !detailPanel || typeof panel.getBoundingClientRect !== "function" || typeof detailPanel.getBoundingClientRect !== "function") return;
+    if (typeof globalThis.innerWidth === "number" && globalThis.innerWidth <= 1080) {
+      panel.style.maxHeight = "";
+      panel.style.height = "";
+      if (indexColumn) {
+        indexColumn.style.maxHeight = "";
+        indexColumn.style.height = "";
+      }
+      return;
+    }
+    const detailHeight = detailPanel.getBoundingClientRect().height;
+    if (detailHeight > 0) {
+      const height = `${Math.ceil(detailHeight)}px`;
+      if (indexColumn) {
+        indexColumn.style.height = height;
+        indexColumn.style.maxHeight = height;
+      } else {
+        panel.style.height = height;
+        panel.style.maxHeight = height;
+      }
+    }
+  }
+
+  function listCapacity() {
+    const panel = view.querySelector?.(".trades-panel");
+    const indexColumn = view.querySelector?.(".orders-index-column");
+    const detailPanel = view.querySelector?.(".detail-panel");
+    if (!panel || !detailPanel || typeof detailPanel.getBoundingClientRect !== "function") return null;
+    if (typeof globalThis.innerWidth === "number" && globalThis.innerWidth <= 1080) return null;
+    const panelHeight = panel.getBoundingClientRect().height;
+    const indexHeight = indexColumn?.getBoundingClientRect?.().height || 0;
+    if (!panelHeight || !indexHeight) return null;
+    const headHeight = panel.querySelector?.(".orders-panel-head")?.getBoundingClientRect?.().height || 0;
+    const paginationHeight = panel.querySelector?.(".pagination")?.getBoundingClientRect?.().height || 0;
+    const tableHeadHeight = panel.querySelector?.(".orders-table thead")?.getBoundingClientRect?.().height || 44;
+    const availableHeight = panelHeight - headHeight - paginationHeight - tableHeadHeight - 2;
+    const groupCount = panel.querySelectorAll?.(".campaign-day-row")?.length || 1;
+    return calculateCampaignPageSize({ availableHeight, groupCount });
+  }
+
+  async function syncListCapacity() {
+    if (capacitySyncInFlight) return;
+    applyListPanelHeight();
+    const capacity = listCapacity();
+    if (!capacity || capacity === state.pageSize) return;
+    capacitySyncInFlight = true;
+    try {
+      const selectedIndex = page.campaigns.findIndex((campaign) => campaign.id === selectedCampaignId);
+      const pageSize = page.page_size || state.pageSize;
+      const absoluteIndex = selectedIndex >= 0
+        ? Math.max(0, (page.page - 1) * pageSize + selectedIndex)
+        : Math.max(0, (state.page - 1) * state.pageSize);
+      commitState({ pageSize: capacity, page: Math.floor(absoluteIndex / capacity) + 1 });
+      const pinnedCampaign = campaignDetail?.id === selectedCampaignId ? campaignDetail : null;
+      await loadList(undefined, { pinnedCampaign });
+    } finally {
+      capacitySyncInFlight = false;
+    }
+  }
+
+  function scheduleListCapacitySync() {
+    if (capacitySyncTimer) clearTimeout(capacitySyncTimer);
+    capacitySyncTimer = setTimeout(() => {
+      capacitySyncTimer = null;
+      syncListCapacity().catch((error) => {
+        if (error?.name !== "AbortError") toast(error?.message || "订单列表布局更新失败", { tone: "error" });
+      });
+    }, 0);
+  }
+
+  function bindDayToggles() {
+    if (typeof view.querySelectorAll !== "function") return;
+    for (const button of view.querySelectorAll("[data-day-toggle]")) {
+      button.addEventListener("click", () => toggleDay(button.dataset.dayToggle));
+    }
+  }
+
+  function syncListViewTabs() {
+    for (const [id, value] of [["orderViewAll", "all"], ["orderViewFeatured", "featured"]]) {
+      const button = getElement(id);
+      if (!button) continue;
+      const active = state.listView === value;
+      button.setAttribute("aria-selected", String(active));
+      button.classList?.toggle?.("active", active);
+      if (!button.classList?.toggle) {
+        if (active) button.classList?.add?.("active");
+        else button.classList?.remove?.("active");
+      }
+    }
+  }
+
+  function bindListViewTabs() {
+    for (const [id, value] of [["orderViewAll", "all"], ["orderViewFeatured", "featured"]]) {
+      const button = getElement(id);
+      if (!button) continue;
+      button.addEventListener("click", () => {
+        selectedCampaignId = null;
+        selectedTradeId = null;
+        selectedPositionId = null;
+        commitState({ listView: value, page: 1, campaign: "", trade: "" });
+        syncListViewTabs();
+        loadList();
+      });
+    }
+    syncListViewTabs();
   }
 
   function bindRowInteractions() {
     if (typeof view.querySelectorAll !== "function") return;
-    for (const button of view.querySelectorAll("[data-shot]")) {
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        const src = button.dataset?.shot;
-        if (src) openImageModal(src);
-      });
-    }
     for (const row of view.querySelectorAll("tr[data-campaign-id]")) {
       row.addEventListener("click", async (event) => {
         if (event?.target?.closest?.("button, input, select, textarea, a")) return;
@@ -438,52 +655,16 @@ export function createOrdersController({
         await selectCampaign(selectedCampaignId);
       });
     }
-    for (const button of view.querySelectorAll("[data-campaign-expand]")) {
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        toggleExpand(button.dataset.campaignExpand);
-      });
-    }
-    for (const input of view.querySelectorAll("[data-position-stop][data-position-editor='table']")) {
-      input.addEventListener("click", (event) => event.stopPropagation());
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          input.blur();
-        }
-        if (event.key === "Escape") {
-          input.value = input.defaultValue || "";
-          input.blur();
-        }
-      });
-      input.addEventListener("blur", () => handleStopSave(input.dataset.positionStop, input));
-    }
-    for (const select of view.querySelectorAll("[data-campaign-classification]")) {
-      select.addEventListener("click", (event) => event.stopPropagation());
-      select.addEventListener("change", async () => {
-        select.disabled = true;
-        try {
-          await saveCampaignClassification(
-            select.dataset.campaignId,
-            select.dataset.campaignClassification,
-            select.value,
-          );
-          toast("组合分类已保存");
-        } catch (error) {
-          select.disabled = false;
-          toast(error?.message || "组合分类保存失败", { tone: "error" });
-          await loadList();
-        }
-      });
-    }
-    customFieldsModule.bindCustomValueInputs();
-    customFieldsModule.bindChoiceTriggers();
   }
 
-  function toggleExpand(campaignId) {
-    if (expandedCampaignIds.has(campaignId)) expandedCampaignIds.delete(campaignId);
-    else expandedCampaignIds.add(campaignId);
+  function toggleDay(dayKey) {
+    if (collapsedDayKeys.has(dayKey)) collapsedDayKeys.delete(dayKey);
+    else collapsedDayKeys.add(dayKey);
     renderCampaignRows();
+  }
+
+  function toggleExpand(dayKey) {
+    toggleDay(dayKey);
   }
 
   function renderPagination() {
@@ -502,6 +683,27 @@ export function createOrdersController({
   function setText(id, text) {
     const node = getElement(id);
     if (node) node.textContent = text;
+  }
+
+  function renderCheckinCalendar(payload) {
+    const days = Array.isArray(payload?.days) ? payload.days : [];
+    const calendar = getElement("checkinCalendar");
+    const summary = getElement("checkinCalendarSummary");
+    if (summary) summary.textContent = `今日 ${payload?.today?.count || 0} / ${payload?.daily_goal || 0}`;
+    if (!calendar) return;
+    calendar.innerHTML = renderCheckinCalendarMarkup(payload);
+  }
+
+  async function loadCheckinCalendar() {
+    try {
+      const query = new URLSearchParams({ days: "35", platform: String(platform || "mt5") });
+      const result = await api.requestJson(`/api/campaign-checkins?${query}`);
+      renderCheckinCalendar(result);
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      const summary = getElement("checkinCalendarSummary");
+      if (summary) summary.textContent = "暂不可用";
+    }
   }
 
   function openImageModal(src) {
@@ -573,17 +775,18 @@ export function createOrdersController({
     }
   }
 
-  async function loadList(partialState) {
+  async function loadList(partialState, { pinnedCampaign = null } = {}) {
     if (partialState) state = normalizeListState({ ...state, ...partialState });
     const query = buildCampaignsQuery(state);
     renderRegion("orderRegion", { state: "loading", message: "正在读取订单列表" });
     try {
       const result = await gate.run("campaigns", (signal) => api.requestJson(`/api/campaigns?${query}`, { signal }));
+      const pageSize = result?.page_size || state.pageSize;
       page = {
-        campaigns: result?.campaigns || [],
+        campaigns: mergePinnedCampaigns(result?.campaigns || [], pinnedCampaign, pageSize),
         total: result?.total || 0,
         page: result?.page || state.page,
-        page_size: result?.page_size || state.pageSize,
+        page_size: pageSize,
       };
       resolveSelection(page.campaigns);
       rebuildTrades();
@@ -642,10 +845,12 @@ export function createOrdersController({
     }
     renderDetail();
     renderCampaignRows();
+    await syncListCapacity();
   }
 
   async function loadCampaignDetail(campaignId) {
-    campaignDetail = await gate.run("detail", (signal) => api.requestJson(`/api/campaigns/${encodeURIComponent(campaignId)}`, { signal }));
+    const deleted = state.deleted === "deleted" ? "?deleted=deleted" : "";
+    campaignDetail = await gate.run("detail", (signal) => api.requestJson(`/api/campaigns/${encodeURIComponent(campaignId)}${deleted}`, { signal }));
     rebuildTrades();
     return campaignDetail;
   }
@@ -661,6 +866,30 @@ export function createOrdersController({
     if (campaignId) await loadCampaignDetail(campaignId);
     await loadList();
     return result;
+  }
+
+  async function saveCampaignInitialStop(campaignId, price) {
+    try {
+      const updated = await api.requestJson(`/api/campaigns/${encodeURIComponent(campaignId)}/initial-stop`, {
+        method: "PATCH",
+        body: { initial_stop_price: price },
+      });
+      await afterMutation();
+      return updated;
+    } catch (error) {
+      const positions = campaignDetail?.id === campaignId ? campaignDetail.positions || [] : [];
+      if (error?.status !== 404 || !positions.length) throw error;
+      let updated = null;
+      for (const position of positions) {
+        const result = await api.requestJson(`/api/positions/${encodeURIComponent(position.id)}/initial-stop`, {
+          method: "PATCH",
+          body: { initial_stop_price: price },
+        });
+        updated = result?.campaign || updated;
+      }
+      await afterMutation();
+      return updated;
+    }
   }
 
   async function handleStopSave(positionId, input) {
@@ -687,11 +916,78 @@ export function createOrdersController({
     const trade = selection.trade;
     if (!trade) return;
     if (!confirm(`确认删除订单 ${trade.display_order_no || trade.id}？删除后不会被同步文件自动恢复。`)) return;
-    await api.requestJson(`/api/trades/${encodeURIComponent(trade.id)}`, { method: "DELETE" });
+    const reason = prompt("请输入删除原因（可选）", "") ?? "";
+    await api.requestJson(`/api/trades/${encodeURIComponent(trade.id)}`, {
+      method: "DELETE",
+      body: { reason: String(reason).trim() },
+    });
     selectedTradeId = null;
     selectedPositionId = null;
     toast("订单已删除");
     await loadList();
+  }
+
+  async function restoreSelectedTrade() {
+    const selection = getSelection();
+    const trade = selection.trade;
+    if (!trade) return;
+    if (!confirm(`确认恢复订单 ${trade.display_order_no || trade.id}？恢复后会重新参与当前平台统计。`)) return;
+    await api.requestJson(`/api/trades/${encodeURIComponent(trade.id)}/restore`, { method: "POST" });
+    selectedTradeId = null;
+    selectedPositionId = null;
+    commitState({ deleted: "active", page: 1, trade: "" });
+    toast("订单已恢复");
+    await loadList();
+  }
+
+  async function toggleCampaignFeatured(campaign, featured) {
+    if (!campaign?.id) return null;
+    const updated = await api.requestJson(`/api/campaigns/${encodeURIComponent(campaign.id)}/featured`, {
+      method: "PATCH",
+      body: { featured: Boolean(featured) },
+    });
+    Object.assign(campaign, updated || {}, { is_featured: Boolean(featured) });
+    if (campaignDetail?.id === campaign.id) Object.assign(campaignDetail, updated || {}, { is_featured: Boolean(featured) });
+    await afterMutation();
+    return updated;
+  }
+
+  async function checkinCampaign(campaign) {
+    if (!campaign?.id) return null;
+    const checkedIn = Boolean(campaign.checkin_checked_in_today);
+    const result = await api.requestJson(`/api/campaigns/${encodeURIComponent(campaign.id)}/checkin`, checkedIn
+      ? { method: "DELETE" }
+      : { method: "POST", body: {} });
+    await afterMutation();
+    toast(checkedIn ? "已取消今日打卡" : "打卡成功", { tone: "success" });
+    return result;
+  }
+
+  async function randomFeaturedCampaign() {
+    const result = await api.requestJson("/api/campaigns/random-featured");
+    const selected = result?.campaign || null;
+    if (!selected?.id) {
+      toast("暂无精选订单", { tone: "info" });
+      return null;
+    }
+    selectedCampaignId = selected.id;
+    selectedTradeId = null;
+    selectedPositionId = null;
+    commitState({ listView: "featured", page: 1, campaign: selected.id, trade: "" });
+    campaignDetail = null;
+    await loadList(undefined, { pinnedCampaign: selected });
+    // The random record can belong to a later server page. Keep it visible in
+    // the current featured page so the list and detail selection share one ID.
+    selectedCampaignId = selected.id;
+    if (!page.campaigns.some((campaign) => campaign.id === selected.id)) {
+      page.campaigns = [selected, ...page.campaigns.filter((campaign) => campaign.id !== selected.id)]
+        .slice(0, page.page_size || state.pageSize);
+      rebuildTrades();
+      renderCampaignRows();
+      renderPagination();
+    }
+    await selectCampaign(selected.id);
+    return selected;
   }
 
   async function afterMutation() {
@@ -703,6 +999,7 @@ export function createOrdersController({
       }
     }
     await loadList();
+    await loadCheckinCalendar();
   }
 
   // --- sub-modules ---
@@ -732,7 +1029,15 @@ export function createOrdersController({
     bindCustomValueInputs: customFieldsModule.bindCustomValueInputs,
     bindChoiceTriggers: customFieldsModule.bindChoiceTriggers,
     classificationSelectOptions,
+    classificationOptions,
+    saveCampaignInitialStop,
+    toggleFeatured: toggleCampaignFeatured,
+    checkinCampaign,
+    randomFeatured: randomFeaturedCampaign,
     afterMutation,
+    onLayoutChange: scheduleListCapacitySync,
+    onDeleteTrade: deleteSelectedTrade,
+    onRestoreTrade: restoreSelectedTrade,
   });
 
   // --- lifecycle ---
@@ -741,14 +1046,14 @@ export function createOrdersController({
     state = readOrdersState(location.search);
     await loadCatalog();
     await loadList();
-    if ((state.trade || state.campaign) && selectedCampaignId) {
+    if (selectedCampaignId) {
       await selectCampaign(selectedCampaignId);
     }
   }
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/orders/", title: "订单列表", onRefresh, share: true })
+      ? mountShell({ activeRoute: "/orders/", title: "订单复盘", onRefresh, share: true })
       : null;
 
     const searchInput = getElement("searchInput");
@@ -758,9 +1063,12 @@ export function createOrdersController({
     const startFilter = getElement("startFilter");
     const endFilter = getElement("endFilter");
     const riskMissingOnly = getElement("riskMissingOnly");
+    const deletedFilter = getElement("deletedFilter");
     const prevBtn = getElement("orderPrev");
     const nextBtn = getElement("orderNext");
     const imageClose = getElement("imageClose");
+    bindListViewTabs();
+    loadCheckinCalendar();
 
     if (searchInput) {
       searchInput.value = state.q || "";
@@ -809,6 +1117,16 @@ export function createOrdersController({
         loadList();
       });
     }
+    if (deletedFilter) {
+      deletedFilter.value = state.deleted || "active";
+      deletedFilter.addEventListener("change", (event) => {
+        selectedCampaignId = null;
+        selectedTradeId = null;
+        selectedPositionId = null;
+        commitState({ deleted: event.target.value, page: 1, campaign: "", trade: "" });
+        loadList();
+      });
+    }
     if (prevBtn) prevBtn.addEventListener("click", () => {
       commitState({ page: Math.max(1, state.page - 1) });
       loadList();
@@ -832,11 +1150,15 @@ export function createOrdersController({
         if (event.key === "Escape") customFieldsModule.closeChoicePopover();
       });
     }
+    const windowObject = view.defaultView || globalThis;
+    windowObject.addEventListener?.("resize", scheduleListCapacitySync);
 
     return cleanup;
   }
 
   function dispose() {
+    if (capacitySyncTimer) clearTimeout(capacitySyncTimer);
+    (view.defaultView || globalThis).removeEventListener?.("resize", scheduleListCapacitySync);
     gate.abortAll();
     customFieldsModule.dispose();
     detailModule.dispose();
@@ -847,13 +1169,19 @@ export function createOrdersController({
     load,
     loadList,
     saveInitialStop,
+    saveCampaignInitialStop,
     saveCampaignClassification,
     handleStopSave,
     deleteSelectedTrade,
+    restoreSelectedTrade,
+    toggleDay,
     toggleExpand,
     dispose,
     renderCampaignRows,
     getState: () => state,
     getPage: () => page,
+    checkinCampaign,
+    randomFeaturedCampaign,
+    loadCheckinCalendar,
   };
 }

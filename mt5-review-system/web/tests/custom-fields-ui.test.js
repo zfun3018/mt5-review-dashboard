@@ -7,6 +7,10 @@ const test = require("node:test");
 // the migrated dashboard sources instead of the removed app.js/styles.css.
 const dashboardJs = fs.readFileSync(path.join(__dirname, "..", "dashboard", "dashboard.mjs"), "utf8");
 const dashboardCss = fs.readFileSync(path.join(__dirname, "..", "dashboard", "dashboard.css"), "utf8");
+const dashboardHtml = fs.readFileSync(path.join(__dirname, "..", "dashboard", "index.html"), "utf8");
+const dashboardGrid = fs.readFileSync(path.join(__dirname, "..", "dashboard", "dashboard-grid.mjs"), "utf8");
+const dashboardCharts = fs.readFileSync(path.join(__dirname, "..", "dashboard", "mt5-dashboard-charts.mjs"), "utf8");
+const chartOptions = fs.readFileSync(path.join(__dirname, "..", "dashboard", "domestic-futures-charts.mjs"), "utf8");
 
 // Orders workspace modules (Task 4).
 const ordersSource = fs.readFileSync(path.join(__dirname, "..", "orders", "orders.mjs"), "utf8");
@@ -22,7 +26,7 @@ const schemaSource = fs.readFileSync(path.join(__dirname, "..", "settings", "cus
 const classificationsSource = fs.readFileSync(path.join(__dirname, "..", "settings", "classifications.mjs"), "utf8");
 
 test("custom select fields use the choice popover in table and detail views", () => {
-  assert.match(ordersSource, /renderCustomValueEditor\(trade, field, "table"\)/);
+  assert.match(ordersSource, /renderCustomValueEditor\(editableTrade, field, "table"\)/);
   assert.match(orderDetailSource, /renderCustomValueEditor\(trade, field, "detail"\)/);
   assert.match(customFieldsSource, /data-choice-trigger/);
   assert.match(customFieldsSource, /choice-popover/);
@@ -44,14 +48,19 @@ test("choice search updates options without replacing the IME input", () => {
   assert.doesNotMatch(customFieldsSource, /choiceEditor\.query = event\.target\.value;\s*renderChoicePopover\(\)/);
 });
 
-test("cumulative return chart has an independent grid row and readable axis reserves", () => {
-  assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-column:\s*1 \/ -1/s);
-  assert.match(dashboardJs, /const padding = \{ top: 30, right: 84, bottom: 44, left: 106 \}/);
-  assert.match(dashboardJs, /Math\.min\(2400, chartNode\.clientWidth/);
-  assert.match(dashboardCss, /\.axis-label\s*\{[^}]*fill:\s*var\(--color-muted\)/s);
-  assert.match(dashboardCss, /\.time-label\s*\{[^}]*fill:\s*var\(--color-muted\)/s);
-  assert.match(dashboardJs, /Array\.from\(\{ length: 7 \}/);
-  assert.match(dashboardJs, /timeTicks = \[0, 0\.25, 0\.5, 0\.75, 1\]/);
+test("dashboard charts use GridStack layout and ECharts with responsive sizing", () => {
+  assert.match(dashboardHtml, /vendor\/gridstack-all\.js/);
+  assert.match(dashboardHtml, /vendor\/echarts\.min\.js/);
+  assert.match(dashboardJs, /createDashboardGrid/);
+  assert.match(dashboardJs, /createMt5DashboardCharts/);
+  assert.match(dashboardGrid, /staticGrid:\s*!editable/);
+  assert.match(dashboardGrid, /disableResize:\s*!editable/);
+  assert.match(dashboardCharts, /echarts\.init/);
+  assert.match(dashboardCharts, /ResizeObserver/);
+  assert.match(dashboardCharts, /setOption/);
+  assert.match(chartOptions, /sortByTime/);
+  assert.match(chartOptions, /type:\s*"line"/);
+  assert.match(chartOptions, /type:\s*"bar"/);
 });
 
 test("custom field type and options are sent when fields are added or saved", () => {
@@ -117,24 +126,36 @@ test("order screenshot supports preview, replace, paste/upload, and delete", () 
   assert.match(orderDetailSource, /id="replaceScreenshot"/);
   assert.match(orderDetailSource, /id="deleteScreenshot"/);
   assert.match(ordersCss, /\.screenshot-editor/);
+  assert.match(orderDetailSource, /handleScreenshotPaste/);
+  assert.match(orderDetailSource, /undoScreenshot/);
+  assert.match(orderDetailSource, /ctrlKey|metaKey/);
+  assert.match(orderDetailSource, /view\.addEventListener\?\.\("paste", handleScreenshotPaste\)/);
+  const pasteHandler = orderDetailSource.slice(orderDetailSource.indexOf("const handleScreenshotPaste"), orderDetailSource.indexOf("const handleScreenshotUndo"));
+  assert.doesNotMatch(pasteHandler, /target !== editor|editor\.contains/);
+  assert.match(ordersCss, /\.screenshot-overlay-controls\s*\{[\s\S]*position:\s*absolute/);
 });
 
 test("analysis workspace exposes cumulative return, shared filters, and evaluation summaries", () => {
-  const dashboardHtml = fs.readFileSync(path.join(__dirname, "..", "dashboard", "index.html"), "utf8");
-
   assert.match(dashboardHtml, /收益累计曲线/);
   assert.match(dashboardHtml, /id="timePreset"/);
   assert.doesNotMatch(dashboardHtml, /id="equityPreset"/);
   assert.match(dashboardHtml, /id="systemEvaluationSummary"/);
   assert.doesNotMatch(dashboardHtml, /交易结果连续性说明（Z 分数）/);
   assert.match(dashboardJs, /cumulative_return/);
-  assert.match(dashboardJs, /return_rate/);
-  assert.match(dashboardJs, /sampleCurvePoints\(sourcePoints, 140\)/);
-  assert.match(dashboardJs, /chartNode\.clientWidth/);
   assert.match(dashboardJs, /z_score/);
   assert.match(dashboardJs, /renderSystemEvaluationSummary/);
+  assert.match(dashboardCharts, /buildMt5EquityOption/);
+  assert.match(dashboardCharts, /buildMonthlyPnlOption/);
+  assert.match(dashboardCharts, /buildHeatmapOption/);
   assert.match(dashboardCss, /\.r-metric-grid\s*\{[^}]*repeat\(7,/s);
   assert.match(dashboardCss, /\.evaluation-table-wrap\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(dashboardCss, /\.evaluation-table\s*\{[^}]*min-width:\s*860px/s);
   assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-column:\s*1 \/ -1/s);
+});
+
+test("system evaluation reserves a scrollable 30-row module body", () => {
+  assert.match(dashboardCss, /\.evaluation-panel\s*\{[\s\S]*display:\s*flex/s);
+  assert.match(dashboardCss, /\.evaluation-table-wrap\s*\{[\s\S]*flex:\s*1/s);
+  assert.doesNotMatch(dashboardCss, /\.evaluation-table-wrap\s*\{[\s\S]*max-height:\s*330px/s);
+  assert.match(dashboardJs, /slice\(-30\)/);
 });

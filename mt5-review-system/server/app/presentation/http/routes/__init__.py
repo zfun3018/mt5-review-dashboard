@@ -31,3 +31,9 @@ def path_part(path: str, index: int) -> str:
     if len(parts) <= index:
         raise ValueError("Invalid route identifier")
     return parts[index]
+
+
+def platform_kwargs(query: Query) -> dict[str, str]:
+    if "platform" not in query:
+        return {}
+    return {"platform": first(query, "platform", "mt5") or "mt5"}

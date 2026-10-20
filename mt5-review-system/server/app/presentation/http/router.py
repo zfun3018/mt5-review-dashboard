@@ -106,7 +106,7 @@ class Router:
 
 
 def build_router(storage, auto_import: Callable[[], object]) -> Router:
-    from .routes import album, dashboard, ingestion, orders, settings
+    from .routes import album, dashboard, ingestion, orders, platforms, settings
 
     router = Router()
     dashboard.register(router, storage, auto_import)
@@ -114,4 +114,5 @@ def build_router(storage, auto_import: Callable[[], object]) -> Router:
     album.register(router, storage)
     settings.register(router, storage, auto_import)
     ingestion.register(router, storage)
+    platforms.register(router, storage)
     return router

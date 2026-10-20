@@ -59,13 +59,9 @@ test.describe("workspaces — desktop", () => {
     const navigation = page.locator('aside[aria-label="应用导航"]');
     await expect(navigation).toBeVisible();
 
-    await page.getByRole("link", { name: "订单列表" }).click();
+    await page.getByRole("link", { name: "订单复盘" }).click();
     await expect(page).toHaveURL(/\/orders\//);
-    await expect(page.getByRole("heading", { name: "订单列表" })).toBeVisible();
-
-    await page.getByRole("link", { name: "复盘图册" }).click();
-    await expect(page).toHaveURL(/\/album\//);
-    await expect(page.getByRole("heading", { name: "筛选画册" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "订单复盘" }).first()).toBeVisible();
 
     await page.getByRole("link", { name: "设置" }).click();
     await expect(page).toHaveURL(/\/settings\//);
@@ -73,6 +69,34 @@ test.describe("workspaces — desktop", () => {
 
     await assertNoOverflow(page);
     await expectNoErrors(page, errors);
+  });
+
+  test("workspace pages use the single shared appearance", async ({ page, syntheticServer }) => {
+    await page.goto(`${syntheticServer.baseURL}/dashboard/`);
+
+    const appearance = await page.evaluate(() => {
+      const root = document.documentElement;
+      const sidebar = document.querySelector(".app-navigation");
+      const pageBar = document.querySelector(".app-page-bar");
+      const pageSurface = document.querySelector(".app-page");
+      return {
+        themeButton: document.querySelector('[aria-label^="当前主题："]'),
+        themeAttribute: root.getAttribute("data-theme"),
+        colorScheme: getComputedStyle(root).colorScheme,
+        sidebarBackground: sidebar ? getComputedStyle(sidebar).backgroundColor : "",
+        toolbarBackground: pageBar ? getComputedStyle(pageBar).backgroundColor : "",
+        pageBackground: pageSurface ? getComputedStyle(pageSurface).backgroundColor : "",
+        overflow: document.documentElement.scrollWidth <= window.innerWidth,
+      };
+    });
+
+    expect(appearance.themeButton).toBeNull();
+    expect(appearance.themeAttribute).toBeNull();
+    expect(["light", "dark"]).toContain(appearance.colorScheme);
+    expect(appearance.sidebarBackground).not.toBe("");
+    expect(appearance.toolbarBackground).not.toBe("");
+    expect(appearance.pageBackground).not.toBe("");
+    expect(appearance.overflow).toBe(true);
   });
 
   test("orders filter persists across reload via query string", async ({ page, syntheticServer }) => {
@@ -86,40 +110,12 @@ test.describe("workspaces — desktop", () => {
     await expectNoErrors(page, errors);
   });
 
-  test("album shows the screenshot placeholder card", async ({ page, syntheticServer }) => {
+  test("legacy album entry redirects to order review", async ({ page, syntheticServer }) => {
     const errors = attachConsoleAssertions(page);
     await page.goto(`${syntheticServer.baseURL}/album/`);
-    await expect(page.getByRole("heading", { name: "筛选画册" })).toBeVisible();
-    // Album renders a tag-group region even when no trades match.
-    await expect(page.getByLabel("标签筛选")).toBeVisible();
+    await expect(page).toHaveURL(/\/orders\/\?listView=featured/);
+    await expect(page.getByRole("heading", { name: "订单复盘" }).first()).toBeVisible();
     await assertNoOverflow(page);
-    await expectNoErrors(page, errors);
-  });
-
-  test("album keeps the edited review visible before a reload", async ({ page, syntheticServer }) => {
-    const errors = attachConsoleAssertions(page);
-    await page.goto(`${syntheticServer.baseURL}/album/`);
-    const card = page.locator(".album-card").first();
-    const editor = card.locator("textarea[data-review-editor]");
-    const nextReview = "浏览器即时保存回归测试";
-    await expect(editor).toBeVisible();
-    await editor.fill(nextReview);
-    await Promise.all([
-      page.waitForResponse((response) => response.url().includes("/api/trades/") && response.request().method() === "PATCH"),
-      card.getByRole("button", { name: "保存订单复盘" }).click(),
-    ]);
-    await expect(card.locator("textarea[data-review-editor]")).toHaveValue(nextReview);
-    await expectNoErrors(page, errors);
-  });
-
-  test("album opens the linked order review instead of the campaign summary", async ({ page, syntheticServer }) => {
-    const errors = attachConsoleAssertions(page);
-    await page.goto(`${syntheticServer.baseURL}/album/`);
-    const card = page.locator(".album-card").first();
-    await card.getByRole("link", { name: "打开订单" }).click();
-    await expect(page).toHaveURL(/\/orders\/\?trade=/);
-    await expect(page.getByRole("button", { name: "保存订单复盘" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "保存组合复盘" })).toHaveCount(0);
     await expectNoErrors(page, errors);
   });
 
@@ -169,7 +165,7 @@ test.describe("workspaces — 390px mobile", () => {
     // On mobile the navigation is rendered with `aria-hidden="true"` and
     // `inert`; opening the drawer toggles both. We assert the toggle by
     // checking that links inside become reachable.
-    const ordersLink = page.getByRole("link", { name: "订单列表" });
+    const ordersLink = page.getByRole("link", { name: "订单复盘" });
     await expect(ordersLink).toBeHidden();
 
     await menuButton.click();
@@ -187,13 +183,13 @@ test.describe("workspaces — 390px mobile", () => {
     await expectNoErrors(page, errors);
   });
 
-  test("album and settings remain reachable and overflow-free at 390px", async ({
+  test("orders and settings remain reachable and overflow-free at 390px", async ({
     page,
     syntheticServer,
   }) => {
     const errors = attachConsoleAssertions(page);
-    await page.goto(`${syntheticServer.baseURL}/album/`);
-    await expect(page.getByRole("heading", { name: "筛选画册" })).toBeVisible();
+    await page.goto(`${syntheticServer.baseURL}/orders/`);
+    await expect(page.getByRole("heading", { name: "订单复盘" }).first()).toBeVisible();
     await assertNoOverflow(page);
 
     await page.goto(`${syntheticServer.baseURL}/settings/`);
@@ -204,90 +200,5 @@ test.describe("workspaces — 390px mobile", () => {
   });
 });
 
-test.describe("random reading — landscape mobile", () => {
-  test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
-
-  test("keeps the drawer closed and gives the random image the main landscape area", async ({
-    page,
-    syntheticServer,
-  }) => {
-    const errors = attachConsoleAssertions(page);
-    let randomCalls = 0;
-    await page.route("**/api/review-album/random", async (route) => {
-      randomCalls += 1;
-      const next = randomCalls > 1;
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          trade: {
-            id: next ? "T-LANDSCAPE-NEXT" : "T-LANDSCAPE",
-            symbol: next ? "EURUSD" : "XAUUSD",
-            display_order_no: next ? "ORDER-LANDSCAPE-NEXT" : "ORDER-LANDSCAPE",
-            close_time_bj: "2026-08-20T16:30:00+08:00",
-            open_time_bj: "2026-08-20T16:00:00+08:00",
-            net_pnl: 18.5,
-            lots: 0.1,
-            side: "long",
-            duration_label: "30m",
-            screenshot_url: "/media/screenshots/seed.png",
-            album_tags: [
-              { label: "突破", color: "#f4c95d" },
-              { label: "犯错", color: "#ff7a7a" },
-            ],
-            review_text: next ? "阅读器换单回归" : "横屏随机阅读回归",
-          },
-          custom_fields: [],
-        }),
-      });
-    });
-
-    await page.goto(`${syntheticServer.baseURL}/album/`);
-    await expect(page.getByRole("button", { name: "打开导航" })).toBeVisible();
-    await expect(page.locator('aside[aria-label="应用导航"]')).toHaveAttribute("aria-hidden", "true");
-
-    await page.getByRole("button", { name: "随机一个" }).click();
-    const card = page.locator(".album-card--random");
-    await expect(card).toBeVisible();
-    await expect(card.locator(".album-shot img")).toBeVisible();
-
-    const layout = await card.evaluate((node) => {
-      const style = getComputedStyle(node);
-      const shot = node.querySelector(".album-shot");
-      return {
-        display: style.display,
-        shotWidth: shot ? shot.getBoundingClientRect().width : 0,
-        shotHeight: shot ? shot.getBoundingClientRect().height : 0,
-        details: node.querySelectorAll("details.album-meta").length,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-      };
-    });
-    expect(layout.display).toBe("grid");
-    expect(layout.details).toBe(0);
-    expect(layout.shotWidth).toBeGreaterThan(0);
-    expect(layout.shotHeight).toBeGreaterThan(0);
-
-    await card.locator(".album-shot img").click();
-    const reader = page.locator("#albumImageModal");
-    await expect(reader).toHaveClass(/open/);
-    await expect(reader.locator(".album-reader-aside")).toContainText("XAUUSD");
-    await expect(reader.getByRole("button", { name: "换一个" })).toBeVisible();
-    const controls = await reader.evaluate((node) => {
-      const close = node.querySelector("#albumImageClose").getBoundingClientRect();
-      const next = node.querySelector("#albumReaderNext").getBoundingClientRect();
-      const horizontalOverlap = close.left < next.right && close.right > next.left;
-      const verticalOverlap = close.top < next.bottom && close.bottom > next.top;
-      return { horizontalOverlap, verticalOverlap };
-    });
-    expect(controls.horizontalOverlap && controls.verticalOverlap).toBe(false);
-
-    await Promise.all([
-      page.waitForResponse((response) => response.url().includes("/api/review-album/random")),
-      reader.getByRole("button", { name: "换一个" }).click(),
-    ]);
-    await expect(reader.locator(".album-reader-aside")).toContainText("EURUSD");
-    await expect(reader.locator("#albumModalImage")).toHaveAttribute("alt", "EURUSD 交易截图大图");
-    await assertNoOverflow(page);
-    await expectNoErrors(page, errors);
-  });
-});
+// Legacy album and random-reading coverage now lives in the order-review tests.
+// EOF

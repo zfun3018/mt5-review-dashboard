@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>订单复盘工作台 · 页面原型</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../shared/css/tokens.css" />
+    <link rel="stylesheet" href="../shared/css/base.css" />
+    <link rel="stylesheet" href="../shared/css/shell.css" />
+    <link rel="stylesheet" href="./mock-review.css" />
+  </head>
+  <body>
+    <main class="prototype-shell">
+      <header class="prototype-header">
+        <div>
+          <p class="eyebrow">TRADE REVIEW / PROTOTYPE</p>
+          <h1>订单复盘工作台</h1>
+        </div>
+        <div class="prototype-status"><span></span>模拟数据 · 未连接真实账户</div>
+      </header>
+
+      <section class="workspace" aria-label="订单复盘工作台">
+        <aside class="order-index" aria-label="主订单列表">
+          <div class="index-head">
+            <div>
+              <p class="eyebrow">ORDERS</p>
+              <h2>主订单</h2>
+            </div>
+            <span class="order-count" id="orderCount">6 笔</span>
+          </div>
+          <div class="index-tools">
+            <label class="search-box">
+              <span class="sr-only">搜索订单</span>
+              <input id="orderSearch" type="search" placeholder="搜索开仓时间" />
+            </label>
+            <button id="clearSearch" class="icon-button" type="button" title="清除搜索" aria-label="清除搜索">×</button>
+          </div>
+          <div class="order-list-head" aria-hidden="true">
+            <span>开仓时间</span><span>标记</span><span>R</span><span>盈亏</span>
+          </div>
+          <div id="orderList" class="order-list"></div>
+          <div class="index-foot"><span>组 = 含加仓 · ! = 止损待填</span><span>1 / 1</span></div>
+        </aside>
+
+        <section id="detailPanel" class="order-detail" aria-live="polite"></section>
+      </section>
+    </main>
+    <script type="module" src="./mock-review.mjs"></script>
+  </body>
+</html>

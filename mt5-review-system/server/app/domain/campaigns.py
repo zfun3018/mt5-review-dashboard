@@ -54,23 +54,25 @@ def _side_from_deal(deal_type: Any, *, exiting: bool = False) -> str:
 
 
 def reconstruct_positions(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for source in deals:
         deal = dict(source)
+        platform = str(deal.get("platform") or "mt5")
         account = str(deal.get("account") or "MT5-LOCAL")
         position_id = str(deal.get("position_id") or "")
         if not position_id:
             continue
         deal["account"] = account
+        deal["platform"] = platform
         deal["position_id"] = position_id
         deal["entry_kind"] = _normalized_entry_kind(deal.get("entry_kind"))
         deal["volume"] = float(deal.get("volume") or 0.0)
         deal["price"] = float(deal.get("price") or 0.0)
         deal["profit"] = float(deal.get("profit") or 0.0)
-        grouped[(account, position_id)].append(deal)
+        grouped[(platform, account, position_id)].append(deal)
 
     positions: list[dict[str, Any]] = []
-    for (account, position_id), position_deals in grouped.items():
+    for (platform, account, position_id), position_deals in grouped.items():
         ordered = sorted(position_deals, key=deal_sort_key)
         entries: list[dict[str, Any]] = []
         exits: list[dict[str, Any]] = []
@@ -123,7 +125,12 @@ def reconstruct_positions(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
         last_exit = exits[-1] if exits else None
         opened_deal = entries[0] if entries else first_deal
         position = {
-            "id": f"{account}:{position_id}",
+            "id": (
+                f"{account}:{position_id}"
+                if platform == "mt5"
+                else f"{platform}:{account}:{position_id}"
+            ),
+            "platform": platform,
             "account": account,
             "position_id": position_id,
             "symbol": str(first_deal.get("symbol") or ""),
@@ -154,10 +161,11 @@ def reconstruct_positions(deals: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def group_campaigns(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for position in positions:
         grouped[
             (
+                str(position.get("platform") or "mt5"),
                 str(position.get("account") or ""),
                 str(position.get("symbol") or ""),
                 str(position.get("side") or ""),
@@ -166,7 +174,7 @@ def group_campaigns(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     campaigns: list[dict[str, Any]] = []
     infinite_key = (math.inf, (2, ""))
-    for (account, symbol, side), members in grouped.items():
+    for (platform, account, symbol, side), members in grouped.items():
         ordered = sorted(members, key=lambda item: (item["opened_sort_key"], item["id"]))
         current: list[dict[str, Any]] = []
         active_until: tuple[Any, Any] | None = None
@@ -203,6 +211,7 @@ def group_campaigns(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
             campaigns.append(
                 {
+                    "platform": platform,
                     "account": account,
                     "symbol": symbol,
                     "side": side,

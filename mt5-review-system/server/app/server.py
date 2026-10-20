@@ -16,6 +16,9 @@ from . import storage
 
 WEB_DIR = storage.PROJECT_ROOT / "web"
 API_ROUTER = build_router(storage, auto_import_from_config)
+STATIC_MIME_OVERRIDES = {
+    ".mjs": "text/javascript",
+}
 
 # Legacy flat pages that now live behind a workspace directory. Requests are
 # redirected with a 302 so existing bookmarks and internal links keep working.
@@ -102,7 +105,11 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self._send_file(file_path)
 
     def _send_file(self, file_path: Path) -> None:
-        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        content_type = (
+            STATIC_MIME_OVERRIDES.get(file_path.suffix.lower())
+            or mimetypes.guess_type(file_path.name)[0]
+            or "application/octet-stream"
+        )
         content = file_path.read_bytes()
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)

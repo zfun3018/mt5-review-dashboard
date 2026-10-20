@@ -1,7 +1,7 @@
 import { readQuery, replaceQuery } from "../shared/js/url-state.mjs";
 
-export const PAGE_SIZES = Object.freeze([20, 50, 100]);
-export const DEFAULT_PAGE_SIZE = 50;
+export const PAGE_SIZES = Object.freeze([12, 24, 50]);
+export const DEFAULT_PAGE_SIZE = 12;
 
 // URL-backed state for the Orders workspace. Keys stay camelCase in both the
 // JavaScript state object and the URL so that read/write round-trips are exact;
@@ -14,6 +14,8 @@ const SCHEMA = {
   start: { type: "string", default: "" },
   end: { type: "string", default: "" },
   rMissing: { type: "boolean", default: false },
+  listView: { type: "string", default: "all", values: ["all", "featured"] },
+  deleted: { type: "string", default: "active", values: ["active", "deleted"] },
   page: { type: "integer", default: 1, min: 1 },
   pageSize: { type: "integer", default: DEFAULT_PAGE_SIZE, min: 1, max: 200 },
   trade: { type: "string", default: "" },
@@ -44,6 +46,8 @@ export function buildCampaignsQuery(state) {
   if (state.start) params.set("start", state.start);
   if (state.end) params.set("end", state.end);
   if (state.rMissing) params.set("r_missing", "1");
+  if (state.listView === "featured") params.set("featured", "1");
+  if (state.deleted && state.deleted !== "active") params.set("deleted", state.deleted);
   params.set("page", String(state.page ?? 1));
   params.set("page_size", String(state.pageSize ?? DEFAULT_PAGE_SIZE));
   return params.toString();

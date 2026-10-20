@@ -247,6 +247,116 @@
   width: 120px;
 }
 
+.settings-import-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-import-result {
+  min-height: 1.5em;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.futures-import-calendar,
+.futures-import-history {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.import-calendar-head,
+.import-calendar-week,
+.import-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.import-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.import-calendar-head strong {
+  color: var(--color-text);
+}
+
+.import-calendar-week span {
+  padding: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.import-calendar-cell {
+  display: grid;
+  min-height: 56px;
+  align-content: space-between;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.import-calendar-cell.has-data {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.import-calendar-cell small {
+  color: var(--color-muted);
+}
+
+.import-calendar-cell em {
+  color: var(--color-warning, #b7791f);
+  font-size: 0.68rem;
+  font-style: normal;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.import-calendar-cell.has-data em:last-child {
+  color: var(--color-muted);
+}
+
+.import-calendar-cell.is-empty {
+  border-color: transparent;
+  background: transparent;
+}
+
+.import-history-item {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.import-history-main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.import-history-main span,
+.import-history-meta {
+  color: var(--color-muted);
+  font-size: var(--font-size-xs);
+}
+
+.import-history-meta {
+  overflow-wrap: anywhere;
+}
+
 /* Status */
 
 .settings-status {
@@ -328,5 +438,10 @@
   .settings-threshold-row input {
     flex: 1;
     width: auto;
+  }
+
+  .import-calendar-cell {
+    min-height: 48px;
+    padding: var(--space-1);
   }
 }

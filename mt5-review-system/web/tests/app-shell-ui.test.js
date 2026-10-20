@@ -152,6 +152,11 @@ class FakeElement {
       const label = selector.slice(13, -2);
       return descendants.filter((node) => node.getAttribute("aria-label") === label);
     }
+    const attributeMatch = selector.match(/^\[([^=]+)="([^"]*)"\]$/);
+    if (attributeMatch) {
+      const [, name, value] = attributeMatch;
+      return descendants.filter((node) => node.getAttribute(name) === value);
+    }
     return [];
   }
 
@@ -163,6 +168,7 @@ class FakeElement {
 class FakeDocument {
   constructor() {
     this.listeners = new Map();
+    this.documentElement = new FakeElement("html", this);
     this.body = new FakeElement("body", this);
     this.activeElement = this.body;
   }
@@ -213,11 +219,42 @@ test("shell defines the four workspace destinations", async () => {
     NAV_ITEMS.map(({href, label}) => ({href, label})),
     [
       {href: "/dashboard/", label: "复盘仪表盘"},
-      {href: "/orders/", label: "订单列表"},
-      {href: "/album/", label: "复盘图册"},
+      {href: "/orders/", label: "订单复盘"},
       {href: "/settings/", label: "设置"},
     ],
   );
+});
+
+test("shell does not expose a theme switcher", async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const originalStorage = globalThis.localStorage;
+  const document = new FakeDocument();
+  const root = document.createElement("div");
+  root.setAttribute("data-app-shell", "");
+  document.body.append(root);
+  globalThis.document = document;
+  globalThis.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+  };
+  globalThis.window = {
+    lucide: {createIcons() {}},
+    matchMedia: () => ({matches: false, addEventListener() {}, removeEventListener() {}}),
+  };
+
+  try {
+    const {mountShell} = await import(`${moduleUrl("shared/js/shell.mjs")}?theme-test`);
+    const cleanup = mountShell({title: "复盘仪表盘"});
+    assert.equal(root.querySelector('[aria-label^="当前主题："]'), null);
+    assert.equal(document.documentElement.getAttribute("data-theme"), null);
+
+    cleanup();
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+    globalThis.localStorage = originalStorage;
+  }
 });
 
 test("shell manages active navigation, drawer focus, escape, collapse, and cleanup", async () => {
@@ -240,7 +277,7 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
     action.textContent = "刷新";
     const cleanup = shell.mountShell({
       activeRoute: "/orders/",
-      title: "订单列表",
+      title: "订单复盘",
       actions: [action],
     });
     const links = root.querySelectorAll("a");
@@ -250,9 +287,12 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
 
     assert.equal(typeof cleanup, "function");
     assert.equal(links.find((link) => link.getAttribute("href") === "/orders/").getAttribute("aria-current"), "page");
-    assert.equal(root.querySelectorAll('[aria-label="订单列表"]')[0].textContent, "订单列表");
+    assert.equal(root.querySelectorAll('[aria-label="订单复盘"]')[0].textContent, "订单复盘");
     assert.equal(menuButton.getAttribute("title"), "打开导航");
     assert.equal(iconRefreshes, 1);
+    assert.ok(root.querySelector('[data-ui="window-controls"]'));
+    assert.ok(root.querySelector('[data-ui="navigation-section"]'));
+    assert.ok(root.querySelector('[data-ui="toolbar-context"]'));
 
     collapseButton.dispatchEvent({type: "click"});
     assert.equal(root.getAttribute("data-navigation-collapsed"), "true");
@@ -368,7 +408,7 @@ test("shell only mounts page sharing when explicitly enabled", async () => {
 
   try {
     const {mountShell} = await import(`${moduleUrl("shared/js/shell.mjs")}?share-test`);
-    const sharedCleanup = mountShell({title: "订单列表", share: true});
+    const sharedCleanup = mountShell({title: "订单复盘", share: true});
     const shareButton = root.querySelector('[aria-label="分享页面"]');
     assert.ok(shareButton);
     assert.equal(shareButton.getAttribute("data-share-exclude"), "true");
@@ -464,6 +504,7 @@ test("shared styles enforce stable navigation, mobile targets, and visible focus
   assert.match(tokens, /--sidebar-collapsed-width:\s*64px/);
   assert.match(tokens, /--font-size-xs:\s*12px/);
   assert.match(tokens, /--font-size-display:\s*28px/);
+  assert.doesNotMatch(shellSource, /THEME_OPTIONS|THEME_STORAGE_KEY|app-theme-button/);
   assert.match(shell, /grid-template-columns:\s*var\(--sidebar-width\)\s+minmax\(0,\s*1fr\)/);
   assert.match(shell, /@media\s*\(max-width:\s*720px\)/);
   assert.match(shell, /min-height:\s*44px/);
@@ -495,6 +536,7 @@ test("shared styles enforce stable navigation, mobile targets, and visible focus
   assert.match(components, /\.menu(?:\s*,|\s*\{)/);
   assert.match(components, /:disabled|\[aria-disabled="true"\]/);
   assert.match(components, /@media\s*\(max-width:\s*720px\)[\s\S]*\.filter-bar/);
+  assert.doesNotMatch(shell, /\.app-theme-button/);
 });
 
 test("shell omits unsupported runtime safety claims and keeps desktop navigation controls inert", async () => {
