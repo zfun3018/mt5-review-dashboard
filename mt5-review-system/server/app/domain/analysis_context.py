@@ -31,9 +31,11 @@ class AnalysisContext:
     """Normalized, read-only inputs available to all metric modules."""
 
     campaigns: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
+    reference_campaigns: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
     equity_snapshots: tuple[Mapping[str, Any], ...] = field(default_factory=tuple)
     window_start: datetime | None = None
     window_end: datetime | None = None
+    anchor_utc: datetime | None = None
     platform: str = ""
     timezone: str = "Asia/Shanghai"
     settings: Mapping[str, Any] = field(default_factory=dict)
@@ -47,6 +49,11 @@ class AnalysisContext:
         if not str(self.timezone).strip():
             raise ValueError("timezone is required")
         object.__setattr__(self, "campaigns", _freeze_rows(self.campaigns, "campaigns"))
+        object.__setattr__(
+            self,
+            "reference_campaigns",
+            _freeze_rows(self.reference_campaigns, "reference_campaigns"),
+        )
         object.__setattr__(
             self,
             "equity_snapshots",

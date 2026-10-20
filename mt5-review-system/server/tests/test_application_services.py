@@ -9,13 +9,14 @@ from unittest.mock import patch
 from app import storage
 from app.application import AnalysisWindow, PageRequest
 from app.application.album_service import AlbumService
-from app.application.dashboard_service import DashboardService
+from app.application.dashboard_service import DashboardService, _legacy_definition
 from app.application.orders_service import OrdersService
 from app.application.settings_service import SettingsService
 from app.data.campaign_repository import CampaignRepository
 from app.data.catalog_repository import CatalogRepository
 from app.data.media_repository import MediaRepository
 from app.data.trade_repository import TradeRepository
+from app.domain.analysis_context import AnalysisContext
 from tests.support import TemporaryStorageCase, insert_trade
 
 
@@ -252,6 +253,7 @@ class DashboardServiceTest(unittest.TestCase):
                 "sessions",
                 "system_evaluation",
                 "mode_evaluation",
+                "metric_meta",
             },
         )
         self.assertNotIn("trades", payload)
@@ -276,6 +278,37 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertEqual(catalogs.classification_calls, [(None, False)])
         self.assertEqual(settings.calls, 1)
 
+    def test_analysis_builds_one_shared_context_for_registered_legacy_metrics(self):
+        trades = FakeTradeRepository()
+        campaigns = FakeCampaignRepository()
+        catalogs = FakeCatalogRepository()
+        settings = FakeSettingsRepository()
+        service = DashboardService(trades, campaigns, catalogs, settings)
+
+        class RecordingRegistry:
+            def __init__(self, delegate):
+                self.delegate = delegate
+                self.contexts = []
+
+            def evaluate(self, context):
+                self.contexts.append(context)
+                return self.delegate.evaluate(context)
+
+        registry = RecordingRegistry(service.metric_registry)
+        service.metric_registry = registry
+
+        payload = service.get_analysis(AnalysisWindow("2026-08-18", "2026-08-18", 30))
+
+        self.assertEqual(len(registry.contexts), 1)
+        context = registry.contexts[0]
+        self.assertIsInstance(context, AnalysisContext)
+        self.assertEqual(context.platform, "mt5")
+        self.assertEqual(context.timezone, "Asia/Shanghai")
+        self.assertEqual(len(context.campaigns), 1)
+        self.assertEqual(len(context.reference_campaigns), 1)
+        self.assertEqual(context.settings["scratch_threshold_r"], 0.15)
+        self.assertEqual(payload["metric_meta"]["summary"]["definition_version"], "1")
+
     def test_domestic_futures_analysis_exposes_domestic_extensions_from_campaigns(self):
         trades = FakeTradeRepository()
         campaigns = FakeCampaignRepository()
@@ -297,6 +330,23 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertEqual(payload["metrics"]["order_count"], 1)
         self.assertEqual(payload["metrics"]["net_pnl"], 6.0)
         self.assertEqual(campaigns.analysis_calls, [("2026-08-18", "2026-08-18"), (None, None)])
+
+    def test_platform_specific_legacy_metric_is_not_run_on_other_platforms(self):
+        definition = _legacy_definition(
+            "domestic_only",
+            lambda context: (_ for _ in ()).throw(AssertionError("must not run")),
+            platforms=("domestic_futures",),
+        )
+        context = AnalysisContext(
+            campaigns=[{"id": "C-1"}],
+            platform="mt5",
+            timezone="Asia/Shanghai",
+        )
+
+        result = definition.calculate(context)
+
+        self.assertEqual(result.status, "not_applicable")
+        self.assertIsNone(result.value)
 
 
 class OrdersServiceTest(unittest.TestCase):
