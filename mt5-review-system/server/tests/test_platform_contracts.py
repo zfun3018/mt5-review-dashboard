@@ -1,11 +1,28 @@
 import unittest
 
-from app.platform_adapters.contracts import NormalizedExecution
+from app.platform_adapters.contracts import NormalizedExecution, PlatformCapabilities
 from app.platform_adapters.registry import platform_registry
 from app.platforms import DOMESTIC_FUTURES_PLATFORM, normalize_platform, platform_options
 
 
 class PlatformContractsTest(unittest.TestCase):
+    def test_platform_descriptors_declare_explicit_dashboard_capabilities(self):
+        mt5 = platform_registry.adapter("mt5")
+        domestic = platform_registry.adapter(DOMESTIC_FUTURES_PLATFORM)
+
+        self.assertIsInstance(mt5.capabilities, PlatformCapabilities)
+        self.assertIsInstance(domestic.capabilities, PlatformCapabilities)
+        self.assertTrue(mt5.capabilities.show_market_clock)
+        self.assertTrue(mt5.capabilities.show_sessions)
+        self.assertTrue(mt5.capabilities.supports_r_metrics)
+        self.assertFalse(mt5.capabilities.show_contract_rankings)
+        self.assertFalse(domestic.capabilities.show_market_clock)
+        self.assertFalse(domestic.capabilities.show_sessions)
+        self.assertTrue(domestic.capabilities.show_contract_rankings)
+        self.assertTrue(domestic.capabilities.show_fixed_periods)
+        self.assertTrue(domestic.capabilities.show_review_coverage)
+        self.assertTrue(domestic.capabilities.show_risk_summary)
+
     def test_domestic_futures_has_stable_user_facing_platform_identity(self):
         self.assertEqual(normalize_platform("tonghuashun_futures"), DOMESTIC_FUTURES_PLATFORM)
         self.assertEqual(normalize_platform("tonghuashun"), DOMESTIC_FUTURES_PLATFORM)

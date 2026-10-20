@@ -119,6 +119,15 @@ def r_metrics_definition() -> MetricDefinition:
 
 def build_r_metric_result(context: AnalysisContext) -> MetricResult:
     campaigns = list(context.campaigns)
+    if not context.capabilities.get("supports_r_metrics", True):
+        return MetricResult(
+            key="r_metrics",
+            value=None,
+            unit="R",
+            status="not_applicable",
+            sample_count=len(campaigns),
+            definition_version=DEFINITION_VERSION,
+        )
     value = build_r_metrics(
         campaigns,
         float(context.settings.get("scratch_threshold_r", 0.15)),

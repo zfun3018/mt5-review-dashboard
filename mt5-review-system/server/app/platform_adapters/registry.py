@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable
+from dataclasses import dataclass, field
 
+from .contracts import (
+    DOMESTIC_FUTURES_CAPABILITIES,
+    MT5_CAPABILITIES,
+    PlatformCapabilities,
+)
 from ..platforms import DEFAULT_PLATFORM, DOMESTIC_FUTURES_PLATFORM, normalize_platform
 
 
@@ -11,6 +15,7 @@ class PlatformAdapterDescriptor:
     platform_id: str
     supported_formats: tuple[str, ...]
     source_kinds: tuple[str, ...]
+    capabilities: PlatformCapabilities = field(default_factory=PlatformCapabilities)
 
 
 class PlatformRegistry:
@@ -30,11 +35,17 @@ class PlatformRegistry:
 
 platform_registry = PlatformRegistry(
     (
-        PlatformAdapterDescriptor(DEFAULT_PLATFORM, ("jsonl",), ("mt5_bridge",)),
+        PlatformAdapterDescriptor(
+            DEFAULT_PLATFORM,
+            ("jsonl",),
+            ("mt5_bridge",),
+            MT5_CAPABILITIES,
+        ),
         PlatformAdapterDescriptor(
             DOMESTIC_FUTURES_PLATFORM,
             ("csv", "xls"),
             ("standard_template", "tonghuashun"),
+            DOMESTIC_FUTURES_CAPABILITIES,
         ),
     )
 )

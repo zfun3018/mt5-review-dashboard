@@ -36,18 +36,24 @@ def time_pattern_definitions() -> tuple[MetricDefinition, ...]:
 
 def build_hour_heatmap_result(context: AnalysisContext) -> MetricResult:
     campaigns = list(context.campaigns)
+    if not _enabled(context, "show_market_clock", default=True):
+        return _not_applicable("hour_heatmap", len(campaigns))
     value = build_hour_heatmap(campaigns, anchor_utc=context.anchor_utc)
     return _result("hour_heatmap", value, len(campaigns))
 
 
 def build_weekday_hour_heatmap_result(context: AnalysisContext) -> MetricResult:
     campaigns = list(context.campaigns)
+    if not _enabled(context, "show_market_clock", default=True):
+        return _not_applicable("weekday_hour_heatmap", len(campaigns))
     value = build_weekday_hour_heatmap(campaigns)
     return _result("weekday_hour_heatmap", value, len(campaigns))
 
 
 def build_sessions_result(context: AnalysisContext) -> MetricResult:
     campaigns = list(context.campaigns)
+    if not _enabled(context, "show_sessions", default=True):
+        return _not_applicable("sessions", len(campaigns))
     value = build_session_stats(campaigns)
     return _result("sessions", value, len(campaigns))
 
@@ -61,4 +67,19 @@ def _result(key: str, value, sample_count: int) -> MetricResult:
         sample_count=sample_count,
         definition_version=DEFINITION_VERSION,
         coverage=1.0 if sample_count else 0.0,
+    )
+
+
+def _enabled(context: AnalysisContext, capability: str, *, default: bool) -> bool:
+    return bool(context.capabilities.get(capability, default))
+
+
+def _not_applicable(key: str, sample_count: int) -> MetricResult:
+    return MetricResult(
+        key=key,
+        value=None,
+        unit="currency",
+        status="not_applicable",
+        sample_count=sample_count,
+        definition_version=DEFINITION_VERSION,
     )

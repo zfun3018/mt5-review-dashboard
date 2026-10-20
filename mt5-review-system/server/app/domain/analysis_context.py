@@ -38,6 +38,7 @@ class AnalysisContext:
     anchor_utc: datetime | None = None
     platform: str = ""
     timezone: str = "Asia/Shanghai"
+    capabilities: Mapping[str, Any] = field(default_factory=dict)
     settings: Mapping[str, Any] = field(default_factory=dict)
     data_quality: Mapping[str, Any] = field(default_factory=dict)
 
@@ -60,4 +61,9 @@ class AnalysisContext:
             _freeze_rows(self.equity_snapshots, "equity_snapshots"),
         )
         object.__setattr__(self, "settings", _freeze_mapping(self.settings, "settings"))
+        object.__setattr__(
+            self,
+            "capabilities",
+            _freeze_mapping(self.capabilities, "capabilities"),
+        )
         object.__setattr__(self, "data_quality", _freeze_mapping(self.data_quality, "data_quality"))

@@ -10,6 +10,7 @@ from app.domain.metric_registry import MetricRegistry
 from app.domain.r_metrics import r_metrics_definition
 
 from .calendar import calendar_definitions
+from .domestic_futures import domestic_metric_definitions
 from .equity import equity_definition
 from .modes import mode_definitions
 from .summary import summary_definition
@@ -22,6 +23,7 @@ def build_metric_registry() -> MetricRegistry:
     definitions.append(equity_definition())
     definitions.extend(calendar_definitions())
     definitions.extend(time_pattern_definitions())
+    definitions.extend(domestic_metric_definitions())
     return MetricRegistry(definitions)
 
 

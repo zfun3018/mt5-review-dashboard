@@ -11,6 +11,14 @@ MODULE_DIR = Path(__file__).resolve().parents[1] / "app" / "platform_modules"
 
 
 class PlatformModuleContractTest(unittest.TestCase):
+    def test_platform_services_expose_dashboard_capabilities(self):
+        self.assertEqual(MT5Service.capabilities.show_market_clock, True)
+        self.assertEqual(MT5Service.capabilities.show_sessions, True)
+        self.assertEqual(MT5Service.capabilities.supports_r_metrics, True)
+        self.assertEqual(DomesticFuturesService.capabilities.show_market_clock, False)
+        self.assertEqual(DomesticFuturesService.capabilities.show_sessions, False)
+        self.assertEqual(DomesticFuturesService.capabilities.show_contract_rankings, True)
+
     def test_platform_services_expose_only_their_own_workspace_identity(self):
         self.assertEqual(MT5Service.platform_id, DEFAULT_PLATFORM)
         self.assertEqual(DomesticFuturesService.platform_id, DOMESTIC_FUTURES_PLATFORM)

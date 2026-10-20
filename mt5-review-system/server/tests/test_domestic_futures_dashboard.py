@@ -8,6 +8,10 @@ from app.domain.domestic_futures_dashboard import (
     build_review_coverage,
     build_risk_summary,
 )
+from app.domain.analysis_context import AnalysisContext
+from app.domain.metrics import build_metric_registry
+from app.domain.metrics.domestic_futures import domestic_metric_definitions
+from app.domain.metric_registry import MetricRegistry
 
 
 def trade(trade_id, close_time, symbol, pnl, commission=0.0, fee=0.0):
@@ -84,6 +88,87 @@ class DomesticFuturesDashboardTest(unittest.TestCase):
         self.assertEqual(risk["longest_loss_streak"], 1)
         self.assertEqual(risk["max_loss"], -540.0)
         self.assertEqual(risk["fee_pressure"], round(140 / 1000, 4))
+
+    def test_domestic_metric_results_keep_campaign_sample_and_metadata(self):
+        context = AnalysisContext(
+            campaigns=self.trades,
+            reference_campaigns=self.trades,
+            anchor_utc=self.anchor,
+            platform="domestic_futures",
+            timezone="Asia/Shanghai",
+            capabilities={
+                "show_fixed_periods": True,
+                "show_contract_rankings": True,
+                "show_review_coverage": True,
+                "show_risk_summary": True,
+                "show_domestic_system_evaluation": True,
+            },
+            settings={"fixed_review_day": self.anchor, "start_date": None, "end_date": None},
+        )
+
+        results = MetricRegistry(domestic_metric_definitions()).evaluate(context)
+
+        self.assertEqual(
+            {result.key for result in results},
+            {
+                "fixed_periods",
+                "contract_rankings",
+                "domestic_system_evaluation",
+                "review_coverage",
+                "risk_summary",
+            },
+        )
+        for result in results:
+            self.assertEqual(result.status, "available")
+            self.assertEqual(result.sample_count, len(self.trades))
+            self.assertEqual(result.definition_version, "1")
+
+    def test_domestic_metric_results_are_not_applicable_for_mt5(self):
+        context = AnalysisContext(
+            campaigns=self.trades,
+            reference_campaigns=self.trades,
+            anchor_utc=self.anchor,
+            platform="mt5",
+            timezone="Asia/Shanghai",
+            capabilities={},
+            settings={"fixed_review_day": self.anchor},
+        )
+
+        results = MetricRegistry(domestic_metric_definitions()).evaluate(context)
+
+        self.assertTrue(all(result.status == "not_applicable" for result in results))
+        self.assertTrue(all(result.value is None for result in results))
+
+    def test_domestic_context_does_not_fabricate_market_clock_metrics(self):
+        context = AnalysisContext(
+            campaigns=self.trades,
+            reference_campaigns=self.trades,
+            anchor_utc=self.anchor,
+            platform="domestic_futures",
+            timezone="Asia/Shanghai",
+            capabilities={
+                "show_market_clock": False,
+                "show_sessions": False,
+                "supports_r_metrics": True,
+                "show_fixed_periods": True,
+                "show_contract_rankings": True,
+                "show_review_coverage": True,
+                "show_risk_summary": True,
+                "show_domestic_system_evaluation": True,
+            },
+            settings={
+                "selected_year": 2026,
+                "selected_month": 10,
+                "fixed_review_day": self.anchor,
+            },
+        )
+
+        results = {result.key: result for result in build_metric_registry().evaluate(context)}
+
+        self.assertEqual(results["hour_heatmap"].status, "not_applicable")
+        self.assertEqual(results["sessions"].status, "not_applicable")
+        self.assertIsNone(results["hour_heatmap"].value)
+        self.assertIsNone(results["sessions"].value)
 
 
 if __name__ == "__main__":

@@ -7,20 +7,14 @@ from typing import Any, Callable
 
 from ..data.database import connect
 from ..domain.analytics import (
-    build_daily_system_evaluation,
     parse_dt,
     to_beijing,
 )
 from ..domain.analysis_context import AnalysisContext
-from ..domain.domestic_futures_dashboard import (
-    build_contract_rankings,
-    build_fixed_period_summaries,
-    build_review_coverage,
-    build_risk_summary,
-)
 from ..domain.metrics import build_metric_registry
 from ..domain.metric_contracts import MetricDefinition, MetricResult
 from ..domain.metric_registry import MetricRegistry
+from ..platform_adapters.registry import platform_registry
 from . import AnalysisWindow
 
 
@@ -90,7 +84,8 @@ class DashboardService:
         )
         fixed_calendar_day = datetime.now(timezone.utc)
         fixed_review_day = fixed_calendar_day - timedelta(days=1)
-        if platform == "domestic_futures":
+        platform_descriptor = platform_registry.adapter(platform)
+        if platform_descriptor.capabilities.show_contract_rankings:
             _decorate_contract_rows(campaign_rows)
             _decorate_contract_rows(all_campaign_rows)
         calendar_anchor = _latest_activity_time(all_campaign_rows, snapshots)
@@ -116,6 +111,7 @@ class DashboardService:
             anchor_utc=anchor,
             platform=platform,
             timezone="Asia/Shanghai",
+            capabilities=platform_descriptor.capabilities.as_dict(),
             settings=settings,
             data_quality={
                 "campaign_count": len(campaign_rows),
@@ -142,8 +138,6 @@ class DashboardService:
             "equity": results["equity_curve"].value,
             "calendar": results["calendar"].value,
             "monthly_pnl": results["monthly_pnl"].value,
-            "heatmap": results["hour_heatmap"].value,
-            "sessions": results["sessions"].value,
             "system_evaluation": results["system_evaluation"].value,
             "mode_evaluation": results["mode_evaluation"].value,
             "metric_meta": {
@@ -151,6 +145,10 @@ class DashboardService:
                 for key, result in results.items()
             },
         }
+        for key in ("heatmap", "sessions"):
+            result = results["hour_heatmap" if key == "heatmap" else key]
+            if result.status != "not_applicable":
+                payload[key] = result.value
         for key in (
             "fixed_periods",
             "contract_rankings",
@@ -241,54 +239,7 @@ def _legacy_definition(
 
 
 def _build_legacy_metric_registry() -> MetricRegistry:
-    registry = build_metric_registry()
-
-    def rows(context: AnalysisContext) -> list[dict[str, Any]]:
-        return list(context.campaigns)
-
-    def reference_rows(context: AnalysisContext) -> list[dict[str, Any]]:
-        return list(context.reference_campaigns or context.campaigns)
-
-    registry.register(
-        _legacy_definition(
-            "fixed_periods",
-            lambda context: build_fixed_period_summaries(
-                reference_rows(context),
-                context.settings["fixed_review_day"],
-                today=context.settings["fixed_review_day"],
-            ),
-            platforms=("domestic_futures",),
-        )
-    )
-    registry.register(
-        _legacy_definition(
-            "contract_rankings",
-            lambda context: build_contract_rankings(rows(context)),
-            platforms=("domestic_futures",),
-        )
-    )
-    registry.register(
-        _legacy_definition(
-            "domestic_system_evaluation",
-            lambda context: build_daily_system_evaluation(rows(context)),
-            platforms=("domestic_futures",),
-        )
-    )
-    registry.register(
-        _legacy_definition(
-            "review_coverage",
-            lambda context: build_review_coverage(rows(context)),
-            platforms=("domestic_futures",),
-        )
-    )
-    registry.register(
-        _legacy_definition(
-            "risk_summary",
-            lambda context: build_risk_summary(rows(context)),
-            platforms=("domestic_futures",),
-        )
-    )
-    return registry
+    return build_metric_registry()
 
 def _latest_activity_time(
     trades: list[dict[str, Any]], snapshots: list[dict[str, Any]]
