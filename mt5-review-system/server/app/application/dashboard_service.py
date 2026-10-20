@@ -7,12 +7,7 @@ from typing import Any, Callable
 
 from ..data.database import connect
 from ..domain.analytics import (
-    build_cumulative_return_curve,
     build_daily_system_evaluation,
-    build_hour_heatmap,
-    build_month_calendar,
-    build_session_stats,
-    build_trade_metrics,
     parse_dt,
     to_beijing,
 )
@@ -20,17 +15,10 @@ from ..domain.analysis_context import AnalysisContext
 from ..domain.domestic_futures_dashboard import (
     build_contract_rankings,
     build_fixed_period_summaries,
-    build_monthly_pnl,
     build_review_coverage,
     build_risk_summary,
 )
-from ..domain.dashboard import (
-    build_campaign_period_metrics,
-    build_daily_campaign_evaluation,
-    build_trade_period_summaries,
-    labeled_campaign_mode_evaluation,
-)
-from ..domain.r_metrics import build_r_metrics
+from ..domain.metrics import build_metric_registry
 from ..domain.metric_contracts import MetricDefinition, MetricResult
 from ..domain.metric_registry import MetricRegistry
 from . import AnalysisWindow
@@ -253,108 +241,54 @@ def _legacy_definition(
 
 
 def _build_legacy_metric_registry() -> MetricRegistry:
+    registry = build_metric_registry()
+
     def rows(context: AnalysisContext) -> list[dict[str, Any]]:
         return list(context.campaigns)
 
     def reference_rows(context: AnalysisContext) -> list[dict[str, Any]]:
         return list(context.reference_campaigns or context.campaigns)
 
-    def threshold(context: AnalysisContext) -> float:
-        return float(context.settings["scratch_threshold_r"])
-
-    def anchor(context: AnalysisContext) -> datetime:
-        return context.anchor_utc or _latest_activity_time(rows(context), list(context.equity_snapshots))
-
-    def build_periods(context: AnalysisContext) -> dict[str, dict[str, Any]]:
-        result = build_trade_period_summaries(rows(context), anchor(context))
-        for key, metrics in build_campaign_period_metrics(
-            rows(context), anchor(context), threshold(context)
-        ).items():
-            result.setdefault(key, {})["r_metrics"] = metrics
-        return result
-
-    def build_mode_evaluation(context: AnalysisContext) -> dict[str, list[dict[str, Any]]]:
-        options = list(context.settings.get("classification_options") or [])
-        return {
-            "trade_type": labeled_campaign_mode_evaluation(
-                rows(context), "trade_type", options, threshold(context)
+    registry.register(
+        _legacy_definition(
+            "fixed_periods",
+            lambda context: build_fixed_period_summaries(
+                reference_rows(context),
+                context.settings["fixed_review_day"],
+                today=context.settings["fixed_review_day"],
             ),
-            "strategy": labeled_campaign_mode_evaluation(
-                rows(context), "strategy", options, threshold(context)
-            ),
-        }
-
-    return MetricRegistry(
-        (
-            _legacy_definition("summary", lambda context: build_trade_metrics(rows(context))),
-            _legacy_definition("r_metrics", lambda context: build_r_metrics(rows(context), threshold(context))),
-            _legacy_definition("periods", build_periods),
-            _legacy_definition(
-                "equity_curve",
-                lambda context: build_cumulative_return_curve(
-                    rows(context),
-                    list(context.equity_snapshots),
-                    now_utc=anchor(context),
-                    hours=(
-                        int(context.settings["equity_days"]) * 24
-                        if context.settings.get("equity_days") is not None
-                        else None
-                    ),
-                    start_date=context.settings.get("start_date"),
-                    end_date=context.settings.get("end_date"),
-                    max_points=200,
-                ),
-            ),
-            _legacy_definition(
-                "calendar",
-                lambda context: build_month_calendar(
-                    reference_rows(context),
-                    int(context.settings["selected_year"]),
-                    int(context.settings["selected_month"]),
-                ),
-            ),
-            _legacy_definition("monthly_pnl", lambda context: build_monthly_pnl(rows(context))),
-            _legacy_definition(
-                "hour_heatmap",
-                lambda context: build_hour_heatmap(rows(context), anchor_utc=anchor(context)),
-            ),
-            _legacy_definition("sessions", lambda context: build_session_stats(rows(context))),
-            _legacy_definition(
-                "system_evaluation",
-                lambda context: build_daily_campaign_evaluation(rows(context), threshold(context)),
-            ),
-            _legacy_definition("mode_evaluation", build_mode_evaluation),
-            _legacy_definition(
-                "fixed_periods",
-                lambda context: build_fixed_period_summaries(
-                    reference_rows(context),
-                    context.settings["fixed_review_day"],
-                    today=context.settings["fixed_review_day"],
-                ),
-                platforms=("domestic_futures",),
-            ),
-            _legacy_definition(
-                "contract_rankings",
-                lambda context: build_contract_rankings(rows(context)),
-                platforms=("domestic_futures",),
-            ),
-            _legacy_definition(
-                "domestic_system_evaluation",
-                lambda context: build_daily_system_evaluation(rows(context)),
-                platforms=("domestic_futures",),
-            ),
-            _legacy_definition(
-                "review_coverage",
-                lambda context: build_review_coverage(rows(context)),
-                platforms=("domestic_futures",),
-            ),
-            _legacy_definition(
-                "risk_summary",
-                lambda context: build_risk_summary(rows(context)),
-                platforms=("domestic_futures",),
-            ),
+            platforms=("domestic_futures",),
         )
     )
+    registry.register(
+        _legacy_definition(
+            "contract_rankings",
+            lambda context: build_contract_rankings(rows(context)),
+            platforms=("domestic_futures",),
+        )
+    )
+    registry.register(
+        _legacy_definition(
+            "domestic_system_evaluation",
+            lambda context: build_daily_system_evaluation(rows(context)),
+            platforms=("domestic_futures",),
+        )
+    )
+    registry.register(
+        _legacy_definition(
+            "review_coverage",
+            lambda context: build_review_coverage(rows(context)),
+            platforms=("domestic_futures",),
+        )
+    )
+    registry.register(
+        _legacy_definition(
+            "risk_summary",
+            lambda context: build_risk_summary(rows(context)),
+            platforms=("domestic_futures",),
+        )
+    )
+    return registry
 
 def _latest_activity_time(
     trades: list[dict[str, Any]], snapshots: list[dict[str, Any]]

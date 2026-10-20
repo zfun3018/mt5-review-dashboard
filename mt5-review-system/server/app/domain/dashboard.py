@@ -48,6 +48,7 @@ def labeled_campaign_mode_evaluation(
     options: list[dict[str, Any]],
     threshold: float,
 ) -> list[dict[str, Any]]:
+    """Group Campaigns by a classification tag, with empty tags unclassified."""
     if dimension not in {"trade_type", "strategy"}:
         raise ValueError("dimension must be trade_type or strategy")
     labels = {
@@ -57,7 +58,7 @@ def labeled_campaign_mode_evaluation(
     }
     grouped: dict[str, list[dict[str, Any]]] = {}
     for campaign in campaigns:
-        key = str(campaign.get(dimension) or "unclassified")
+        key = str(campaign.get(dimension) or "").strip() or "unclassified"
         grouped.setdefault(key, []).append(campaign)
     total = len(campaigns)
     return [

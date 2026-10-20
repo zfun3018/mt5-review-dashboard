@@ -5,6 +5,11 @@ from statistics import mean, stdev
 from typing import Any
 
 from .campaigns import VOLUME_EPSILON, calculate_campaign_r
+from .analysis_context import AnalysisContext
+from .metric_contracts import MetricDefinition, MetricResult
+
+
+DEFINITION_VERSION = "1"
 
 
 def _calculate_r_runs_z(
@@ -102,3 +107,35 @@ def build_r_metrics(
         "sqn_minimum_sample": 30,
         "z_score": _calculate_r_runs_z(complete, threshold),
     }
+
+
+def r_metrics_definition() -> MetricDefinition:
+    return MetricDefinition(
+        key="r_metrics",
+        definition_version=DEFINITION_VERSION,
+        calculate=build_r_metric_result,
+    )
+
+
+def build_r_metric_result(context: AnalysisContext) -> MetricResult:
+    campaigns = list(context.campaigns)
+    value = build_r_metrics(
+        campaigns,
+        float(context.settings.get("scratch_threshold_r", 0.15)),
+    )
+    warnings = []
+    if value["missing_count"]:
+        warnings.append("some campaigns do not have a complete R value")
+    if value["sqn_status"] != "available":
+        warnings.append(f"SQN status: {value['sqn_status']}")
+    status = "estimated" if warnings else "available"
+    return MetricResult(
+        key="r_metrics",
+        value=value,
+        unit="R",
+        status=status,
+        sample_count=len(campaigns),
+        definition_version=DEFINITION_VERSION,
+        coverage=value["coverage_rate"],
+        warnings=tuple(warnings),
+    )
