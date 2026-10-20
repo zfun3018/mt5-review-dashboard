@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import re
 import unittest
+from dataclasses import FrozenInstanceError
+from datetime import datetime
 from pathlib import Path
+
+from app.domain.analysis_context import AnalysisContext
+from app.domain.metric_contracts import MetricDefinition, MetricResult
+from app.domain.metric_registry import MetricRegistry
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -104,6 +110,153 @@ class MetricDocumentationContractTest(unittest.TestCase):
         self.assertIn("Campaign", architecture)
         self.assertRegex(architecture, re.compile(r"单一事实源|唯一业务订单"))
         self.assertIn("仪表盘", architecture)
+
+
+class AnalysisContextContractTest(unittest.TestCase):
+    def test_context_normalizes_rows_and_freezes_configuration(self):
+        context = AnalysisContext(
+            campaigns=[{"id": "campaign-1", "net_pnl": 12.5}],
+            equity_snapshots=[{"time_utc": "2026-10-20T00:00:00+00:00", "equity": 1012.5}],
+            window_start=datetime(2026, 10, 1),
+            window_end=datetime(2026, 10, 31),
+            platform="mt5",
+            timezone="Asia/Shanghai",
+            settings={"scratch_threshold_r": 0.15},
+            data_quality={"missing_campaign_count": 0},
+        )
+
+        self.assertEqual(len(context.campaigns), 1)
+        self.assertEqual(context.campaigns[0]["id"], "campaign-1")
+        self.assertEqual(context.equity_snapshots[0]["equity"], 1012.5)
+        with self.assertRaises(TypeError):
+            context.settings["scratch_threshold_r"] = 0.2
+        with self.assertRaises(FrozenInstanceError):
+            context.platform = "domestic_futures"
+
+
+class MetricResultContractTest(unittest.TestCase):
+    def test_result_supports_explicit_quality_statuses(self):
+        statuses = (
+            "available",
+            "insufficient_data",
+            "incomplete_data",
+            "estimated",
+            "not_applicable",
+        )
+        for status in statuses:
+            result = MetricResult(
+                key="summary.net_pnl",
+                value=12.5 if status in {"available", "estimated"} else None,
+                unit="currency",
+                status=status,
+                sample_count=3,
+                definition_version="1",
+                coverage=1.0 if status == "available" else None,
+                warnings=("synthetic warning",) if status == "estimated" else (),
+            )
+            self.assertEqual(result.status, status)
+            self.assertEqual(result.sample_count, 3)
+
+    def test_unknown_status_cannot_be_encoded_as_zero(self):
+        with self.assertRaises(ValueError):
+            MetricResult(
+                key="summary.net_pnl",
+                value=0,
+                unit="currency",
+                status="insufficient_data",
+                sample_count=0,
+                definition_version="1",
+                coverage=0.0,
+            )
+
+    def test_result_requires_stable_metadata(self):
+        with self.assertRaises(ValueError):
+            MetricResult(
+                key="",
+                value=1,
+                unit="count",
+                status="available",
+                sample_count=1,
+                definition_version="1",
+                coverage=1.0,
+            )
+        with self.assertRaises(ValueError):
+            MetricResult(
+                key="summary.count",
+                value=1,
+                unit="count",
+                status="available",
+                sample_count=1,
+                definition_version="",
+                coverage=1.0,
+            )
+        with self.assertRaises(ValueError):
+            MetricResult(
+                key="summary.count",
+                value=1,
+                unit="count",
+                status="available",
+                sample_count=1.5,
+                definition_version="1",
+                coverage=1.0,
+            )
+
+
+class MetricRegistryContractTest(unittest.TestCase):
+    def test_registry_rejects_duplicate_keys_and_unversioned_definitions(self):
+        registry = MetricRegistry()
+        definition = MetricDefinition(
+            key="summary.count",
+            definition_version="1",
+            calculate=lambda context: MetricResult(
+                key="summary.count",
+                value=len(context.campaigns),
+                unit="count",
+                status="available",
+                sample_count=len(context.campaigns),
+                definition_version="1",
+                coverage=1.0,
+            ),
+        )
+        registry.register(definition)
+
+        with self.assertRaises(ValueError):
+            registry.register(definition)
+        with self.assertRaises(ValueError):
+            MetricDefinition(
+                key="summary.unversioned",
+                definition_version="",
+                calculate=lambda context: None,
+            )
+
+    def test_registry_evaluates_registered_metrics_with_shared_context(self):
+        registry = MetricRegistry()
+        registry.register(
+            MetricDefinition(
+                key="summary.count",
+                definition_version="1",
+                calculate=lambda context: MetricResult(
+                    key="summary.count",
+                    value=len(context.campaigns),
+                    unit="count",
+                    status="available",
+                    sample_count=len(context.campaigns),
+                    definition_version="1",
+                    coverage=1.0,
+                ),
+            )
+        )
+        context = AnalysisContext(
+            campaigns=[{"id": "campaign-1"}],
+            platform="mt5",
+            timezone="Asia/Shanghai",
+        )
+
+        results = registry.evaluate(context)
+
+        self.assertEqual([result.key for result in results], ["summary.count"])
+        self.assertEqual(results[0].value, 1)
+        self.assertEqual(results[0].definition_version, "1")
 
 
 if __name__ == "__main__":
