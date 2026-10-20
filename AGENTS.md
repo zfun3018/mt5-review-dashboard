@@ -24,6 +24,23 @@ This is a local MT5 trade review dashboard. The server uses Python standard-libr
 - A view that displays a related entity must resolve it through the persisted relationship (`campaign_id`, `position_id`, or `trade_id`) and read the owning record. If a derived projection is required for performance, document its owner, refresh/rebuild rule, and invalidation path.
 - Any change to shared data must include a cross-view test: write through the owning workflow, then read the same value through orders, album, dashboard, and relevant APIs. Tests that seed each page's table independently are insufficient.
 
+## Analysis governance
+
+- `Campaign` remains the only business-order entity and the database is the single source of truth.
+- 每个新增字段和派生视图必须先声明实体所有者（entity owner）、数据来源、重建规则、平台范围和跨页面测试路径（cross-view test path）。
+- Before adding a field or derived view, state its entity owner, data source, rebuild rule, platform scope, and cross-view test path.
+- Before adding an analysis module, add a metric specification, a manually checkable synthetic dataset, and the corresponding server and API tests.
+- Dashboard metrics must declare their statistical unit, fact time field, timezone, definition version, sample quality, and drill-down filter.
+- Do not persist dashboard results as a second business-data source. A derived projection must document its owner, refresh rule, and invalidation path.
+
+## Codex change protocol
+
+- Inspect the relevant data flow and state the root cause before editing behavior.
+- Write a narrow failing test or architecture check first, implement the smallest change, then run the focused test before moving to the next task.
+- Keep the current order review layout and interaction unchanged unless the user explicitly requests a redesign.
+- Keep platform-specific capabilities explicit; do not spread platform-name branches through shared metric formulas.
+- Stop after each planned task, report the changed files and verification result, and wait for the next task instruction.
+
 ## Verification
 
 Run Python tests from `mt5-review-system/server`:

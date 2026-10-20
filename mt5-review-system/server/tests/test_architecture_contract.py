@@ -16,6 +16,19 @@ from tests.support import TemporaryStorageCase, insert_trade
 DOMAIN_DIR = Path(__file__).resolve().parents[1] / "app" / "domain"
 APPLICATION_DIR = Path(__file__).resolve().parents[1] / "app" / "application"
 STORAGE_MODULE = Path(__file__).resolve().parents[1] / "app" / "storage.py"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+LOCAL_INSTRUCTION_FILES = {
+    "root": PROJECT_ROOT / "AGENTS.md",
+    "server": PROJECT_ROOT / "mt5-review-system" / "server" / "AGENTS.md",
+    "domain": PROJECT_ROOT / "mt5-review-system" / "server" / "app" / "domain" / "AGENTS.md",
+    "web": PROJECT_ROOT / "mt5-review-system" / "web" / "AGENTS.md",
+}
+LOCAL_INSTRUCTION_REQUIREMENTS = {
+    "root": ("实体所有者", "跨页面测试", "Campaign"),
+    "server": ("计算模块", "指标说明书", "数据库单一事实源"),
+    "domain": ("不能导入 SQLite", "人工可核对的合成数据", "MetricResult"),
+    "web": ("不能重新计算交易事实", "订单复盘页面", "状态渲染"),
+}
 OWNED_INTEGRATION_MODULES = (
     Path(__file__).resolve().parents[1] / "app" / "data" / "migrations.py",
     Path(__file__).resolve().parents[1] / "app" / "importer.py",
@@ -48,6 +61,10 @@ FORBIDDEN_DOMAIN_IMPORT_COMPONENTS = frozenset(
         "pathlib",
         "shutil",
         "tempfile",
+        # Frontend and browser state.
+        "frontend",
+        "web",
+        "dom",
     }
 )
 
@@ -89,6 +106,17 @@ def find_domain_boundary_violations(domain_dir: Path) -> list[str]:
 
 
 class DomainBoundaryTest(unittest.TestCase):
+    def test_local_instruction_files_define_the_project_boundaries(self):
+        for scope, path in LOCAL_INSTRUCTION_FILES.items():
+            self.assertTrue(path.is_file(), f"missing {scope} instructions: {path}")
+            source = path.read_text(encoding="utf-8")
+            for phrase in LOCAL_INSTRUCTION_REQUIREMENTS[scope]:
+                self.assertIn(
+                    phrase,
+                    source,
+                    f"{scope} instructions omit required rule: {phrase}",
+                )
+
     def test_domain_modules_do_not_import_infrastructure(self):
         self.assertTrue(DOMAIN_DIR.is_dir(), f"missing domain package: {DOMAIN_DIR}")
         violations = find_domain_boundary_violations(DOMAIN_DIR)
