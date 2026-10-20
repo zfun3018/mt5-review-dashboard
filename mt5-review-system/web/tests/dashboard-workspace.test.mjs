@@ -160,6 +160,40 @@ test("dashboard resolves a preset into a dated analysis window", async () => {
   assert.equal(api.paths[0].includes("end="), true);
 });
 
+test("dashboard tolerates metric metadata and omitted platform-specific sections", async () => {
+  const { heatmap, sessions, ...analysisWithoutOptionalSections } = ANALYSIS;
+  const api = recordingApi({
+    "/api/analysis": {
+      ...analysisWithoutOptionalSections,
+      metric_meta: {
+        summary: {
+          status: "available",
+          sample_count: 12,
+          definition_version: "1",
+          warnings: [],
+        },
+        sessions: {
+          status: "not_applicable",
+          sample_count: 12,
+          definition_version: "1",
+          warnings: ["platform does not expose market sessions"],
+        },
+      },
+    },
+  });
+  const controller = createDashboardController({
+    api,
+    view: new FakeView(),
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+
+  assert.deepEqual(api.paths, ["/api/analysis"]);
+  assert.equal(controller.getState().preset, "all");
+});
+
 test("dashboard URL state round-trips preset, start, end, equity days, year, and month", () => {
   const state = readDashboardState(
     "?preset=custom&start=2026-08-01&end=2026-08-31&equity_days=31&year=2026&month=8",

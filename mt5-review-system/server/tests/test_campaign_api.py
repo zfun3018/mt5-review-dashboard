@@ -145,6 +145,17 @@ class CampaignApiTest(unittest.TestCase):
         self.assertEqual(updated["strategy_tags"], ["breakout"])
         self.assertEqual(updated["mistake_tags"], ["未等确认", "逆势交易"])
 
+        campaign = storage.list_campaigns()["campaigns"][0]
+        analysis = storage.get_analysis("2026-08-01", "2026-08-01")
+        album = storage.query_review_album(tags=["mistake:未等确认"])
+        self.assertEqual(campaign["trade_type_tags"], updated["trade_type_tags"])
+        self.assertEqual(campaign["mistake_tags"], updated["mistake_tags"])
+        self.assertEqual(analysis["metrics"]["order_count"], 1)
+        self.assertEqual(analysis["metrics"]["net_pnl"], campaign["net_pnl"])
+        self.assertEqual(album["total"], 1)
+        self.assertEqual(album["trades"][0]["campaign_id"], campaign["id"])
+        self.assertEqual(album["trades"][0]["mistake_tags"], updated["mistake_tags"])
+
         clear_status, cleared = self.request(
             f"/api/campaigns/{campaign_id}/review",
             method="PATCH",

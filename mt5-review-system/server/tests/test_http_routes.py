@@ -44,6 +44,11 @@ class RecordingStorage:
                 "total": 1,
             },
             "get_random_featured_campaign": {"id": "C-RANDOM"},
+            "random_featured_detail": {
+                "id": "C-RANDOM",
+                "is_featured": 1,
+                "screenshot_url": "/media/screenshots/random.png",
+            },
             "checkin_review_campaign": {
                 "campaign_id": "C-1",
                 "date": "2026-10-08",
@@ -123,6 +128,8 @@ class RecordingStorage:
                 },
             }
         if name == "get_campaign":
+            if args and args[0] == "C-RANDOM":
+                return self.results["random_featured_detail"]
             return {"id": args[0]} if args[0] else None
         if name in {
             "delete_classification_option",
@@ -793,11 +800,61 @@ class HttpRouterTest(unittest.TestCase):
             None,
         )
         self.assertEqual(response.status, HTTPStatus.OK)
-        self.assertEqual(response.payload, {"campaign": {"id": "C-RANDOM"}})
+        self.assertEqual(
+            response.payload,
+            {
+                "campaign": {
+                    "id": "C-RANDOM",
+                    "is_featured": 1,
+                    "screenshot_url": "/media/screenshots/random.png",
+                }
+            },
+        )
         self.assertEqual(
             self.storage.calls,
-            [("get_random_featured_campaign", (), {"platform": "mt5"})],
+            [
+                ("get_random_featured_campaign", (), {"platform": "mt5"}),
+                ("get_campaign", ("C-RANDOM",), {"platform": "mt5"}),
+            ],
         )
+        self.assertEqual(self.import_calls, 1)
+
+    def test_random_featured_domestic_futures_does_not_run_mt5_import(self):
+        before_imports = self.import_calls
+        response = self.router.dispatch(
+            "GET",
+            "/api/campaigns/random-featured",
+            {"platform": ["domestic_futures"]},
+            None,
+        )
+
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(self.import_calls, before_imports)
+
+    def test_analysis_route_preserves_optional_metric_metadata(self):
+        payload = {
+            "metrics": {"order_count": 1, "net_pnl": 4.0},
+            "metric_meta": {
+                "summary": {
+                    "status": "available",
+                    "sample_count": 1,
+                    "definition_version": "1",
+                }
+            },
+        }
+        self.storage.results["get_analysis"] = payload
+
+        response = self.router.dispatch("GET", "/api/analysis", {}, None)
+
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(response.payload, payload)
+        self.assertEqual(self.storage.calls, [("get_analysis", (), {
+            "start_date": None,
+            "end_date": None,
+            "equity_days": None,
+            "year": None,
+            "month": None,
+        })])
 
     def test_empty_campaign_prefix_keeps_legacy_not_found_semantics(self):
         response = self.router.dispatch("GET", "/api/campaigns/", {}, None)

@@ -61,3 +61,39 @@ def insert_trade(storage_module, **overrides):
     trade.update(overrides)
     storage_module.upsert_trade(trade)
     return trade
+
+
+def insert_analysis_trade(
+    storage_module,
+    trade_id,
+    *,
+    position_id=None,
+    symbol="XAUUSD",
+    side="long",
+    open_time_utc="2026-10-01T00:00:00+00:00",
+    close_time_utc="2026-10-01T00:30:00+00:00",
+    pnl=0.0,
+    commission=0.0,
+    swap=0.0,
+    fee=0.0,
+    platform="mt5",
+    trade_type="follow",
+    strategy="breakout",
+):
+    """Insert one deterministic legacy trade for cross-view analysis tests."""
+    return insert_trade(
+        storage_module,
+        id=trade_id,
+        platform=platform,
+        position_id=position_id or trade_id,
+        symbol=symbol,
+        side=side,
+        open_time_utc=open_time_utc,
+        close_time_utc=close_time_utc,
+        pnl=pnl,
+        commission=commission,
+        swap=swap,
+        fee=fee,
+        trade_type=trade_type,
+        strategy=strategy,
+    )
