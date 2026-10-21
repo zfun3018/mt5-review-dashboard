@@ -5,6 +5,7 @@ import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from app import storage
@@ -145,11 +146,19 @@ class CampaignApiTest(unittest.TestCase):
         self.assertEqual(updated["strategy_tags"], ["breakout"])
         self.assertEqual(updated["mistake_tags"], ["未等确认", "逆势交易"])
 
-        campaign = storage.list_campaigns()["campaigns"][0]
-        analysis = storage.get_analysis("2026-08-01", "2026-08-01")
-        album = storage.query_review_album(tags=["mistake:未等确认"])
+        campaign_status, campaigns_view = self.request("/api/campaigns?platform=mt5")
+        analysis_status, analysis = self.request(
+            "/api/analysis?start=2026-08-01&end=2026-08-01&platform=mt5"
+        )
+        album_status, album = self.request(
+            f"/api/review-album?tag={quote('mistake:未等确认', safe='')}&platform=mt5"
+        )
+        campaign = campaigns_view["campaigns"][0]
         self.assertEqual(campaign["trade_type_tags"], updated["trade_type_tags"])
         self.assertEqual(campaign["mistake_tags"], updated["mistake_tags"])
+        self.assertEqual(campaign_status, 200)
+        self.assertEqual(analysis_status, 200)
+        self.assertEqual(album_status, 200)
         self.assertEqual(analysis["metrics"]["order_count"], 1)
         self.assertEqual(analysis["metrics"]["net_pnl"], campaign["net_pnl"])
         self.assertEqual(album["total"], 1)

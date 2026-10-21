@@ -118,6 +118,10 @@ class AnalysisReconciliationTest(TemporaryStorageCase):
         )
 
         self.assertEqual(analysis["metrics"]["order_count"], orders["total"])
+        self.assertEqual(
+            sum(item["net_pnl"] for item in campaigns),
+            analysis["metrics"]["net_pnl"],
+        )
         self.assertEqual(analysis["metrics"]["net_pnl"], 90.0)
         self.assertEqual(analysis["metrics"]["fee_total"], -19.0)
         self.assertEqual(
@@ -221,6 +225,38 @@ class AnalysisReconciliationTest(TemporaryStorageCase):
         self.assertEqual(fixed_year["order_count"], expected["order_count"])
         self.assertEqual(fixed_year["net_pnl"], expected["net_pnl"])
         self.assertEqual(fixed_year["fee_total"], expected["fee_total"])
+
+    def test_analysis_and_orders_keep_mixed_platform_rows_isolated(self):
+        mt5_orders = self._seed_campaigns(platform="mt5")
+        insert_analysis_trade(
+            storage,
+            "DOMESTIC-1",
+            symbol="IF2611",
+            close_time_utc="2026-10-01T03:30:00+00:00",
+            pnl=999.0,
+            platform="domestic_futures",
+        )
+
+        domestic_orders = storage.list_campaigns(
+            platform="domestic_futures", page_size=100
+        )
+        mt5_analysis = storage.get_analysis(
+            start_date="2026-10-01",
+            end_date="2026-10-02",
+            platform="mt5",
+        )
+        domestic_analysis = storage.get_analysis(
+            start_date="2026-10-01",
+            end_date="2026-10-02",
+            platform="domestic_futures",
+        )
+
+        self.assertEqual(mt5_orders["total"], 5)
+        self.assertEqual(mt5_analysis["metrics"]["order_count"], 5)
+        self.assertEqual(mt5_analysis["metrics"]["net_pnl"], 90.0)
+        self.assertEqual(domestic_orders["total"], 1)
+        self.assertEqual(domestic_analysis["metrics"]["order_count"], 1)
+        self.assertEqual(domestic_analysis["metrics"]["net_pnl"], 999.0)
 
 
 if __name__ == "__main__":
