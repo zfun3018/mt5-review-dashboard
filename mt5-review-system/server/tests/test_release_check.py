@@ -29,14 +29,33 @@ class ReleaseCheckGateListTest(unittest.TestCase):
         names = [gate.name for gate in check_release.build_gates(skip_browser=False)]
         self.assertEqual(
             names,
-            ["python", "node", "syntax", "compatibility", "benchmark", "browser"],
+            [
+                "python",
+                "node",
+                "syntax",
+                "compatibility",
+                "metric-contracts",
+                "architecture",
+                "analysis-reconciliation",
+                "benchmark",
+                "browser",
+            ],
         )
 
     def test_skip_browser_drops_browser_gate_only(self):
         names = [gate.name for gate in check_release.build_gates(skip_browser=True)]
         self.assertEqual(
             names,
-            ["python", "node", "syntax", "compatibility", "benchmark"],
+            [
+                "python",
+                "node",
+                "syntax",
+                "compatibility",
+                "metric-contracts",
+                "architecture",
+                "analysis-reconciliation",
+                "benchmark",
+            ],
         )
         self.assertNotIn("browser", names)
 

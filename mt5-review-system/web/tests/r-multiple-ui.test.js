@@ -80,9 +80,11 @@ test("metric explanations include formula, dynamic threshold, sample, missing re
   assert.match(zScore.threshold, /交替.*成串/);
 });
 
-test("metric quality treats missing values as insufficient samples", () => {
+test("metric quality renders server-owned insufficient-data states", () => {
   const dashboard = fs.readFileSync(path.join(root, "dashboard", "dashboard.mjs"), "utf8");
-  assert.match(dashboard, /if \(!hasValue\) return \{ label: "样本不足"/);
+  assert.match(dashboard, /insufficient_data/);
+  assert.match(dashboard, /metric_meta/);
+  assert.doesNotMatch(dashboard, /numeric < 30/);
 });
 
 test("dashboard exposes accessible shared metric explanation", () => {

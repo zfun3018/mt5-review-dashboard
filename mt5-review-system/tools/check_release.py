@@ -137,6 +137,16 @@ def _compatibility_gate() -> int:
     )
 
 
+def _focused_python_gate(module: str) -> Callable[[], int]:
+    def run() -> int:
+        return _run(
+            [sys.executable, "-m", "unittest", module, "-v"],
+            cwd=SERVER_DIR,
+        )
+
+    return run
+
+
 def _benchmark_gate() -> int:
     # Run a small benchmark (1k trades) to keep this gate fast, then assert
     # the analysis latency budget from the resulting artifact. Full 10k
@@ -219,6 +229,21 @@ def build_gates(*, skip_browser: bool) -> list[Gate]:
         Gate(name="node", cwd=PROJECT_ROOT, run=_node_gate),
         Gate(name="syntax", cwd=PROJECT_ROOT, run=_syntax_gate),
         Gate(name="compatibility", cwd=SERVER_DIR, run=_compatibility_gate),
+        Gate(
+            name="metric-contracts",
+            cwd=SERVER_DIR,
+            run=_focused_python_gate("tests.test_metric_contracts"),
+        ),
+        Gate(
+            name="architecture",
+            cwd=SERVER_DIR,
+            run=_focused_python_gate("tests.test_architecture_contract"),
+        ),
+        Gate(
+            name="analysis-reconciliation",
+            cwd=SERVER_DIR,
+            run=_focused_python_gate("tests.test_analysis_reconciliation"),
+        ),
         Gate(name="benchmark", cwd=PROJECT_ROOT, run=_benchmark_gate),
     ]
     if not skip_browser:
