@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from app import storage
 from app.core.config import RuntimePaths, get_runtime_paths, set_runtime_paths
 from app.data.compatibility import (
     build_data_fingerprint,
@@ -164,6 +165,46 @@ class DataCompatibilityTest(unittest.TestCase):
                 "SELECT COUNT(*) FROM trades WHERE deleted_at IS NULL"
             ).fetchone()[0]
             self.assertEqual(backup_trades, before_fingerprint.active_trades)
+
+    def test_upgrade_rebuild_preserves_review_annotations_and_legacy_api_fields(self):
+        self._load_fixture("schema_v3.sql")
+
+        result = upgrade_with_backup(self.paths)
+
+        self.assertTrue(result.report.compatible, result.report.differences)
+        conn = connect(self.paths)
+        try:
+            trade = conn.execute(
+                "SELECT review_text, screenshot_path, trade_type, strategy FROM trades WHERE id = 'V3-T1'"
+            ).fetchone()
+            campaign = conn.execute(
+                "SELECT review_text, screenshot_path, trade_type, strategy FROM trade_campaigns "
+                "WHERE id IN (SELECT campaign_id FROM campaign_source_trades WHERE trade_id = 'V3-T1')"
+            ).fetchone()
+            custom_value = conn.execute(
+                "SELECT value FROM trade_custom_values WHERE trade_id = 'V3-T1' AND field_id = 1"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        self.assertEqual(trade["review_text"], "V3 复盘文字")
+        self.assertEqual(trade["screenshot_path"], "screenshots/v3-placeholder.png")
+        self.assertEqual(campaign["review_text"], "V3 复盘文字")
+        self.assertEqual(campaign["screenshot_path"], "screenshots/v3-placeholder.png")
+        self.assertEqual(custom_value["value"], "1")
+        self.assertEqual(set(campaign.keys()), {"review_text", "screenshot_path", "trade_type", "strategy"})
+
+        # The legacy API still exposes the established analysis sections after
+        # the derived model is rebuilt; metric metadata remains additive.
+        analysis = storage.get_analysis(
+            "2026-01-06", "2026-01-06", platform="mt5"
+        )
+        self.assertTrue(
+            {"metrics", "r_metrics", "periods", "equity", "calendar"}.issubset(
+                analysis
+            )
+        )
+        self.assertIn("metric_meta", analysis)
 
 
 if __name__ == "__main__":

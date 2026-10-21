@@ -8,11 +8,34 @@ from app.data.import_repository import (
     list_import_batches,
     record_import_batch_days,
 )
+from app.platform_importer import import_platform_file
 from app.platforms import DOMESTIC_FUTURES_PLATFORM
 from tests.support import TemporaryStorageCase
 
 
 class ImportBatchRepositoryTest(TemporaryStorageCase):
+    def test_duplicate_import_is_idempotent_for_campaigns_and_analysis(self):
+        csv_text = (
+            "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交序号\n"
+            "2026-10-19 09:30:00,IF2611,买,开,4000,1,,5,1001\n"
+            "2026-10-19 10:15:00,IF2611,卖,平,4010,1,100,6,1002\n"
+        )
+
+        first = import_platform_file("tonghuashun_futures", csv_text.encode(), "trades.csv")
+        second = import_platform_file("tonghuashun_futures", csv_text.encode(), "trades.csv")
+
+        self.assertEqual(first["imported"], 1)
+        self.assertEqual(second["imported"], 1)
+        campaigns = storage.list_campaigns(platform=DOMESTIC_FUTURES_PLATFORM)
+        analysis = storage.get_analysis(platform=DOMESTIC_FUTURES_PLATFORM)
+        self.assertEqual(campaigns["total"], 1)
+        self.assertEqual(analysis["metrics"]["order_count"], 1)
+        self.assertEqual(analysis["metrics"]["net_pnl"], 89.0)
+        self.assertEqual(
+            len([batch for batch in list_import_batches(DOMESTIC_FUTURES_PLATFORM) if batch["status"] == "committed"]),
+            2,
+        )
+
     def test_batch_records_counts_and_hides_absolute_filename(self):
         batch = create_import_batch(
             DOMESTIC_FUTURES_PLATFORM,
