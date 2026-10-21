@@ -110,7 +110,7 @@ def build_router(storage, auto_import: Callable[[], object]) -> Router:
 
     router = Router()
     dashboard.register(router, storage, auto_import)
-    orders.register(router, storage)
+    orders.register(router, storage, auto_import)
     album.register(router, storage)
     settings.register(router, storage, auto_import)
     ingestion.register(router, storage)

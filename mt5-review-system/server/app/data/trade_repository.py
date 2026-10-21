@@ -12,6 +12,7 @@ from ..platform_modules.domestic_futures_contracts import contract_display
 from ..platforms import DOMESTIC_FUTURES_PLATFORM
 from .catalog_repository import CatalogRepository
 from .database import connect
+from .import_repository import import_sources_for_trade_ids
 
 
 BEIJING_TIMEZONE = timezone(timedelta(hours=8))
@@ -56,7 +57,7 @@ class TradeRepository:
                     SELECT trades.*, trends.name AS trend_name, trends.color AS trend_color
                     {from_sql}
                     {where_sql}
-                    ORDER BY trades.close_time_utc DESC, trades.id DESC
+                    ORDER BY COALESCE(trades.trade_date, trades.close_time_utc) DESC, trades.close_time_utc DESC, trades.id DESC
                     LIMIT ? OFFSET ?
                     """,
                     [*parameters, safe_size, (safe_page - 1) * safe_size],
@@ -70,10 +71,14 @@ class TradeRepository:
                 [str(row["id"]) for row in rows],
                 str(filters.get("platform") or "mt5"),
             )
+            import_sources = import_sources_for_trade_ids(
+                conn, [str(row["id"]) for row in rows]
+            )
 
         for row in rows:
             row["custom_fields"] = custom_values.get(str(row["id"]), {})
             row.update(campaign_reviews.get(str(row["id"]), {}))
+            row["import_sources"] = import_sources.get(str(row["id"]), [])
         return Page(rows, total, safe_page, safe_size)
 
     def query_analysis_rows(
@@ -103,7 +108,7 @@ class TradeRepository:
         with context as active_conn:
             rows = active_conn.execute(
                 f"""
-                SELECT trades.id, trades.close_time_utc, trades.symbol,
+                    SELECT trades.id, trades.trade_date, trades.close_time_utc, trades.symbol,
                        trades.product_name, trades.contract_name, trades.pnl,
                        trades.commission, trades.swap, trades.fee,
                        trades.review_text, trades.screenshot_path,
@@ -184,9 +189,13 @@ class TradeRepository:
                 [str(row["id"]) for row in rows],
                 str(filters.get("platform") or "mt5"),
             )
+            import_sources = import_sources_for_trade_ids(
+                conn, [str(row["id"]) for row in rows]
+            )
         for row in rows:
             row["custom_fields"] = custom_values.get(str(row["id"]), {})
             row.update(campaign_reviews.get(str(row["id"]), {}))
+            row["import_sources"] = import_sources.get(str(row["id"]), [])
         return Page(rows, total, safe_page, safe_size)
 
     def random_album_trade(self, platform: str = "mt5") -> dict[str, Any] | None:
@@ -214,8 +223,10 @@ class TradeRepository:
             campaign_reviews = self._campaign_reviews_for_trade_ids(
                 conn, [str(trade["id"])], platform
             )
+            import_sources = import_sources_for_trade_ids(conn, [str(trade["id"])])
         trade["custom_fields"] = custom_values.get(str(trade["id"]), {})
         trade.update(campaign_reviews.get(str(trade["id"]), {}))
+        trade["import_sources"] = import_sources.get(str(trade["id"]), [])
         return trade
 
     @staticmethod
@@ -448,7 +459,7 @@ class TradeRepository:
         with closing(connect(self.paths)) as conn:
             trade_row = conn.execute(
                 """
-                SELECT id, close_time_utc, symbol, product_name, contract_name
+                SELECT id, trade_date, close_time_utc, symbol, product_name, contract_name
                 FROM trades
                 WHERE platform = ? AND deleted_at IS NULL
                 ORDER BY close_time_utc DESC, id DESC
@@ -488,7 +499,7 @@ class TradeRepository:
                 contract_name = str(trade_row["contract_name"] or "")
             latest_trade = {
                 "id": str(trade_row["id"]),
-                "trade_date": close_time_bj.date().isoformat(),
+                "trade_date": str(trade_row["trade_date"] or close_time_bj.date().isoformat()),
                 "time_bj": close_time_bj.isoformat(),
                 "symbol": symbol,
                 "product_name": product_name,
@@ -509,8 +520,9 @@ class TradeRepository:
     def _where(self, filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
         clauses: list[str] = []
         parameters: list[Any] = []
+        platform = str(filters.get("platform") or "mt5")
         clauses.append("trades.platform = ?")
-        parameters.append(str(filters.get("platform") or "mt5"))
+        parameters.append(platform)
         deleted = str(filters.get("deleted") or "").strip().lower()
         if not deleted:
             deleted = "all" if filters.get("include_deleted") else "active"
@@ -539,39 +551,54 @@ class TradeRepository:
                 clauses.append(f"trades.{key} = ?")
                 parameters.append(value)
 
-        start_utc, end_utc = _beijing_date_bounds(
-            filters.get("start_date") or filters.get("start"),
-            filters.get("end_date") or filters.get("end"),
-        )
-        if start_utc:
-            clauses.append("trades.close_time_utc >= ?")
-            parameters.append(start_utc)
-        if end_utc:
-            clauses.append("trades.close_time_utc < ?")
-            parameters.append(end_utc)
+        start_date = filters.get("start_date") or filters.get("start")
+        end_date = filters.get("end_date") or filters.get("end")
+        start_utc, end_utc = _beijing_date_bounds(start_date, end_date)
+        if platform == DOMESTIC_FUTURES_PLATFORM:
+            if start_date:
+                clauses.append("trades.trade_date >= ?")
+                parameters.append(str(start_date))
+            if end_date:
+                clauses.append("trades.trade_date <= ?")
+                parameters.append(str(end_date))
+        else:
+            if start_utc:
+                clauses.append("trades.close_time_utc >= ?")
+                parameters.append(start_utc)
+            if end_utc:
+                clauses.append("trades.close_time_utc < ?")
+                parameters.append(end_utc)
         return clauses, parameters
 
     @staticmethod
     def _album_where(filters: dict[str, Any]) -> tuple[list[str], list[Any]]:
         clauses = ["trades.deleted_at IS NULL"]
         parameters: list[Any] = []
+        platform = str(filters.get("platform") or "mt5")
         clauses.append("trades.platform = ?")
-        parameters.append(str(filters.get("platform") or "mt5"))
+        parameters.append(platform)
         archived = filters.get("archived", False)
         if not isinstance(archived, bool):
             raise ValueError("archived must be a boolean")
         clauses.append("COALESCE(trades.is_archived, 0) = ?")
         parameters.append(1 if archived else 0)
-        start_utc, end_utc = _beijing_date_bounds(
-            filters.get("start_date") or filters.get("start"),
-            filters.get("end_date") or filters.get("end"),
-        )
-        if start_utc:
-            clauses.append("trades.close_time_utc >= ?")
-            parameters.append(start_utc)
-        if end_utc:
-            clauses.append("trades.close_time_utc < ?")
-            parameters.append(end_utc)
+        start_date = filters.get("start_date") or filters.get("start")
+        end_date = filters.get("end_date") or filters.get("end")
+        start_utc, end_utc = _beijing_date_bounds(start_date, end_date)
+        if platform == DOMESTIC_FUTURES_PLATFORM:
+            if start_date:
+                clauses.append("trades.trade_date >= ?")
+                parameters.append(str(start_date))
+            if end_date:
+                clauses.append("trades.trade_date <= ?")
+                parameters.append(str(end_date))
+        else:
+            if start_utc:
+                clauses.append("trades.close_time_utc >= ?")
+                parameters.append(start_utc)
+            if end_utc:
+                clauses.append("trades.close_time_utc < ?")
+                parameters.append(end_utc)
 
         symbols = [
             str(value).strip().casefold()

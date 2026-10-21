@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from contextlib import closing, nullcontext
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from ..data.database import connect
@@ -15,6 +15,7 @@ from ..domain.metrics import build_metric_registry
 from ..domain.metric_contracts import MetricDefinition, MetricResult
 from ..domain.metric_registry import MetricRegistry
 from ..platform_adapters.registry import platform_registry
+from ..platforms import DOMESTIC_FUTURES_PLATFORM
 from . import AnalysisWindow
 
 
@@ -82,13 +83,12 @@ class DashboardService:
             if window.end_date
             else _latest_activity_time(campaign_rows, snapshots)
         )
-        fixed_calendar_day = datetime.now(timezone.utc)
-        fixed_review_day = fixed_calendar_day - timedelta(days=1)
         platform_descriptor = platform_registry.adapter(platform)
         if platform_descriptor.capabilities.show_contract_rankings:
             _decorate_contract_rows(campaign_rows)
             _decorate_contract_rows(all_campaign_rows)
         calendar_anchor = _latest_activity_time(all_campaign_rows, snapshots)
+        fixed_period_anchor = _latest_campaign_close_time(all_campaign_rows)
         selected_calendar = to_beijing(calendar_anchor)
         settings = dict(analysis_settings)
         settings.update(
@@ -97,7 +97,10 @@ class DashboardService:
                 "selected_year": year or selected_calendar.year,
                 "selected_month": month or selected_calendar.month,
                 "equity_days": window.equity_days,
-                "fixed_review_day": fixed_review_day,
+                # Fixed cards are anchored to the latest available closed
+                # order, so historical imports remain meaningful and the
+                # active date filter cannot shift their fact window.
+                "fixed_period_anchor_utc": fixed_period_anchor,
                 "start_date": window.start_date,
                 "end_date": window.end_date,
             }
@@ -144,6 +147,7 @@ class DashboardService:
                 key: _serialize_metric_meta(result)
                 for key, result in results.items()
             },
+            "date_semantics": _date_semantics(context.platform),
         }
         for key in ("heatmap", "sessions"):
             result = results["hour_heatmap" if key == "heatmap" else key]
@@ -167,8 +171,8 @@ def _decorate_contract_rows(rows: list[dict[str, Any]]) -> None:
 
     for row in rows:
         display = contract_display(str(row.get("symbol") or ""))
-        row["product_name"] = row.get("product_name") or display["product_name"]
-        row["contract_name"] = row.get("contract_name") or display["contract_name"]
+        row["product_name"] = display["product_name"]
+        row["contract_name"] = display["contract_name"]
 
 
 def _window_boundary(value: str | None, *, end: bool = False) -> datetime | None:
@@ -186,6 +190,24 @@ def _serialize_metric_meta(result: MetricResult) -> dict[str, Any]:
         "definition_version": result.definition_version,
         "coverage": result.coverage,
         "warnings": list(result.warnings),
+    }
+
+
+def _date_semantics(platform: str) -> dict[str, str]:
+    if str(platform or "mt5") == DOMESTIC_FUTURES_PLATFORM:
+        return {
+            "timezone": "Asia/Shanghai",
+            "order_date": "trade_date",
+            "order_date_label": "开仓成交的交易所交易日",
+            "pnl_date": "close_time_utc",
+            "pnl_date_label": "平仓成交时间对应的交易日",
+        }
+    return {
+        "timezone": "Asia/Shanghai",
+        "order_date": "close_time_utc",
+        "order_date_label": "平仓北京时间",
+        "pnl_date": "close_time_utc",
+        "pnl_date_label": "平仓北京时间",
     }
 
 
@@ -246,6 +268,13 @@ def _latest_activity_time(
 ) -> datetime:
     candidates = [trade["close_time_utc"] for trade in trades]
     candidates.extend(snapshot["time_utc"] for snapshot in snapshots)
+    if not candidates:
+        return datetime.now(timezone.utc)
+    return max(parse_dt(value) for value in candidates)
+
+
+def _latest_campaign_close_time(trades: list[dict[str, Any]]) -> datetime:
+    candidates = [trade["close_time_utc"] for trade in trades if trade.get("close_time_utc")]
     if not candidates:
         return datetime.now(timezone.utc)
     return max(parse_dt(value) for value in candidates)

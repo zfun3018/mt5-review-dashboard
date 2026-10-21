@@ -225,6 +225,9 @@ class AnalysisReconciliationTest(TemporaryStorageCase):
         self.assertEqual(fixed_year["order_count"], expected["order_count"])
         self.assertEqual(fixed_year["net_pnl"], expected["net_pnl"])
         self.assertEqual(fixed_year["fee_total"], expected["fee_total"])
+        # Imported historical data must use its latest available closed day;
+        # the machine's current date is not a meaningful trading anchor.
+        self.assertEqual(analysis["fixed_periods"]["today"]["order_count"], 2)
 
     def test_analysis_and_orders_keep_mixed_platform_rows_isolated(self):
         mt5_orders = self._seed_campaigns(platform="mt5")

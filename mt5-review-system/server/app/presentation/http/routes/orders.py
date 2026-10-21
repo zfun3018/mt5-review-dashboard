@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from ..router import Router
 
 
-def register(router: Router, storage) -> None:
+def register(router: Router, storage, auto_import=None) -> None:
     def trades(path: str, query: Query, body: Body):
         return ok(
             storage.query_trades(
@@ -65,8 +65,14 @@ def register(router: Router, storage) -> None:
         unknown = sorted(set(query) - {"platform"})
         if unknown:
             raise ValueError(f"Unsupported random featured filter: {unknown[0]}")
+        platform = normalize_platform(first(query, "platform", "mt5") or "mt5")
+        if platform == "mt5" and auto_import is not None:
+            auto_import()
+        campaign = storage.get_random_featured_campaign(platform=platform)
+        if campaign and campaign.get("id"):
+            campaign = storage.get_campaign(campaign["id"], platform=platform) or campaign
         return ok({
-            "campaign": storage.get_random_featured_campaign(**platform_kwargs(query)),
+            "campaign": campaign,
         })
 
     def campaign_detail(path: str, query: Query, body: Body):

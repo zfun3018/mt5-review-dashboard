@@ -375,7 +375,7 @@ export function createAlbumController({
       <section class="album-day">
         <header class="album-day-head">
           <div>
-            <p class="eyebrow">BEIJING CLOSE DATE</p>
+          <p class="eyebrow">${escapeHtml(day.date_label || "BEIJING CLOSE DATE")}</p>
             <h2>${escapeHtml(day.date)}</h2>
           </div>
           <div class="album-day-meta">

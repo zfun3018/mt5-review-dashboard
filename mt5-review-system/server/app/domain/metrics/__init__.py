@@ -6,8 +6,8 @@ serialization remain in the application layer.
 
 from __future__ import annotations
 
-from app.domain.metric_registry import MetricRegistry
-from app.domain.r_metrics import r_metrics_definition
+from ..metric_registry import MetricRegistry
+from ..r_metrics import r_metrics_definition
 
 from .calendar import calendar_definitions
 from .domestic_futures import domestic_metric_definitions

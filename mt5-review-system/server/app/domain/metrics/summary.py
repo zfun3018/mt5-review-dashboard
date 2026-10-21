@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from app.domain.analytics import build_trade_metrics
-from app.domain.analysis_context import AnalysisContext
-from app.domain.metric_contracts import MetricDefinition, MetricResult
+from ..analytics import build_trade_metrics
+from ..analysis_context import AnalysisContext
+from ..metric_contracts import MetricDefinition, MetricResult
 
 
 DEFINITION_VERSION = "1"

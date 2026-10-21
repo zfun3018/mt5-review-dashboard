@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS trends (
 CREATE TABLE IF NOT EXISTS trades (
     id TEXT PRIMARY KEY,
     platform TEXT NOT NULL DEFAULT 'mt5',
+    trade_date TEXT,
     account TEXT,
     order_no TEXT,
     position_id TEXT,

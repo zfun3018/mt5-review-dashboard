@@ -24,6 +24,19 @@ function uniqueTags(value, fallback = []) {
 
 const SINGLE_TAG_GROUPS = new Set(["trade_type_tags", "strategy_tags"]);
 
+export function shouldConfirmFeaturedRemoval(campaign) {
+  return Boolean(campaign?.is_featured);
+}
+
+export function campaignContractDisplay(campaign) {
+  const name = String(campaign?.display_symbol || campaign?.contract_name || campaign?.symbol || "-");
+  const symbol = String(campaign?.symbol || "");
+  return {
+    name,
+    code: symbol && symbol !== name ? symbol : "",
+  };
+}
+
 function isSingleTagGroup(group) {
   return SINGLE_TAG_GROUPS.has(group);
 }
@@ -43,9 +56,49 @@ function campaignStop(detail) {
   return stops.every((value) => value === stops[0]) ? String(stops[0]) : "";
 }
 
+export function renderImportSourcesMarkup(sources = []) {
+  const items = Array.isArray(sources) ? sources : [];
+  if (!items.length) return '<div class="import-source-empty">来源信息不可用（可能是历史导入数据）</div>';
+  return `<section class="import-source-section is-secondary" aria-label="导入来源">
+    <div class="section-head"><h3>导入来源</h3><span>${items.length} 个批次</span></div>
+    <div class="import-source-list">${items.map((source) => `
+      <article class="import-source-item">
+        <div class="import-source-item__head"><strong>${escapeHtml(source.filename || "未命名文件")}</strong><span>${escapeHtml(source.batch_id || "")}</span></div>
+        <div class="import-source-item__meta">
+          <span>导入 ${escapeHtml(source.started_at || "未知时间")}</span>
+          <span>工作表 ${escapeHtml(source.source_sheet || "默认")}</span>
+          <span>原始行 ${escapeHtml((source.source_rows || []).join(", ") || "未知")}</span>
+        </div>
+        <div class="import-source-item__meta">
+          <span>成交序号 ${escapeHtml((source.trade_ids || []).join(", ") || "未知")}</span>
+          <span class="import-source-sha" title="文件 SHA-256">SHA-256 ${escapeHtml(source.file_sha256 || "未知")}</span>
+        </div>
+      </article>
+    `).join("")}</div>
+  </section>`;
+}
+
 function renderDetailIcons() {
   const lucide = globalThis.window?.lucide || globalThis.lucide;
   lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
+}
+
+function dealFees(deal) {
+  return Number((Number(deal?.commission || 0) + Number(deal?.swap || 0) + Number(deal?.fee || 0)).toFixed(2));
+}
+
+function executionMoney(deal, { realized = false } = {}) {
+  const feesValue = dealFees(deal);
+  const pnlValue = realized ? Number(deal?.profit || 0) : null;
+  const netPnlValue = realized ? Number((pnlValue + feesValue).toFixed(2)) : feesValue || null;
+  return {
+    feesValue,
+    pnlValue,
+    netPnlValue,
+    fees: realized || feesValue ? formatMoney(feesValue) : "—",
+    pnl: realized ? formatMoney(pnlValue) : "—",
+    netPnl: netPnlValue === null ? "—" : formatMoney(netPnlValue),
+  };
 }
 
 export function executionRows(detail) {
@@ -55,6 +108,7 @@ export function executionRows(detail) {
     const side = position.side === "long" ? "多" : "空";
     const entryPrice = Number(position.weighted_entry_price);
     for (const deal of position.entry_deals || []) {
+      const money = executionMoney(deal);
       rows.push({
         type: entryIndex === 0 ? "open" : "add",
         typeLabel: entryIndex === 0 ? "开仓" : "加仓",
@@ -65,7 +119,7 @@ export function executionRows(detail) {
         closePrice: "—",
         volume: formatVolume(deal.volume),
         points: "—",
-        netPnl: "—",
+        ...money,
         sort: Number(deal.time_msc || 0),
       });
       entryIndex += 1;
@@ -76,7 +130,7 @@ export function executionRows(detail) {
       const signedPoints = Number.isFinite(entryPrice) && Number.isFinite(price)
         ? (position.side === "long" ? price - entryPrice : entryPrice - price)
         : null;
-      const net = Number(deal.profit || 0) + Number(deal.commission || 0) + Number(deal.swap || 0) + Number(deal.fee || 0);
+      const money = executionMoney(deal, { realized: true });
       const isClose = index === exits.length - 1
         && ["complete", "legacy_estimated"].includes(position.reconstruction_status);
       rows.push({
@@ -89,7 +143,7 @@ export function executionRows(detail) {
         closePrice: formatPrice(deal.price),
         volume: formatVolume(deal.volume),
         points: Number.isFinite(signedPoints) ? `${signedPoints >= 0 ? "+" : ""}${signedPoints.toFixed(2)}` : "—",
-        netPnl: formatMoney(net),
+        ...money,
         sort: Number(deal.time_msc || 0),
       });
     });
@@ -634,17 +688,24 @@ export function createOrderDetailModule({
     const records = executionRows(detail);
     const stop = campaignStop(detail);
     const checkinCount = Math.max(0, Number(campaign.checkin_count) || 0);
+    const contractDisplay = campaignContractDisplay(campaign);
     node.innerHTML = `
       <div class="detail-body order-detail-workspace">
         <header class="detail-title order-detail-title">
           <div>
             <p class="eyebrow">主订单 · ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))}</p>
-            <h2>${escapeHtml(campaign.display_symbol || campaign.contract_name || campaign.symbol)} · ${campaign.side === "long" ? "多单" : "空单"}</h2>
+            <h2><span class="detail-contract-name">${escapeHtml(contractDisplay.name)}</span>${contractDisplay.code ? ` <span class="detail-contract-code">${escapeHtml(contractDisplay.code)}</span>` : ""} · ${campaign.side === "long" ? "多单" : "空单"}</h2>
             <span class="detail-time">开仓 ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} · ${formatVolume(campaign.entry_volume)} 手 · ${escapeHtml(rMultipleLabel(campaign))}</span>
           </div>
           <div class="detail-order-actions">
-            <button id="featureCampaign" class="app-icon-button detail-icon-action${campaign.is_featured ? " is-active" : ""}" type="button" title="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-label="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-pressed="${Boolean(campaign.is_featured)}"><i data-lucide="star" aria-hidden="true"></i></button>
-            <button id="randomFeatured" class="app-icon-button detail-icon-action" type="button" title="随机一张精选订单" aria-label="随机一张精选订单"><i data-lucide="shuffle" aria-hidden="true"></i></button>
+            <span class="detail-action-group" aria-label="订单状态">
+              <button id="featureCampaign" class="app-icon-button detail-icon-action featured-action${campaign.is_featured ? " is-active" : ""}" type="button" title="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-label="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-pressed="${Boolean(campaign.is_featured)}"><i data-lucide="star" aria-hidden="true"></i></button>
+              ${campaign.is_featured ? '<span class="featured-status-badge"><i data-lucide="star" aria-hidden="true"></i>已精选</span>' : ""}
+            </span>
+            <span class="detail-action-divider" aria-hidden="true"></span>
+            <span class="detail-action-group" aria-label="浏览操作">
+              <button id="randomFeatured" class="app-icon-button detail-icon-action" type="button" title="随机一张精选订单" aria-label="随机一张精选订单"><i data-lucide="shuffle" aria-hidden="true"></i></button>
+            </span>
             <button id="checkinCampaign" class="app-icon-button detail-icon-action${campaign.checkin_checked_in_today ? " is-active" : ""}" type="button" title="${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"} · 累计 ${checkinCount} 次" aria-label="${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"}" aria-pressed="${Boolean(campaign.checkin_checked_in_today)}"><i data-lucide="${campaign.checkin_checked_in_today ? "undo-2" : "check-circle"}" aria-hidden="true"></i><span class="detail-action-count" aria-hidden="true">${checkinCount}</span><span class="sr-only">${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"}</span></button>
             ${trade ? `<button id="${trade.deleted_at ? "restoreOrder" : "deleteOrder"}" class="app-icon-button detail-icon-action${trade.deleted_at ? "" : "is-danger"}" type="button" title="${trade.deleted_at ? "恢复订单" : "排除订单"}" aria-label="${trade.deleted_at ? "恢复订单" : "排除订单"}"><i data-lucide="${trade.deleted_at ? "archive-restore" : "archive"}" aria-hidden="true"></i></button>` : ""}
           </div>
@@ -675,7 +736,7 @@ export function createOrderDetailModule({
           <div class="section-head"><h3>成交流水</h3><span>组合订单共 ${records.length} 条执行记录</span></div>
           <div class="execution-table-wrap">
             <table class="execution-table">
-              <thead><tr><th>类型 / 方向</th><th>时间 · 北京</th><th>开仓价格</th><th>平仓价格</th><th>手数</th><th>盈利点数</th><th>净盈亏</th></tr></thead>
+              <thead><tr><th>类型 / 方向</th><th>时间 · 北京</th><th>开仓价格</th><th>平仓价格</th><th>手数</th><th>盈利点数</th><th>手续费</th><th>盈亏</th><th>净盈亏</th></tr></thead>
               <tbody>${records.map((record) => `
                 <tr>
                   <td><span class="execution-type ${record.type}">${record.typeLabel}</span><span class="execution-side ${["多", "平多"].includes(record.direction) ? "long" : "short"}">${record.direction}</span></td>
@@ -684,12 +745,15 @@ export function createOrderDetailModule({
                   <td class="mono-cell">${escapeHtml(record.closePrice)}</td>
                   <td class="mono-cell">${escapeHtml(record.volume)}</td>
                   <td class="mono-cell ${record.points.startsWith("+") ? "profit-text" : record.points.startsWith("-") ? "loss-text" : "muted-mini"}">${escapeHtml(record.points)}</td>
+                  <td class="mono-cell ${record.fees.startsWith("-") ? "loss-text" : "muted-mini"}">${escapeHtml(record.fees)}</td>
+                  <td class="mono-cell ${record.pnl.startsWith("+") ? "profit-text" : record.pnl.startsWith("-") ? "loss-text" : "muted-mini"}">${escapeHtml(record.pnl)}</td>
                   <td class="mono-cell ${record.netPnl.startsWith("+") ? "profit-text" : record.netPnl.startsWith("-") ? "loss-text" : "muted-mini"}">${escapeHtml(record.netPnl)}</td>
                 </tr>
-              `).join("") || '<tr><td colspan="7" class="muted-mini">暂无成交流水</td></tr>'}</tbody>
+              `).join("") || '<tr><td colspan="9" class="muted-mini">暂无成交流水</td></tr>'}</tbody>
             </table>
           </div>
         </section>
+        ${renderImportSourcesMarkup(campaign.import_sources || trade?.import_sources || [])}
       </div>
     `;
     renderDetailIcons();
@@ -698,6 +762,7 @@ export function createOrderDetailModule({
     getElement("restoreOrder")?.addEventListener("click", () => onRestoreTrade?.());
     getElement("featureCampaign")?.addEventListener("click", async () => {
       try {
+        if (shouldConfirmFeaturedRemoval(campaign) && !confirm("确认取消精选？")) return;
         await toggleFeatured?.(campaign, !campaign.is_featured);
       } catch (error) {
         toast(error?.message || "精选状态保存失败", { tone: "error" });

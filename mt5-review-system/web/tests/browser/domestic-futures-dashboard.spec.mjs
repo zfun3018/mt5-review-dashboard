@@ -59,6 +59,9 @@ test("domestic dashboard uses the preview range control and explains empty risk 
 test("domestic dashboard opens the standalone layout editor with a return route", async ({page, syntheticServer}) => {
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=domestic_futures`);
   await page.getByRole("link", {name: "打开仪表盘布局编辑器"}).click();
-  await expect(page).toHaveURL(/mock-domestic-futures-layout\.html\?return=/);
-  await expect(page.locator("#editorGrid .grid-stack-item")).toHaveCount(14);
+  const editorUrl = new URL(page.url());
+  expect(editorUrl.pathname).toMatch(/mock-domestic-futures-layout\.html$/);
+  expect(editorUrl.searchParams.get("platform")).toBe("domestic_futures");
+  expect(editorUrl.searchParams.get("return")).toBe("/dashboard/?platform=domestic_futures");
+  await expect(page.locator("#editorGrid .grid-stack-item")).toHaveCount(11);
 });

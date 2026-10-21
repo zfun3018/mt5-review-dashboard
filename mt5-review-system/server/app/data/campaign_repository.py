@@ -12,6 +12,7 @@ from ..domain.analytics import to_beijing, trade_net_pnl
 from ..domain.campaigns import calculate_campaign_r, group_campaigns, reconstruct_positions
 from .catalog_repository import CatalogRepository
 from .database import connect, transaction
+from .import_repository import import_sources_for_trade_ids
 from .trade_repository import Page, _beijing_date_bounds, _escape_like
 
 
@@ -63,7 +64,7 @@ class CampaignRepository:
                     SELECT campaigns.id
                     FROM trade_campaigns AS campaigns
                     {where_sql}
-                    ORDER BY COALESCE(campaigns.closed_at_utc, campaigns.opened_at_utc) DESC,
+                    ORDER BY COALESCE(campaigns.trade_date, campaigns.closed_at_utc, campaigns.opened_at_utc) DESC,
                              campaigns.id DESC
                     LIMIT ? OFFSET ?
                     """,
@@ -244,7 +245,7 @@ class CampaignRepository:
                 dict(row)
                 for row in active_conn.execute(
                     f"""
-                    SELECT campaigns.id, campaigns.status, campaigns.closed_at_utc,
+                    SELECT campaigns.id, campaigns.trade_date, campaigns.symbol, campaigns.status, campaigns.closed_at_utc,
                            campaigns.closed_at_utc AS close_time_utc,
                            campaigns.trade_pnl AS pnl, campaigns.trade_pnl,
                            campaigns.commission, campaigns.swap, campaigns.fee,
@@ -318,7 +319,7 @@ class CampaignRepository:
                   )
                   {deleted_clause}
                   {id_clause}
-                ORDER BY COALESCE(campaigns.closed_at_utc, campaigns.opened_at_utc) DESC,
+                ORDER BY COALESCE(campaigns.trade_date, campaigns.closed_at_utc, campaigns.opened_at_utc) DESC,
                          campaigns.id DESC
                 """,
                 parameters,
@@ -436,9 +437,13 @@ class CampaignRepository:
         source_custom_values = self.catalog.custom_values_for_trade_ids(
             conn, [str(row["id"]) for row in source_rows]
         )
+        source_imports = import_sources_for_trade_ids(
+            conn, [str(row["id"]) for row in source_rows]
+        )
         source_by_position: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
         for row in source_rows:
             row["custom_fields"] = source_custom_values.get(str(row["id"]), {})
+            row["import_sources"] = source_imports.get(str(row["id"]), [])
             key = (
                 str(row.get("platform") or "mt5"),
                 str(row.get("account") or "MT5-LOCAL"),
@@ -761,6 +766,18 @@ class CampaignRepository:
             trade_pnl = round(
                 sum(float(row.get("pnl") or 0.0) for row in active_rows), 2
             )
+            opening_rows = sorted(
+                active_rows,
+                key=lambda row: (str(row.get("open_time_utc") or ""), str(row["id"])),
+            )
+            campaign_trade_date = next(
+                (
+                    str(row.get("trade_date") or "").strip()
+                    for row in opening_rows
+                    if str(row.get("trade_date") or "").strip()
+                ),
+                None,
+            )
             commission = round(
                 sum(float(row.get("commission") or 0.0) for row in active_rows), 2
             )
@@ -772,15 +789,16 @@ class CampaignRepository:
             conn.execute(
                 """
                 INSERT INTO trade_campaigns (
-                    id, platform, account, symbol, side, opened_at_utc, closed_at_utc, status,
+                    id, platform, trade_date, account, symbol, side, opened_at_utc, closed_at_utc, status,
                     trade_pnl, commission, swap, fee, net_pnl, review_text,
                     trade_type, strategy, screenshot_path, is_featured,
                     classification_conflict, campaign_r, risk_status,
                     trade_type_tags, strategy_tags, mistake_tags
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     account = excluded.account,
                     platform = excluded.platform,
+                    trade_date = excluded.trade_date,
                     symbol = excluded.symbol,
                     side = excluded.side,
                     opened_at_utc = excluded.opened_at_utc,
@@ -817,6 +835,7 @@ class CampaignRepository:
                 (
                     campaign_id,
                     campaign.get("platform") or "mt5",
+                    campaign_trade_date,
                     campaign["account"],
                     campaign["symbol"],
                     campaign["side"],
@@ -1030,16 +1049,23 @@ class CampaignRepository:
                     clauses.append(f"campaigns.{key} = ?")
                     parameters.append(value)
 
-        start_utc, end_utc = _beijing_date_bounds(
-            filters.get("start_date") or filters.get("start"),
-            filters.get("end_date") or filters.get("end"),
-        )
-        if start_utc:
-            clauses.append("julianday(campaigns.closed_at_utc) >= julianday(?)")
-            parameters.append(start_utc)
-        if end_utc:
-            clauses.append("julianday(campaigns.closed_at_utc) < julianday(?)")
-            parameters.append(end_utc)
+        start_date = filters.get("start_date") or filters.get("start")
+        end_date = filters.get("end_date") or filters.get("end")
+        start_utc, end_utc = _beijing_date_bounds(start_date, end_date)
+        if platform == "domestic_futures":
+            if start_date:
+                clauses.append("campaigns.trade_date >= ?")
+                parameters.append(str(start_date))
+            if end_date:
+                clauses.append("campaigns.trade_date <= ?")
+                parameters.append(str(end_date))
+        else:
+            if start_utc:
+                clauses.append("julianday(campaigns.closed_at_utc) >= julianday(?)")
+                parameters.append(start_utc)
+            if end_utc:
+                clauses.append("julianday(campaigns.closed_at_utc) < julianday(?)")
+                parameters.append(end_utc)
         if filters.get("r_missing_only") or filters.get("r_missing"):
             clauses.append(
                 "(campaigns.status != 'closed' OR EXISTS ("

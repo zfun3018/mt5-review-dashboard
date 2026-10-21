@@ -131,7 +131,7 @@ test.describe("order review workspace", () => {
     });
 
     await page.goto(`${syntheticServer.baseURL}/orders/`);
-    await expect(page.locator("#orderHead")).toContainText("开仓时间");
+    await expect(page.locator("#orderHead")).toContainText("订单信息");
     await expect(page.locator("#orderHead")).toContainText("R 值");
     await expect(page.locator("#orderHead")).toContainText("净盈亏");
     await expect(page.locator("[data-day-toggle]")).toHaveAttribute("aria-expanded", "true");
@@ -148,6 +148,7 @@ test.describe("order review workspace", () => {
     await expect(page.locator(".execution-table tbody tr")).toHaveCount(3);
     await expect(page.locator(".execution-type.close")).toHaveText("平仓");
     await expect(page.locator(".execution-side").last()).toHaveText("平多");
+    await expect(page.locator(".campaign-list-pnl").first()).not.toContainText("$");
 
     const composition = await page.evaluate(() => {
       const rect = (selector) => {
@@ -177,9 +178,11 @@ test.describe("order review workspace", () => {
     const listLayout = await page.locator(".trades-panel .table-wrap").evaluate((node) => ({
       overflowY: getComputedStyle(node).overflowY,
       pnlFontSize: getComputedStyle(node.querySelector(".campaign-list-pnl")).fontSize,
+      groupPnlFontSize: getComputedStyle(node.querySelector(".campaign-day-summary strong:last-child")).fontSize,
     }));
-    expect(listLayout.overflowY).toBe(isMobile ? "visible" : "hidden");
+    expect(listLayout.overflowY).toBe("auto");
     expect(Number.parseFloat(listLayout.pnlFontSize)).toBeGreaterThan(11);
+    expect(listLayout.groupPnlFontSize).toBe(listLayout.pnlFontSize);
 
     await page.locator('[data-tag-trigger="trade_type_tags"]').click();
     await page.locator('[data-campaign-choice-option="scene_reversal"]').click();
@@ -224,6 +227,46 @@ test.describe("order review workspace", () => {
     expect(verticalLayout.screenshotBottom).toBeLessThanOrEqual(verticalLayout.executionTop + 1);
     expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewportWidth);
     expect(dimensions.height).toBeGreaterThanOrEqual(dimensions.viewportHeight);
+    expect(errors).toEqual([]);
+  });
+
+  test("uses the shared compact list and shows the futures code in the detail title", async ({ page, syntheticServer }) => {
+    const futuresCampaign = {
+      ...campaign,
+      platform: "domestic_futures",
+      symbol: "V2701",
+      display_symbol: "PVC2701",
+      contract_name: "PVC2701",
+      side: "short",
+      net_pnl: -72.02,
+    };
+    const futuresDetail = { ...detail, ...futuresCampaign, positions: detail.positions };
+    const errors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/api/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.pathname === "/api/custom-fields") return response(route, catalog);
+      if (url.pathname === "/api/classification-options") return response(route, { classification_options: catalog.classification_options });
+      if (url.pathname === "/api/analysis-settings") return response(route, { scratch_threshold_r: 0.15 });
+      if (url.pathname === "/api/campaigns" && request.method() === "GET") {
+        return response(route, { campaigns: [futuresCampaign], total: 1, page: 1, page_size: 20 });
+      }
+      if (url.pathname === "/api/campaigns/C-ORDER-1" && request.method() === "GET") {
+        return response(route, futuresDetail);
+      }
+      return response(route, {});
+    });
+
+    await page.goto(`${syntheticServer.baseURL}/orders/?platform=domestic_futures`);
+    await expect(page.locator("#orderHead")).toContainText("订单信息");
+    await expect(page.locator(".campaign-list-contract")).toHaveText("PVC2701");
+    await expect(page.locator(".campaign-list-pnl")).toHaveText("-72.02");
+    await expect(page.locator(".detail-contract-name")).toHaveText("PVC2701");
+    await expect(page.locator(".detail-contract-code")).toHaveText("V2701");
     expect(errors).toEqual([]);
   });
 });

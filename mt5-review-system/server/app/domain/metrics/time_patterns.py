@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from app.domain.analytics import (
+from ..analytics import (
     build_hour_heatmap,
     build_session_stats,
     build_weekday_hour_heatmap,
 )
-from app.domain.analysis_context import AnalysisContext
-from app.domain.metric_contracts import MetricDefinition, MetricResult
+from ..analysis_context import AnalysisContext
+from ..metric_contracts import MetricDefinition, MetricResult
 
 
 DEFINITION_VERSION = "1"

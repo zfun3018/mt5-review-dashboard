@@ -13,6 +13,7 @@ from .application.settings_service import SettingsService
 from .core.config import RuntimePaths, get_runtime_paths, register_runtime_paths_listener, set_runtime_paths
 from .data import bootstrap, campaign_commands, catalog_commands, ingestion_repository
 from .data import maintenance_repository, trade_commands
+from .data.data_cleanup_repository import cleanup_data, list_accounts as list_data_accounts, preview_cleanup as preview_data_cleanup
 from .data.campaign_repository import CampaignRepository
 from .data.catalog_repository import CatalogRepository
 from .data.database import connect as database_connect
@@ -26,8 +27,8 @@ from .platform_facade import (
     latest_import_summary,
     import_csv,
     import_file,
-    list_import_batches,
-    list_platforms,
+    list_unmatched_import_executions, match_import_executions,
+    list_import_batches, revert_import_batch, list_platforms,
 )
 from .platforms import normalize_platform
 from .review_facade import (
@@ -153,7 +154,6 @@ def init_db(seed: bool = True) -> None:
         seed=seed_demo_data if seed else False,
         migrate=_ensure_schema,
     )
-
 
 def _ensure_schema(conn, previous_version: int = 0) -> None:
     bootstrap._ensure_schema(conn, previous_version)

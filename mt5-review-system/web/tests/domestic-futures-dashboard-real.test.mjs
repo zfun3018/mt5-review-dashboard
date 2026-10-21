@@ -72,7 +72,7 @@ test("real dashboard mounts domestic futures root and opens the standalone edito
   const css = fs.readFileSync(path.join(webRoot, "dashboard/domestic-futures-dashboard.css"), "utf8");
   assert.match(html, /id="domesticDashboard"/);
   assert.match(html, /data-domestic-filter/);
-  assert.match(html, /mock-domestic-futures-layout\.html\?return=/);
+  assert.match(html, /mock-domestic-futures-layout\.html\?platform=domestic_futures&amp;return=/);
   assert.match(html, /id="domesticFixedPeriods"/);
   assert.match(html, /id="domesticMonthlyChart"/);
   assert.match(html, /id="domesticContractLosses"/);

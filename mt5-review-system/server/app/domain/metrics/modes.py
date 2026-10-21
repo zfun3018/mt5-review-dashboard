@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.domain.analysis_context import AnalysisContext
-from app.domain.dashboard import (
+from ..analysis_context import AnalysisContext
+from ..dashboard import (
     build_campaign_period_metrics,
     build_daily_campaign_evaluation,
     build_trade_period_summaries,
     labeled_campaign_mode_evaluation,
 )
-from app.domain.metric_contracts import MetricDefinition, MetricResult
-from app.domain.r_metrics import build_r_metrics
+from ..metric_contracts import MetricDefinition, MetricResult
+from ..r_metrics import build_r_metrics
 
 
 DEFINITION_VERSION = "1"
@@ -83,7 +83,7 @@ def _anchor(context: AnalysisContext) -> datetime:
     for campaign in reversed(context.campaigns):
         close_time = campaign.get("closed_at_utc") or campaign.get("close_time_utc")
         if close_time:
-            from app.domain.analytics import parse_dt
+            from ..analytics import parse_dt
 
             return parse_dt(close_time)
     from datetime import datetime, timezone

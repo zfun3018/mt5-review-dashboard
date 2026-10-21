@@ -88,6 +88,39 @@ class ImporterTest(unittest.TestCase):
             raw_count = conn.execute("SELECT COUNT(*) AS value FROM raw_events").fetchone()["value"]
         self.assertEqual(raw_count, 2)
 
+    def test_import_normalizes_windows_screenshot_path_for_media_urls(self):
+        bridge_dir = self.root / "bridge-windows-path"
+        screenshot_dir = bridge_dir / "screenshots"
+        screenshot_dir.mkdir(parents=True)
+        (screenshot_dir / "trade-win.png").write_bytes(b"fake-png")
+        payload = {
+            "type": "trade_close",
+            "trade_id": "MT5-WIN-PATH",
+            "account": "SYNTHETIC",
+            "order_no": "9002",
+            "position_id": "7002",
+            "order_ticket": "8002",
+            "deal_ticket": "8102",
+            "symbol": "EURUSD",
+            "side": "long",
+            "lots": 0.2,
+            "open_time_utc": "2026-08-14T01:00:00+00:00",
+            "close_time_utc": "2026-08-14T01:45:00+00:00",
+            "entry_price": 1.101,
+            "exit_price": 1.105,
+            "pnl": 80.0,
+            "screenshot_path": r"screenshots\trade-win.png",
+        }
+        (bridge_dir / "events_windows.jsonl").write_text(
+            json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+
+        import_bridge_dir(bridge_dir)
+
+        trade = storage.get_trade("MT5-WIN-PATH")
+        self.assertEqual(trade["screenshot_path"], "screenshots/trade-win.png")
+        self.assertEqual(trade["screenshot_url"], "/media/screenshots/trade-win.png")
+
     def test_same_payload_with_different_json_format_is_duplicate(self):
         bridge_dir = self.root / "bridge-restore"
         screenshot_dir = bridge_dir / "screenshots"

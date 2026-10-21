@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from .analytics import build_trade_metrics, to_beijing, trade_net_pnl
+from ..platform_modules.domestic_futures_contracts import contract_display
 
 
 def build_fixed_period_summaries(
@@ -46,8 +47,15 @@ def build_contract_rankings(
 ) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for trade in trades:
-        key = str(trade.get("contract_name") or trade.get("symbol") or "未命名合约")
-        grouped[key].append(trade)
+        symbol = str(trade.get("symbol") or "").strip()
+        display = contract_display(symbol) if symbol else {
+            "product_name": "未命名品种",
+            "contract_name": "未命名合约",
+        }
+        enriched = dict(trade)
+        enriched["product_name"] = display["product_name"]
+        enriched["contract_name"] = display["contract_name"]
+        grouped[display["contract_name"]].append(enriched)
 
     rows = []
     for contract_name, selected in grouped.items():
@@ -55,6 +63,7 @@ def build_contract_rankings(
         rows.append(
             {
                 "symbol": str(selected[0].get("symbol") or contract_name),
+                "product_name": str(selected[0].get("product_name") or "未命名品种"),
                 "contract_name": contract_name,
                 **metrics,
             }

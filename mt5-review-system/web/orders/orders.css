@@ -113,7 +113,8 @@
 .trades-panel .table-wrap {
   max-height: none;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .checkin-calendar-panel {
@@ -227,22 +228,21 @@
 /* Column tracks */
 .orders-table th:nth-child(1),
 .orders-table td:nth-child(1) {
-  width: 8.9rem;
+  width: auto;
 }
 
 .orders-table th:nth-child(2),
 .orders-table td:nth-child(2) {
-  width: 9.5rem;
+  width: 4.3rem;
+  min-width: 4.3rem;
+  text-align: center;
 }
 
 .orders-table th:nth-child(3),
 .orders-table td:nth-child(3) {
-  width: 8rem;
-}
-
-.orders-table th:nth-child(4),
-.orders-table td:nth-child(4) {
-  width: 8rem;
+  width: 6rem;
+  min-width: 6rem;
+  text-align: right;
 }
 
 .orders-table th:nth-child(5),
@@ -1040,8 +1040,8 @@ th.custom-col {
   background: #081524;
 }
 
-/* Pagination */
-.pagination {
+/* Continuous list status */
+.order-list-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1050,18 +1050,12 @@ th.custom-col {
   border-top: 1px solid var(--color-border);
 }
 
-.pagination-total {
+.order-list-footer .pagination-total {
   color: var(--color-muted);
   font-size: var(--font-size-xs);
 }
 
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.pagination-controls span {
+.order-list-footer .muted-mini {
   color: var(--color-muted);
   font-size: var(--font-size-xs);
   white-space: nowrap;
@@ -1309,6 +1303,7 @@ th.custom-col {
   .trades-panel .table-wrap {
     max-height: none;
     min-height: 0;
+    overflow-y: visible;
   }
 
   .detail-panel {
@@ -1376,13 +1371,9 @@ th.custom-col {
     display: none;
   }
 
-  .pagination {
+  .order-list-footer {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .pagination-controls {
-    justify-content: space-between;
   }
 }
 
@@ -1457,7 +1448,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 }
 
 .orders-layout {
-  grid-template-columns: minmax(238px, 286px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   align-items: stretch;
   min-height: 0;
   height: auto;
@@ -1471,6 +1462,10 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   overflow: hidden;
 }
 
+.orders-index-column .trades-panel {
+  max-height: calc(100dvh - 168px);
+}
+
 .orders-panel-head {
   padding: 12px 14px 9px;
 }
@@ -1482,7 +1477,8 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .trades-panel .table-wrap {
   min-height: 0;
   max-height: none;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .orders-table th,
@@ -1499,35 +1495,85 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .orders-table th:nth-child(2),
 .orders-table td:nth-child(2) {
-  width: 48px;
-  text-align: right;
+  width: 4.3rem;
+  min-width: 4.3rem;
+  text-align: center;
 }
 
 .orders-table th:nth-child(3),
 .orders-table td:nth-child(3) {
+  width: 6rem;
+  min-width: 6rem;
+  text-align: right;
+}
+
+.orders-table th:nth-child(4),
+.orders-table td:nth-child(4) {
   width: 76px;
   text-align: right;
+}
+
+.campaign-order-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campaign-list-order {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 7px;
+}
+
+.campaign-list-meta {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 3px;
+}
+
+.campaign-list-contract {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-list-opened {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-muted);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .campaign-pnl-cell {
   text-align: right;
 }
 
-.campaign-list-pnl {
-  display: inline-block;
-  min-width: 64px;
-  font-size: 13px;
+.campaign-list-pnl,
+.campaign-day-summary strong:last-child {
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 750;
-  letter-spacing: 0;
   line-height: 1.1;
   white-space: nowrap;
 }
 
-.campaign-list-time {
-  display: flex;
+.campaign-list-pnl {
+  display: inline-block;
   min-width: 0;
-  align-items: center;
-  gap: 6px;
+  letter-spacing: 0;
 }
 
 .campaign-day-row td {
@@ -1540,9 +1586,9 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .campaign-day-summary {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) 32px minmax(6rem, auto);
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   color: var(--color-muted);
   font-size: 10px;
 }
@@ -1585,10 +1631,12 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 }
 
 .campaign-day-summary strong:last-child {
-  min-width: 58px;
+  min-width: 6rem;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
   text-align: right;
-  font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 10.5px;
 }
 
 .campaign-list-index {
@@ -1639,6 +1687,21 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   background: rgba(100, 181, 255, 0.14);
 }
 
+.campaign-featured-mark {
+  display: inline-grid;
+  width: 17px;
+  height: 16px;
+  place-items: center;
+  color: #df8618;
+}
+
+.campaign-featured-mark svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
 .campaign-risk-mark {
   color: var(--color-negative);
   background: rgba(255, 125, 129, 0.14);
@@ -1671,6 +1734,17 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .order-detail-title h2 {
   font-size: 20px;
+}
+
+.detail-contract-name {
+  color: var(--color-text);
+}
+
+.detail-contract-code {
+  color: var(--color-muted);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.7em;
+  font-weight: 500;
 }
 
 .order-info-strip {
@@ -1802,12 +1876,87 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .screenshot-editor,
 .review-editor-panel,
-.execution-section {
+.execution-section,
+.import-source-section {
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
   background: rgba(17, 36, 53, 0.38);
+}
+
+.import-source-section {
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.import-source-section.is-secondary {
+  margin-top: 16px;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.import-source-section.is-secondary .section-head {
+  margin-bottom: 6px;
+}
+
+.import-source-section.is-secondary .section-head h3 {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.import-source-list {
+  display: grid;
+  gap: 6px;
+}
+
+.import-source-item {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: rgba(17, 36, 53, 0.24);
+}
+
+.import-source-section.is-secondary .import-source-item {
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.import-source-item__head,
+.import-source-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+}
+
+.import-source-item__head strong,
+.import-source-item__head span,
+.import-source-item__meta {
+  overflow-wrap: anywhere;
+}
+
+.import-source-item__head span,
+.import-source-item__meta,
+.import-source-empty {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.import-source-item__meta {
+  margin-top: 4px;
+}
+
+.import-source-sha {
+  font-family: var(--font-mono);
 }
 
 .screenshot-editor {
@@ -1946,7 +2095,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .execution-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 900px;
   border-collapse: collapse;
   color: var(--color-muted);
   font-size: 11px;
@@ -1973,7 +2122,9 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .execution-table th:nth-child(4) { width: 104px; }
 .execution-table th:nth-child(5) { width: 70px; }
 .execution-table th:nth-child(6),
-.execution-table th:nth-child(7) { width: 100px; }
+.execution-table th:nth-child(7),
+.execution-table th:nth-child(8),
+.execution-table th:nth-child(9) { width: 100px; }
 
 .execution-type,
 .execution-side {
@@ -2023,7 +2174,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   }
 
   .trades-panel .table-wrap {
-    overflow: visible;
+    overflow-y: visible;
   }
 
   .order-info-main {
@@ -2343,7 +2494,19 @@ html[data-platform="domestic_futures"] .detail-panel select {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 14px;
+}
+
+.detail-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.detail-action-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
 }
 
 .detail-icon-action {
@@ -2385,6 +2548,34 @@ html[data-platform="domestic_futures"] .detail-panel select {
   border-color: #9bd8d0;
   color: #075f5b;
   background: #dff5f1;
+}
+
+.detail-icon-action.featured-action.is-active {
+  border-color: #f3bf70;
+  color: #df8618;
+  background: #fff4df;
+}
+
+.detail-icon-action.featured-action.is-active svg {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.featured-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #c87512;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.featured-status-badge svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  stroke: currentColor;
 }
 
 .detail-icon-action.is-danger {

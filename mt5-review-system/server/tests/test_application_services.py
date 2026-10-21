@@ -254,6 +254,7 @@ class DashboardServiceTest(unittest.TestCase):
                 "system_evaluation",
                 "mode_evaluation",
                 "metric_meta",
+                "date_semantics",
             },
         )
         self.assertNotIn("trades", payload)

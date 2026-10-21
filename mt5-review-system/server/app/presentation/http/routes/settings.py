@@ -125,6 +125,33 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
         auto_import()
         return ok(storage.get_local_status())
 
+    def data_accounts(path: str, query: Query, body: Body):
+        platform = first(query, "platform", "mt5") or "mt5"
+        return ok({"accounts": storage.list_data_accounts(platform)})
+
+    def data_cleanup_preview(path: str, query: Query, body: Body):
+        payload = request_body(body)
+        return ok(
+            storage.preview_data_cleanup(
+                platform=str(payload.get("platform") or "mt5"),
+                account=str(payload.get("account") or ""),
+                start_date=str(payload.get("start_date") or ""),
+                end_date=str(payload.get("end_date") or ""),
+            )
+        )
+
+    def data_cleanup(path: str, query: Query, body: Body):
+        payload = request_body(body)
+        return ok(
+            storage.cleanup_data(
+                platform=str(payload.get("platform") or "mt5"),
+                account=str(payload.get("account") or ""),
+                start_date=str(payload.get("start_date") or ""),
+                end_date=str(payload.get("end_date") or ""),
+                confirm=bool(payload.get("confirm")),
+            )
+        )
+
     def sync(path: str, query: Query, body: Body):
         return ok(auto_import())
 
@@ -166,4 +193,12 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
     router.add("GET", "/api/backups", backups)
     router.add("POST", "/api/backups", create_backup)
     router.add("GET", "/api/status", status)
+    router.add("GET", "/api/data/accounts", data_accounts)
+    router.add(
+        "POST",
+        "/api/data/cleanup/preview",
+        data_cleanup_preview,
+        reads_body=True,
+    )
+    router.add("POST", "/api/data/cleanup", data_cleanup, reads_body=True)
     router.add("POST", "/api/sync", sync)

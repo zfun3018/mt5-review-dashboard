@@ -85,8 +85,34 @@
               <button id="downloadFuturesTemplate" class="button" type="button">下载标准模板</button>
             </div>
             <div id="futuresImportResult" class="settings-import-result" aria-live="polite"></div>
+            <div id="futuresImportSummary" class="futures-import-summary"></div>
+            <div id="futuresImportIssues" class="futures-import-issues"></div>
+            <div id="futuresUnmatchedExecutions" class="futures-unmatched-executions"></div>
             <div id="futuresImportCalendar" class="futures-import-calendar"></div>
             <div id="futuresImportHistory" class="futures-import-history"></div>
+          </div>
+
+          <div class="settings-section settings-danger-zone">
+            <div class="settings-section-head">
+              <div>
+                <p class="eyebrow">DATA CLEANUP</p>
+                <h2>按账户和日期清除数据</h2>
+              </div>
+            </div>
+            <p class="settings-hint">仅清除当前工作区、指定账户和日期范围内的订单及关联导入数据。操作不可恢复，建议先创建备份。</p>
+            <div class="settings-cleanup-row">
+              <label for="cleanupAccount">账户</label>
+              <select id="cleanupAccount"></select>
+              <label for="cleanupStartDate">开始日期</label>
+              <input id="cleanupStartDate" type="date" />
+              <label for="cleanupEndDate">结束日期</label>
+              <input id="cleanupEndDate" type="date" />
+            </div>
+            <div class="settings-cleanup-actions">
+              <button id="previewDataCleanup" class="button" type="button">预览影响范围</button>
+              <button id="executeDataCleanup" class="button-danger" type="button">确认清除</button>
+            </div>
+            <div id="dataCleanupResult" class="settings-import-result" aria-live="polite">先预览影响范围，再确认清除。</div>
           </div>
 
           <div class="settings-section">

@@ -116,13 +116,13 @@ test("dashboard exposes accessible shared metric explanation", () => {
 });
 
 test("order flow renders a compact merged-campaign index", () => {
-  assert.match(ordersSource, /<tr><th>开仓时间<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
+  assert.match(ordersSource, /<tr><th>订单信息<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
   assert.match(ordersSource, /class="campaign-kind-mark"/);
   assert.match(ordersSource, />组<\/span>/);
   assert.match(ordersSource, /初始止损未完整填写/);
   assert.match(ordersSource, /class="campaign-risk-mark"/);
   assert.match(ordersCss, /\.orders-table th,[\s\r\n]+\.orders-table td\s*\{[\s\S]*font-size:\s*11px/);
-  assert.match(ordersCss, /grid-template-columns:\s*minmax\(238px, 286px\)/);
+  assert.match(ordersCss, /grid-template-columns:\s*minmax\(260px, 320px\)/);
   assert.match(ordersCss, /\.app-page\s*\{[\s\S]*height:\s*calc\(100dvh - 60px\)/);
 });
 

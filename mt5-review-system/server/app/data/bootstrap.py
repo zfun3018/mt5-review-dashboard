@@ -253,6 +253,7 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
         CREATE TABLE IF NOT EXISTS trade_campaigns (
             id TEXT PRIMARY KEY,
             platform TEXT NOT NULL DEFAULT 'mt5',
+            trade_date TEXT,
             account TEXT NOT NULL,
             symbol TEXT NOT NULL,
             side TEXT NOT NULL,
@@ -361,11 +362,13 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             status TEXT NOT NULL DEFAULT 'preview',
             started_at TEXT NOT NULL,
             completed_at TEXT,
+            file_sha256 TEXT NOT NULL DEFAULT '',
             trade_date_start TEXT,
             trade_date_end TEXT,
             source_row_count INTEGER NOT NULL DEFAULT 0,
             new_row_count INTEGER NOT NULL DEFAULT 0,
             duplicate_count INTEGER NOT NULL DEFAULT 0,
+            conflict_count INTEGER NOT NULL DEFAULT 0,
             invalid_count INTEGER NOT NULL DEFAULT 0,
             unpaired_count INTEGER NOT NULL DEFAULT 0,
             order_count INTEGER NOT NULL DEFAULT 0,
@@ -379,6 +382,7 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             source_row_count INTEGER NOT NULL DEFAULT 0,
             new_row_count INTEGER NOT NULL DEFAULT 0,
             duplicate_count INTEGER NOT NULL DEFAULT 0,
+            conflict_count INTEGER NOT NULL DEFAULT 0,
             invalid_count INTEGER NOT NULL DEFAULT 0,
             unpaired_count INTEGER NOT NULL DEFAULT 0,
             order_count INTEGER NOT NULL DEFAULT 0,
@@ -397,12 +401,69 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS import_executions (
+            id TEXT PRIMARY KEY,
+            fingerprint TEXT NOT NULL UNIQUE,
+            identity_key TEXT NOT NULL DEFAULT '',
+            batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+            platform TEXT NOT NULL,
+            account TEXT NOT NULL,
+            trade_date TEXT NOT NULL,
+            time_utc TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            side TEXT NOT NULL,
+            offset TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            remaining_quantity REAL NOT NULL,
+            price REAL NOT NULL,
+            fee REAL NOT NULL DEFAULT 0,
+            pnl REAL NOT NULL DEFAULT 0,
+            trade_id TEXT NOT NULL DEFAULT '',
+            order_id TEXT NOT NULL DEFAULT '',
+            source_kind TEXT NOT NULL DEFAULT '',
+            source_filename TEXT NOT NULL DEFAULT '',
+            source_sheet TEXT NOT NULL DEFAULT '',
+            source_row_number INTEGER,
+            raw_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'unmatched',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS import_batch_executions (
+            batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+            execution_id TEXT NOT NULL REFERENCES import_executions(id) ON DELETE CASCADE,
+            disposition TEXT NOT NULL,
+            source_row_number INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (batch_id, execution_id, source_row_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS import_execution_matches (
+            id TEXT PRIMARY KEY,
+            platform TEXT NOT NULL,
+            open_execution_id TEXT NOT NULL REFERENCES import_executions(id),
+            close_execution_id TEXT NOT NULL REFERENCES import_executions(id),
+            trade_id TEXT NOT NULL REFERENCES trades(id),
+            quantity REAL NOT NULL,
+            match_kind TEXT NOT NULL DEFAULT 'manual',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_import_batches_platform_started
             ON import_batches(platform, started_at DESC);
         CREATE INDEX IF NOT EXISTS idx_import_batch_days_platform_date
             ON import_batch_days(platform, trade_date);
         CREATE INDEX IF NOT EXISTS idx_import_batch_issues_batch
             ON import_batch_issues(batch_id, row_number);
+        CREATE INDEX IF NOT EXISTS idx_import_executions_platform_status
+            ON import_executions(platform, status, trade_date, time_utc);
+        CREATE INDEX IF NOT EXISTS idx_import_batch_executions_execution
+            ON import_batch_executions(execution_id, disposition);
+        CREATE INDEX IF NOT EXISTS idx_import_execution_matches_open
+            ON import_execution_matches(open_execution_id);
+        CREATE INDEX IF NOT EXISTS idx_import_execution_matches_close
+            ON import_execution_matches(close_execution_id);
         """
     )
     for table_name in (
@@ -414,6 +475,9 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
         "import_batches",
         "import_batch_days",
         "import_batch_issues",
+        "import_executions",
+        "import_batch_executions",
+        "import_execution_matches",
     ):
         table_exists = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -429,6 +493,32 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
                 f"UPDATE {table_name} SET platform = 'domestic_futures' "
                 "WHERE platform IN ('tonghuashun_futures', 'tonghuashun', 'ths')"
             )
+    batch_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(import_batches)").fetchall()
+    }
+    if "file_sha256" not in batch_columns:
+        conn.execute("ALTER TABLE import_batches ADD COLUMN file_sha256 TEXT NOT NULL DEFAULT ''")
+    if "conflict_count" not in batch_columns:
+        conn.execute("ALTER TABLE import_batches ADD COLUMN conflict_count INTEGER NOT NULL DEFAULT 0")
+    batch_day_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(import_batch_days)").fetchall()
+    }
+    if "conflict_count" not in batch_day_columns:
+        conn.execute("ALTER TABLE import_batch_days ADD COLUMN conflict_count INTEGER NOT NULL DEFAULT 0")
+    execution_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(import_executions)").fetchall()
+    }
+    if "identity_key" not in execution_columns:
+        conn.execute("ALTER TABLE import_executions ADD COLUMN identity_key TEXT NOT NULL DEFAULT ''")
+    conn.execute(
+        "UPDATE import_executions SET identity_key = "
+        "CASE WHEN trade_id != '' THEN platform || '|' || account || '|' || trade_date || '|' || trade_id "
+        "ELSE '' END WHERE identity_key = ''"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_import_executions_identity "
+        "ON import_executions(platform, identity_key)"
+    )
     campaign_columns = {
         row["name"]
         for row in conn.execute("PRAGMA table_info(trade_campaigns)").fetchall()
@@ -458,6 +548,19 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             "UPDATE trade_campaigns SET strategy_tags = json_array(strategy) "
             "WHERE strategy_tags IS NULL OR strategy_tags = '' OR strategy_tags = '[]'"
         )
+    trade_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(trades)").fetchall()
+    }
+    if "trade_date" not in trade_columns:
+        conn.execute("ALTER TABLE trades ADD COLUMN trade_date TEXT")
+    if "trade_date" not in campaign_columns:
+        conn.execute("ALTER TABLE trade_campaigns ADD COLUMN trade_date TEXT")
+    # Legacy domestic-futures trades need the finalized trade schema before
+    # their execution fingerprints can be reconstructed.
+    from .import_repository import backfill_legacy_import_executions_conn
+
+    backfill_legacy_import_executions_conn(conn)
     conn.execute(
         "UPDATE trade_campaigns SET is_featured = 1 "
         "WHERE EXISTS ("

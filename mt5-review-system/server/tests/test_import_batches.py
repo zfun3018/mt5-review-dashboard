@@ -7,6 +7,7 @@ from app.data.import_repository import (
     get_import_calendar,
     list_import_batches,
     record_import_batch_days,
+    revert_import_batch,
 )
 from app.platform_importer import import_platform_file
 from app.platforms import DOMESTIC_FUTURES_PLATFORM
@@ -14,6 +15,67 @@ from tests.support import TemporaryStorageCase
 
 
 class ImportBatchRepositoryTest(TemporaryStorageCase):
+    def test_revert_import_batch_soft_deletes_its_order(self):
+        csv_text = (
+            "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交序号\n"
+            "2026-10-19 09:30:00,IF2611,买,开,4000,1,,5,REV-1001\n"
+            "2026-10-19 10:15:00,IF2611,卖,平,4010,1,100,6,REV-1002\n"
+        )
+        imported = import_platform_file("domestic_futures", csv_text.encode(), "revert.csv")
+
+        result = revert_import_batch(imported["batch_id"], "domestic_futures")
+
+        self.assertTrue(result["reverted"])
+        self.assertEqual(storage.list_campaigns(platform="domestic_futures")["total"], 0)
+        self.assertEqual(
+            list_import_batches("domestic_futures")[0]["status"],
+            "reverted",
+        )
+        self.assertEqual(
+            storage.list_unmatched_import_executions("domestic_futures"),
+            [],
+        )
+
+    def test_revert_original_batch_removes_orders_even_after_duplicate_import(self):
+        csv_text = (
+            "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交序号\n"
+            "2026-10-19 09:30:00,IF2611,买,开,4000,1,,5,REV-DUP-1001\n"
+            "2026-10-19 10:15:00,IF2611,卖,平,4010,1,100,6,REV-DUP-1002\n"
+        )
+        first = import_platform_file("domestic_futures", csv_text.encode(), "first.csv")
+        second = import_platform_file("domestic_futures", csv_text.encode(), "second.csv")
+
+        self.assertEqual(second["imported"], 0)
+        result = revert_import_batch(first["batch_id"], "domestic_futures")
+
+        self.assertTrue(result["reverted"])
+        self.assertEqual(storage.list_campaigns(platform="domestic_futures")["total"], 0)
+        self.assertEqual(storage.query_trades(platform="domestic_futures")["total"], 0)
+        self.assertEqual(
+            storage.get_dashboard(platform="domestic_futures")["summary"]["order_count"],
+            0,
+        )
+        self.assertEqual(
+            storage.get_analysis(platform="domestic_futures")["metrics"]["order_count"],
+            0,
+        )
+
+    def test_reimport_after_revert_reactivates_execution_fingerprints(self):
+        csv_text = (
+            "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交序号\n"
+            "2026-10-19 09:30:00,IF2611,买,开,4000,1,,5,REV-REIMPORT-1001\n"
+            "2026-10-19 10:15:00,IF2611,卖,平,4010,1,100,6,REV-REIMPORT-1002\n"
+        )
+        first = import_platform_file("domestic_futures", csv_text.encode(), "first.csv")
+        revert_import_batch(first["batch_id"], "domestic_futures")
+
+        result = import_platform_file("domestic_futures", csv_text.encode(), "reimport.csv")
+
+        self.assertEqual(result["imported"], 1)
+        self.assertEqual(result["new_row_count"], 2)
+        self.assertEqual(result["duplicate_count"], 0)
+        self.assertEqual(storage.list_campaigns(platform="domestic_futures")["total"], 1)
+
     def test_duplicate_import_is_idempotent_for_campaigns_and_analysis(self):
         csv_text = (
             "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交序号\n"
@@ -25,7 +87,9 @@ class ImportBatchRepositoryTest(TemporaryStorageCase):
         second = import_platform_file("tonghuashun_futures", csv_text.encode(), "trades.csv")
 
         self.assertEqual(first["imported"], 1)
-        self.assertEqual(second["imported"], 1)
+        self.assertEqual(second["imported"], 0)
+        self.assertEqual(second["new_row_count"], 0)
+        self.assertEqual(second["duplicate_count"], 2)
         campaigns = storage.list_campaigns(platform=DOMESTIC_FUTURES_PLATFORM)
         analysis = storage.get_analysis(platform=DOMESTIC_FUTURES_PLATFORM)
         self.assertEqual(campaigns["total"], 1)

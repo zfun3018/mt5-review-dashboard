@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from app.domain.analytics import build_daily_system_evaluation
-from app.domain.analysis_context import AnalysisContext
-from app.domain.domestic_futures_dashboard import (
+from ..analytics import build_daily_system_evaluation
+from ..analysis_context import AnalysisContext
+from ..domestic_futures_dashboard import (
     build_contract_rankings,
     build_fixed_period_summaries,
     build_review_coverage,
     build_risk_summary,
 )
-from app.domain.metric_contracts import MetricDefinition, MetricResult
+from ..metric_contracts import MetricDefinition, MetricResult
 
 
 DEFINITION_VERSION = "1"
@@ -40,7 +40,10 @@ def build_fixed_periods_result(context: AnalysisContext) -> MetricResult:
     value = build_fixed_period_summaries(
         campaigns,
         anchor,
-        today=context.settings.get("fixed_review_day", anchor),
+        today=context.settings.get(
+            "fixed_period_anchor_utc",
+            context.settings.get("fixed_review_day", anchor),
+        ),
     )
     return _available("fixed_periods", value, len(campaigns))
 

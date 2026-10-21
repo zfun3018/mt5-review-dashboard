@@ -7,6 +7,7 @@ from math import sqrt
 from typing import Any
 
 BEIJING_TZ = timezone(timedelta(hours=8))
+WEEKDAY_LABELS = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 DEFAULT_SESSIONS = {
     "asia": {"label": "Asia", "start": time(8, 0), "end": time(15, 0)},
@@ -271,6 +272,8 @@ def build_hour_heatmap(
             {
                 "date": key,
                 "weekday": current.strftime("%a"),
+                "weekday_label": WEEKDAY_LABELS[current.weekday()],
+                "label": f"{current.month}月{current.day}日 {WEEKDAY_LABELS[current.weekday()]}",
                 "hours": hours,
             }
         )

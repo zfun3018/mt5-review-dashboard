@@ -46,6 +46,113 @@ class NormalizedImportTest(unittest.TestCase):
         self.assertEqual(result.price, 4000.5)
         self.assertEqual(result.source_row_number, 2)
 
+    def test_night_time_uses_previous_natural_date_but_keeps_exchange_trade_date(self):
+        result = normalize_execution(
+            {
+                "trade_date": "2026-10-20",
+                "trade_time": "21:01:00",
+                "symbol": "IF2611",
+                "side": "buy",
+                "offset": "open",
+                "quantity": "1",
+                "price": "4000",
+            },
+            self._context(),
+        )
+
+        self.assertIsInstance(result, NormalizedExecution)
+        self.assertEqual(result.trade_date, "2026-10-20")
+        self.assertEqual(result.time_utc, "2026-10-19T13:01:00+00:00")
+
+    def test_full_night_datetime_uses_exchange_trade_date_for_actual_timestamp(self):
+        result = normalize_execution(
+            {
+                "trade_date": "2026-10-20",
+                "trade_time": "2026-10-20 21:01:00",
+                "symbol": "IF2611",
+                "side": "buy",
+                "offset": "open",
+                "quantity": "1",
+                "price": "4000",
+            },
+            self._context(),
+        )
+
+        self.assertIsInstance(result, NormalizedExecution)
+        self.assertEqual(result.trade_date, "2026-10-20")
+        self.assertEqual(result.time_utc, "2026-10-19T13:01:00+00:00")
+
+    def test_matching_sorts_night_before_day_even_when_source_rows_are_reversed(self):
+        close = normalize_execution(
+            {
+                "trade_date": "2026-10-20",
+                "trade_time": "09:30:00",
+                "symbol": "IF2611",
+                "side": "sell",
+                "offset": "close",
+                "quantity": "1",
+                "price": "4010",
+                "pnl": "100",
+                "trade_id": "T-CLOSE",
+            },
+            self._context(3),
+        )
+        opened = normalize_execution(
+            {
+                "trade_date": "2026-10-20",
+                "trade_time": "21:00:00",
+                "symbol": "IF2611",
+                "side": "buy",
+                "offset": "open",
+                "quantity": "1",
+                "price": "4000",
+                "trade_id": "T-OPEN",
+            },
+            self._context(2),
+        )
+
+        result = match_executions([close, opened])
+
+        self.assertEqual(len(result.trades), 1)
+        self.assertEqual(result.issues, ())
+        self.assertEqual(result.trades[0]["trade_date"], "2026-10-20")
+        self.assertEqual(result.trades[0]["open_time_utc"], "2026-10-19T13:00:00+00:00")
+
+    def test_import_preview_counts_orders_on_opening_trade_date(self):
+        opened = NormalizedExecution(
+            platform=DOMESTIC_FUTURES_PLATFORM,
+            trade_date="2026-10-20",
+            time_utc="2026-10-19T13:00:00+00:00",
+            symbol="IF2611",
+            side="long",
+            offset="open",
+            quantity=1,
+            price=4000,
+            trade_id="T-OPEN",
+        )
+        closed = NormalizedExecution(
+            platform=DOMESTIC_FUTURES_PLATFORM,
+            trade_date="2026-10-20",
+            time_utc="2026-10-20T01:30:00+00:00",
+            symbol="IF2611",
+            side="long",
+            offset="close",
+            quantity=1,
+            price=4010,
+            pnl=100,
+            trade_id="T-CLOSE",
+        )
+
+        preview = build_import_preview(
+            source_row_count=2,
+            executions=(opened, closed),
+            duplicates=(),
+            issues=(),
+            trades=match_executions((opened, closed)).trades,
+        )
+
+        self.assertEqual(preview["day_counts"]["2026-10-20"]["order_count"], 1)
+
     def test_normalize_execution_returns_structured_issue_for_bad_number(self):
         result = normalize_execution(
             {
@@ -64,6 +171,28 @@ class NormalizedImportTest(unittest.TestCase):
         self.assertEqual(result.code, "invalid_number")
         self.assertEqual(result.row_number, 9)
         self.assertEqual(result.details["trade_date"], "2026-10-19")
+        self.assertEqual(result.details["field"], "quantity")
+        self.assertEqual(result.details["expected"], "有效的正数")
+
+    def test_normalize_execution_explains_non_positive_quantity(self):
+        result = normalize_execution(
+            {
+                "trade_date": "2026-10-19",
+                "trade_time": "09:30:00",
+                "symbol": "IF2611",
+                "side": "buy",
+                "offset": "open",
+                "quantity": 0,
+                "price": 4000,
+            },
+            self._context(10),
+        )
+
+        self.assertIsInstance(result, ImportIssue)
+        self.assertEqual(result.code, "invalid_number")
+        self.assertEqual(result.message, "手数必须大于 0")
+        self.assertEqual(result.details["value"], 0)
+        self.assertEqual(result.details["expected"], "有效的正数")
 
     def test_deduplicate_executions_prefers_source_trade_id_and_falls_back_to_fingerprint(self):
         first = NormalizedExecution(
@@ -131,6 +260,36 @@ class NormalizedImportTest(unittest.TestCase):
         self.assertEqual(result.trades[0]["lots"], 1)
         self.assertEqual(len(result.issues), 1)
         self.assertEqual(result.issues[0].code, "unpaired_close")
+        self.assertEqual(result.issues[0].details["matched_quantity"], 0)
+        self.assertEqual(result.issues[0].details["remaining_quantity"], 1)
+        self.assertIn("找不到", result.issues[0].details["reason"])
+
+    def test_build_trade_without_source_ids_uses_stable_string_references(self):
+        opened = NormalizedExecution(
+            platform=DOMESTIC_FUTURES_PLATFORM,
+            trade_date="2026-10-19",
+            time_utc="2026-10-19T01:30:00+00:00",
+            symbol="IF2611",
+            side="long",
+            offset="open",
+            quantity=1,
+            price=4000,
+        )
+        closed = NormalizedExecution(
+            platform=DOMESTIC_FUTURES_PLATFORM,
+            trade_date="2026-10-19",
+            time_utc="2026-10-19T02:30:00+00:00",
+            symbol="IF2611",
+            side="long",
+            offset="close",
+            quantity=1,
+            price=4010,
+        )
+
+        result = match_executions([opened, closed])
+
+        self.assertEqual(len(result.trades), 1)
+        self.assertTrue(result.trades[0]["id"].startswith("FUT-"))
 
     def test_build_preview_keeps_issue_rows_and_counts(self):
         preview = build_import_preview(

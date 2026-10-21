@@ -25,6 +25,7 @@ class CampaignResponseSerializer:
         ]
         serialized["source_trades"] = sources
         serialized["source_trade"] = sources[-1] if sources else None
+        serialized["import_sources"] = _merge_import_sources(sources)
         if sources:
             representative = sources[-1]
             for key in (
@@ -92,10 +93,18 @@ class CampaignResponseSerializer:
         serialized["display_order_no"] = campaign_id[:8]
         serialized["campaign_total_pnl"] = float(serialized.get("net_pnl") or 0.0)
         serialized["net_pnl"] = float(serialized.get("net_pnl") or 0.0)
-        screenshot_path = str(serialized.get("screenshot_path") or "")
-        screenshot_exists = MediaRepository(get_runtime_paths()).exists(screenshot_path)
-        serialized["screenshot_missing"] = bool(screenshot_path) and not screenshot_exists
-        serialized["screenshot_url"] = f"/media/{screenshot_path}" if screenshot_exists else ""
+        serialized["import_sources"] = _merge_import_sources(
+            source
+            for position in record.get("positions", [])
+            for source in position.get("source_trades", [])
+        )
+        screenshot_source, screenshot_path, screenshot_missing = _campaign_screenshot(
+            record,
+            MediaRepository(get_runtime_paths()),
+        )
+        serialized["screenshot_source"] = screenshot_source
+        serialized["screenshot_missing"] = screenshot_missing
+        serialized["screenshot_url"] = f"/media/{screenshot_path}" if screenshot_path else ""
         serialized["open_time_utc"] = serialized.get("opened_at_utc")
         serialized["close_time_utc"] = serialized.get("closed_at_utc")
         serialized["position_summaries"] = [
@@ -122,6 +131,61 @@ class CampaignResponseSerializer:
                 for position in record.get("positions", [])
             ]
         return serialized
+
+
+def _campaign_screenshot(
+    record: dict[str, Any], media: MediaRepository
+) -> tuple[str, str, bool]:
+    """Resolve one stable screenshot for a merged campaign.
+
+    Older records may still keep the image on a source Trade even though the
+    campaign is now the canonical review unit. Prefer the campaign image, then
+    the first existing source image in repository order.
+    """
+    candidates: list[tuple[str, str]] = []
+    campaign_path = str(record.get("screenshot_path") or "").strip()
+    if campaign_path:
+        candidates.append(("campaign", campaign_path))
+    for position in record.get("positions") or []:
+        for source in position.get("source_trades") or []:
+            source_path = str(source.get("screenshot_path") or "").strip()
+            if source_path and ("source_trade", source_path) not in candidates:
+                candidates.append(("source_trade", source_path))
+
+    for source, path in candidates:
+        normalized = media.normalize_relative_path(path)
+        if normalized and media.exists(normalized):
+            return source, normalized, False
+    return "", "", bool(candidates)
+
+
+def _merge_import_sources(sources) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for source in sources:
+        for item in source.get("import_sources") or []:
+            batch_id = str(item.get("batch_id") or "")
+            if not batch_id:
+                continue
+            current = merged.setdefault(batch_id, {**item})
+            current["source_rows"] = sorted(
+                set(current.get("source_rows") or [])
+                | set(item.get("source_rows") or [])
+            )
+            current["execution_ids"] = sorted(
+                set(current.get("execution_ids") or [])
+                | set(item.get("execution_ids") or [])
+            )
+            current["trade_ids"] = sorted(
+                set(current.get("trade_ids") or [])
+                | set(item.get("trade_ids") or [])
+            )
+    return sorted(
+        merged.values(),
+        key=lambda item: (
+            str(item.get("started_at") or ""),
+            str(item.get("batch_id") or ""),
+        ),
+    )
 
 
 def _campaign_contract_display(record: dict[str, Any]) -> dict[str, str]:

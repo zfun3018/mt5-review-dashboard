@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from app.domain.analytics import build_month_calendar
-from app.domain.analysis_context import AnalysisContext
-from app.domain.domestic_futures_dashboard import build_monthly_pnl
-from app.domain.metric_contracts import MetricDefinition, MetricResult
+from ..analytics import build_month_calendar
+from ..analysis_context import AnalysisContext
+from ..domestic_futures_dashboard import build_monthly_pnl
+from ..metric_contracts import MetricDefinition, MetricResult
 
 
 DEFINITION_VERSION = "1"

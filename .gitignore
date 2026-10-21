@@ -31,6 +31,7 @@ venv/
 .idea/
 .vscode/
 .worktrees/
+.superpowers/
 
 # Node and Playwright artefacts (Task 4 browser verification)
 node_modules/

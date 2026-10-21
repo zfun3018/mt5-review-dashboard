@@ -80,6 +80,20 @@ class DomesticFuturesDashboardTest(unittest.TestCase):
         self.assertEqual(rankings["losses"][0]["symbol"], "PVC2701")
         self.assertEqual(rankings["losses"][0]["net_pnl"], -540.0)
 
+    def test_contract_rankings_replace_placeholder_names_from_symbol(self):
+        rankings = build_contract_rankings([
+            {
+                **trade("placeholder", "2026-10-20T01:00:00+00:00", "FG701", 100),
+                "contract_name": "未命名合约",
+                "product_name": "未命名合约",
+            }
+        ])
+
+        row = rankings["contribution"][0]
+        self.assertEqual(row["symbol"], "FG701")
+        self.assertEqual(row["product_name"], "玻璃")
+        self.assertEqual(row["contract_name"], "玻璃2701")
+
     def test_risk_summary_exposes_drawdown_and_loss_streak(self):
         risk = build_risk_summary(self.trades)
 

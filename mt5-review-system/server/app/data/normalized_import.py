@@ -7,6 +7,7 @@ import re
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, Mapping
 
 from ..platform_adapters.contracts import ImportIssue, NormalizedExecution
@@ -27,6 +28,35 @@ class DeduplicationResult:
 class MatchResult:
     trades: tuple[dict[str, Any], ...]
     issues: tuple[ImportIssue, ...]
+    matches: tuple[dict[str, Any], ...] = ()
+
+
+def trade_order_signature(trade: Mapping[str, Any]) -> tuple[str, ...] | None:
+    """Return the fallback identity for a complete one-open/one-close import trade."""
+    required = (
+        "platform",
+        "account",
+        "symbol",
+        "side",
+        "lots",
+        "open_time_utc",
+        "entry_price",
+        "close_time_utc",
+        "exit_price",
+    )
+    if any(str(trade.get(field) or "").strip() == "" for field in required):
+        return None
+    return (
+        str(trade["platform"]),
+        str(trade["account"]),
+        str(trade["symbol"]),
+        str(trade["side"]),
+        _canonical_number(trade["lots"]),
+        str(trade["open_time_utc"]),
+        _canonical_number(trade["entry_price"]),
+        str(trade["close_time_utc"]),
+        _canonical_number(trade["exit_price"]),
+    )
 
 
 def normalize_execution(
@@ -39,14 +69,35 @@ def normalize_execution(
     time_value = _clean(raw_row.get("trade_time") or raw_row.get("time"))
     trade_date = _normalize_date(explicit_date)
     try:
-        time_utc, inferred_date = _parse_time(time_value, trade_date)
+        time_utc, inferred_date = _parse_time(
+            time_value,
+            trade_date,
+            domestic_futures=str(context.get("platform") or "").strip() == DOMESTIC_FUTURES_PLATFORM,
+        )
     except ValueError as exc:
-        return _issue("invalid_time", str(exc), row_number, trade_date, context)
+        return _issue(
+            "invalid_time",
+            str(exc),
+            row_number,
+            trade_date,
+            {
+                **context,
+                "field": "trade_time",
+                "value": time_value,
+                "expected": "可识别的时间格式",
+            },
+        )
     trade_date = trade_date or inferred_date
 
     symbol = _clean(raw_row.get("symbol") or raw_row.get("contract"))
     if not symbol:
-        return _issue("missing_required", "缺少合约", row_number, trade_date, context)
+        return _issue(
+            "missing_required",
+            "缺少合约",
+            row_number,
+            trade_date,
+            {**context, "field": "symbol", "expected": "合约代码"},
+        )
 
     side_text = _clean(raw_row.get("side") or raw_row.get("direction")).replace(" ", "")
     offset_text = _clean(raw_row.get("offset") or raw_row.get("action")).replace(" ", "")
@@ -58,20 +109,79 @@ def normalize_execution(
             "无法识别买卖方向或开平标志",
             row_number,
             trade_date,
-            context,
+            {
+                **context,
+                "field": "side/offset",
+                "value": {"side": side_text, "offset": offset_text},
+                "expected": "可识别的买卖方向和开平标志",
+            },
+        )
+
+    quantity_value = raw_row.get("quantity")
+    if quantity_value in (None, ""):
+        quantity_value = raw_row.get("volume")
+    try:
+        quantity = _number(quantity_value, "手数")
+    except ValueError as exc:
+        return _issue(
+            "invalid_number",
+            str(exc),
+            row_number,
+            trade_date,
+            {
+                **context,
+                "field": "quantity",
+                "value": quantity_value,
+                "expected": "有效的正数",
+            },
+        )
+    if quantity <= 0:
+        return _issue(
+            "invalid_number",
+            "手数必须大于 0",
+            row_number,
+            trade_date,
+            {**context, "field": "quantity", "value": quantity, "expected": "有效的正数"},
         )
 
     try:
-        quantity = _number(raw_row.get("quantity") or raw_row.get("volume"), "手数")
         price = _number(raw_row.get("price"), "成交价")
+    except ValueError as exc:
+        return _issue(
+            "invalid_number",
+            str(exc),
+            row_number,
+            trade_date,
+            {**context, "field": "price", "value": raw_row.get("price"), "expected": "有效数字"},
+        )
+    try:
         fee = _number(raw_row.get("fee"), "手续费", default=0.0)
+    except ValueError as exc:
+        return _issue(
+            "invalid_number",
+            str(exc),
+            row_number,
+            trade_date,
+            {**context, "field": "fee", "value": raw_row.get("fee"), "expected": "有效数字"},
+        )
+    try:
         pnl = _number(raw_row.get("pnl"), "平仓盈亏", default=0.0)
     except ValueError as exc:
-        return _issue("invalid_number", str(exc), row_number, trade_date, context)
-    if quantity <= 0:
-        return _issue("invalid_number", "手数必须大于 0", row_number, trade_date, context)
+        return _issue(
+            "invalid_number",
+            str(exc),
+            row_number,
+            trade_date,
+            {**context, "field": "pnl", "value": raw_row.get("pnl"), "expected": "有效数字"},
+        )
     if price < 0 or not math.isfinite(price):
-        return _issue("invalid_number", "成交价必须是有效数字", row_number, trade_date, context)
+        return _issue(
+            "invalid_number",
+            "成交价必须是有效数字",
+            row_number,
+            trade_date,
+            {**context, "field": "price", "value": price, "expected": "有效的非负数字"},
+        )
 
     raw = dict(raw_row)
     if str(context.get("platform") or "").strip() == DOMESTIC_FUTURES_PLATFORM:
@@ -119,7 +229,9 @@ def match_executions(executions: Iterable[NormalizedExecution]) -> MatchResult:
     queues: dict[tuple[str, str, str], deque[NormalizedExecution]] = defaultdict(deque)
     trades: list[dict[str, Any]] = []
     issues: list[ImportIssue] = []
-    for execution in executions:
+    matches: list[dict[str, Any]] = []
+    ordered_executions = sorted(executions, key=_execution_sort_key)
+    for execution in ordered_executions:
         key = (execution.account, execution.symbol, execution.side)
         if execution.offset == "open":
             queues[key].append(execution)
@@ -130,7 +242,16 @@ def match_executions(executions: Iterable[NormalizedExecution]) -> MatchResult:
         while remaining > 1e-9 and queues[key]:
             opened = queues[key][0]
             amount = min(remaining, opened.quantity)
-            trades.append(_build_trade(opened, execution, amount, len(trades)))
+            trade = _build_trade(opened, execution, amount, len(trades))
+            trades.append(trade)
+            matches.append(
+                {
+                    "open_execution": opened,
+                    "close_execution": execution,
+                    "quantity": amount,
+                    "trade_id": trade["id"],
+                }
+            )
             opened = _replace_quantity(opened, opened.quantity - amount)
             queues[key][0] = opened
             remaining = round(remaining - amount, 10)
@@ -147,6 +268,14 @@ def match_executions(executions: Iterable[NormalizedExecution]) -> MatchResult:
                     {
                         "symbol": execution.symbol,
                         "quantity": remaining,
+                        "requested_quantity": execution.quantity,
+                        "matched_quantity": round(execution.quantity - remaining, 10),
+                        "remaining_quantity": remaining,
+                        "reason": (
+                            "平仓成交数量超过可用开仓数量"
+                            if matched
+                            else "找不到同合约、同方向且可用数量足够的开仓成交"
+                        ),
                         "platform": execution.platform,
                     },
                 )
@@ -165,11 +294,15 @@ def match_executions(executions: Iterable[NormalizedExecution]) -> MatchResult:
                     {
                         "symbol": opened.symbol,
                         "quantity": opened.quantity,
+                        "requested_quantity": opened.quantity,
+                        "matched_quantity": 0.0,
+                        "remaining_quantity": opened.quantity,
+                        "reason": "找不到对应平仓成交",
                         "platform": opened.platform,
                     },
                 )
             )
-    return MatchResult(tuple(trades), tuple(issues))
+    return MatchResult(tuple(trades), tuple(issues), tuple(matches))
 
 
 def build_import_preview(
@@ -184,22 +317,43 @@ def build_import_preview(
     duplicates = tuple(duplicates)
     issues = tuple(issues)
     trades = tuple(trades)
-    invalid = [issue for issue in issues if issue.code not in {"unpaired_open", "unpaired_close"}]
+    invalid = [
+        issue
+        for issue in issues
+        if issue.code not in {
+            "unpaired_open",
+            "unpaired_close",
+            "execution_conflict",
+            "duplicate_execution",
+            "duplicate_order",
+        }
+    ]
+    conflicts = [issue for issue in issues if issue.code == "execution_conflict"]
     unpaired = [issue for issue in issues if issue.code in {"unpaired_open", "unpaired_close"}]
     duplicate_rows = [
-        {
-            "row_number": execution.source_row_number,
-            "duplicate_of": None,
-            "trade_date": execution.trade_date,
-        }
-        for execution in duplicates
+        _issue_dict(issue)
+        for issue in issues
+        if issue.code in {"duplicate_execution", "duplicate_order"}
     ]
+    if not duplicate_rows:
+        duplicate_rows = [
+            {
+                "row_number": execution.source_row_number,
+                "duplicate_of": None,
+                "trade_date": execution.trade_date,
+                "code": "duplicate_execution",
+                "message": "成交记录已导入，未重复计入",
+            }
+            for execution in duplicates
+        ]
     invalid_rows = [_issue_dict(issue) for issue in invalid]
+    conflict_rows = [_issue_dict(issue) for issue in conflicts]
     unpaired_rows = [_issue_dict(issue) for issue in unpaired]
     day_counts: dict[str, dict[str, int]] = defaultdict(lambda: {
         "source_row_count": 0,
         "new_row_count": 0,
         "duplicate_count": 0,
+        "conflict_count": 0,
         "invalid_count": 0,
         "unpaired_count": 0,
         "order_count": 0,
@@ -215,12 +369,19 @@ def build_import_preview(
         if not day:
             continue
         is_unpaired = issue.code in {"unpaired_open", "unpaired_close"}
+        is_conflict = issue.code == "execution_conflict"
         if not is_unpaired:
             day_counts[day]["source_row_count"] += 1
-        field = "unpaired_count" if is_unpaired else "invalid_count"
+        field = (
+            "unpaired_count"
+            if is_unpaired
+            else "conflict_count"
+            if is_conflict
+            else "invalid_count"
+        )
         day_counts[day][field] += 1
     for trade in trades:
-        day = str(trade.get("close_time_utc") or "")[:10]
+        day = str(trade.get("trade_date") or "")
         if day:
             day_counts[day]["order_count"] += 1
 
@@ -228,12 +389,38 @@ def build_import_preview(
         "source_row_count": int(source_row_count),
         "deduplicated_row_count": len(duplicates),
         "duplicate_rows": duplicate_rows,
+        "duplicate_order_count": sum(1 for issue in issues if issue.code == "duplicate_order"),
         "invalid_rows": invalid_rows,
+        "conflict_rows": conflict_rows,
         "unpaired_rows": unpaired_rows,
         "trades": list(trades),
         "issues": [_issue_dict(issue) for issue in issues],
         "day_counts": dict(day_counts),
     }
+
+
+def _execution_sort_key(execution: NormalizedExecution) -> tuple[Any, ...]:
+    source_row = execution.source_row_number
+    stable_row = source_row if source_row is not None else 2**31 - 1
+    if execution.platform == DOMESTIC_FUTURES_PLATFORM:
+        local_time = datetime.fromisoformat(
+            execution.time_utc.replace("Z", "+00:00")
+        ).astimezone(BEIJING_TZ)
+        minutes = local_time.hour * 60 + local_time.minute
+        if minutes >= 21 * 60:
+            session_rank = minutes
+        elif minutes < 9 * 60:
+            session_rank = 24 * 60 + minutes
+        else:
+            session_rank = 48 * 60 + minutes
+        return (
+            execution.trade_date,
+            session_rank,
+            local_time.second,
+            stable_row,
+            execution.trade_id or "",
+        )
+    return (execution.time_utc, stable_row, execution.trade_id or "")
 
 
 def _build_trade(opened: NormalizedExecution, closed: NormalizedExecution, quantity: float, index: int) -> dict[str, Any]:
@@ -242,8 +429,8 @@ def _build_trade(opened: NormalizedExecution, closed: NormalizedExecution, quant
     seed = "|".join(
         (
             opened.platform,
-            opened.trade_id or _source_key(opened),
-            closed.trade_id or _source_key(closed),
+            _execution_reference(opened),
+            _execution_reference(closed),
             opened.symbol,
             str(quantity),
             str(index),
@@ -254,8 +441,9 @@ def _build_trade(opened: NormalizedExecution, closed: NormalizedExecution, quant
         "id": f"FUT-{trade_id}",
         "platform": opened.platform,
         "account": opened.account,
+        "trade_date": opened.trade_date,
         "order_no": closed.order_id or closed.trade_id,
-        "position_id": f"{opened.trade_id or _source_key(opened)}-{closed.trade_id or _source_key(closed)}-{index}",
+        "position_id": f"{_execution_reference(opened)}-{_execution_reference(closed)}-{index}",
         "order_ticket": opened.order_id or opened.trade_id,
         "deal_ticket": closed.trade_id,
         "symbol": opened.symbol,
@@ -285,7 +473,13 @@ def _replace_quantity(execution: NormalizedExecution, quantity: float) -> Normal
 
 def _execution_key(execution: NormalizedExecution) -> tuple[Any, ...]:
     if execution.trade_id:
-        return ("id", execution.platform, execution.account, execution.trade_id)
+        return (
+            "id",
+            execution.platform,
+            execution.account,
+            execution.trade_id,
+            *_source_key(execution),
+        )
     return ("signature", execution.platform, execution.account, *_source_key(execution))
 
 
@@ -301,6 +495,10 @@ def _source_key(execution: NormalizedExecution) -> tuple[str, ...]:
         str(execution.fee),
         str(execution.pnl),
     )
+
+
+def _execution_reference(execution: NormalizedExecution) -> str:
+    return execution.trade_id or "|".join(_source_key(execution))
 
 
 def _normalize_side(side_text: str, offset_text: str) -> str | None:
@@ -320,13 +518,29 @@ def _normalize_offset(value: str) -> str | None:
     return None
 
 
-def _parse_time(value: str, trade_date: str | None) -> tuple[str, str]:
+def _parse_time(
+    value: str,
+    trade_date: str | None,
+    *,
+    domestic_futures: bool = False,
+) -> tuple[str, str]:
     text = value.strip().replace("/", "-")
     if trade_date and re.fullmatch(r"\d{1,2}:\d{2}(?::\d{2})?", text):
-        text = f"{trade_date} {text}"
+        parsed_time = datetime.strptime(text, "%H:%M:%S" if text.count(":") == 2 else "%H:%M").time()
+        natural_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+        if domestic_futures and parsed_time.hour >= 21:
+            natural_date -= timedelta(days=1)
+        parsed = datetime.combine(natural_date, parsed_time).replace(tzinfo=BEIJING_TZ)
+        return parsed.astimezone(timezone.utc).isoformat(), trade_date
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"):
         try:
-            parsed = datetime.strptime(text, fmt).replace(tzinfo=BEIJING_TZ)
+            parsed = datetime.strptime(text, fmt)
+            if domestic_futures and trade_date:
+                natural_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+                if parsed.hour >= 21:
+                    natural_date -= timedelta(days=1)
+                parsed = datetime.combine(natural_date, parsed.time())
+            parsed = parsed.replace(tzinfo=BEIJING_TZ)
             utc = parsed.astimezone(timezone.utc)
             return utc.isoformat(), parsed.date().isoformat()
         except ValueError:
@@ -386,7 +600,17 @@ def _optional_int(value: Any) -> int | None:
 
 
 def _clean(value: Any) -> str:
-    return str(value or "").strip()
+    return "" if value is None else str(value).strip()
+
+
+def _canonical_number(value: Any) -> str:
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return str(value)
+    if not number.is_finite():
+        return str(value)
+    return format(number.normalize(), "f")
 
 
 def _basename(value: Any) -> str:

@@ -241,7 +241,7 @@ def _event_to_deal(payload: dict[str, Any]) -> dict[str, Any] | None:
         "commission": float(payload.get("commission", 0.0) or 0.0),
         "swap": float(payload.get("swap", 0.0) or 0.0),
         "fee": float(payload.get("fee", 0.0) or 0.0),
-        "screenshot_path": str(payload.get("screenshot_path") or ""),
+        "screenshot_path": _normalize_event_screenshot_path(payload.get("screenshot_path")),
         "source_kind": "mt5",
         "source_trade_id": None,
         "raw_json": json.dumps(payload, ensure_ascii=False),
@@ -338,7 +338,7 @@ def _event_to_trade(payload: dict[str, Any]) -> dict[str, Any] | None:
         "commission": float(payload.get("commission", 0.0)),
         "swap": float(payload.get("swap", 0.0)),
         "fee": float(payload.get("fee", 0.0)),
-        "screenshot_path": str(payload.get("screenshot_path", "")),
+        "screenshot_path": _normalize_event_screenshot_path(payload.get("screenshot_path")),
         "trade_type": str(payload.get("trade_type", "unclassified") or "unclassified"),
         "strategy": str(payload.get("strategy", "unclassified") or "unclassified"),
         "source": "mt5",
@@ -353,3 +353,8 @@ def _event_hash(raw_event: str) -> str:
 def _canonical_event_hash(payload: dict[str, Any]) -> str:
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return _event_hash(canonical)
+
+
+def _normalize_event_screenshot_path(value: Any) -> str:
+    """Keep new MT5 events in the canonical relative path format."""
+    return str(value or "").replace("\\", "/").strip()

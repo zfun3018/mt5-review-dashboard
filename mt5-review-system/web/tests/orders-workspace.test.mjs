@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   calculateCampaignPageSize,
+  calculateOrderListMaxHeight,
   createOrdersController,
+  groupCampaignsByDay,
   mergePinnedCampaigns,
   renderCheckinCalendarMarkup,
 } from "../orders/orders.mjs";
@@ -15,7 +17,12 @@ import {
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { executionRows } from "../orders/order-detail.mjs";
+import {
+  campaignContractDisplay,
+  executionRows,
+  renderImportSourcesMarkup,
+  shouldConfirmFeaturedRemoval,
+} from "../orders/order-detail.mjs";
 import { formatBeijingDateTime } from "../shared/js/formatters.mjs";
 
 const ordersSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.mjs"), "utf8");
@@ -170,6 +177,7 @@ function controllerWith(location = { search: "" }, routes = {}, options = {}) {
     view,
     location,
     history: { replaceState() {} },
+    platform: options.platform || "mt5",
   });
   return { api, controller, view };
 }
@@ -184,6 +192,153 @@ test("featured is a view of the same campaign order list", async () => {
   const { api, controller } = controllerWith();
   await controller.loadList({ listView: "featured" });
   assert.equal(api.paths[0], "/api/campaigns?featured=1&page=1&page_size=12");
+});
+
+test("order list appends the next batch without splitting the visible workflow into pages", async () => {
+  const first = campaign("C-1", { opened_at_utc: "2026-10-20T01:00:00Z" });
+  const second = campaign("C-2", { opened_at_utc: "2026-10-20T02:00:00Z" });
+  const { api, controller } = controllerWith(
+    { search: "" },
+    {
+      "/api/campaigns?page=1&page_size=50": {
+        campaigns: [first],
+        total: 52,
+        page: 1,
+        page_size: 50,
+      },
+      "/api/campaigns?page=2&page_size=50": {
+        campaigns: [second],
+        total: 52,
+        page: 2,
+        page_size: 50,
+      },
+    },
+  );
+
+  await controller.loadList({ page: 1, pageSize: 50 });
+  await controller.loadMore();
+
+  assert.deepEqual(controller.getPage().campaigns.map((item) => item.id), ["C-1", "C-2"]);
+  assert.equal(api.paths[1], "/api/campaigns?page=2&page_size=50");
+});
+
+test("orders workspace uses a scroll status instead of page navigation controls", () => {
+  assert.match(ordersHtml, /orderLoadStatus/);
+  assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
+  assert.match(ordersStyle, /\.trades-panel \.table-wrap[\s\S]*overflow-y:\s*auto/);
+});
+
+test("featured campaigns are visibly marked in the main order list", async () => {
+  const { controller, view } = controllerWith(
+    { search: "" },
+    {},
+    { campaigns: [campaign("C-FEATURED", { is_featured: 1 })] },
+  );
+
+  await controller.loadList();
+
+  assert.match(view.getElementById("orderRows").innerHTML, /campaign-featured-mark/);
+  assert.match(view.getElementById("orderRows").innerHTML, /已精选/);
+});
+
+test("main order list renders the canonical contract display name", async () => {
+  const { controller, view } = controllerWith(
+    { search: "" },
+    {},
+    { campaigns: [campaign("C-CONTRACT", { display_symbol: "黄金期货" })] },
+  );
+
+  await controller.loadList();
+
+  assert.match(view.getElementById("orderHead").innerHTML, /订单信息/);
+  assert.match(view.getElementById("orderRows").innerHTML, /黄金期货/);
+});
+
+test("contract title shows the common name and raw code only when they differ", () => {
+  assert.deepEqual(
+    campaignContractDisplay({ symbol: "V2701", display_symbol: "PVC2701" }),
+    { name: "PVC2701", code: "V2701" },
+  );
+  assert.deepEqual(
+    campaignContractDisplay({ symbol: "XAUUSD", display_symbol: "XAUUSD" }),
+    { name: "XAUUSD", code: "" },
+  );
+});
+
+test("order details expose import batch provenance without absolute paths", () => {
+  const markup = renderImportSourcesMarkup([
+    {
+      batch_id: "IMP-1",
+      filename: "trades.xls",
+      started_at: "2026-10-21T01:00:00Z",
+      source_sheet: "成交明细",
+      source_rows: [11, 12],
+      trade_ids: ["1001", "1002"],
+      file_sha256: "abc123",
+    },
+  ]);
+
+  assert.match(markup, /trades\.xls/);
+  assert.match(markup, /成交明细/);
+  assert.match(markup, /11, 12/);
+  assert.match(markup, /1001, 1002/);
+  assert.match(markup, /abc123/);
+  assert.doesNotMatch(markup, /[A-Z]:\\/);
+  assert.match(markup, /import-source-section is-secondary/);
+  assert.ok(orderDetailSource.indexOf('class="execution-section"') < orderDetailSource.lastIndexOf("renderImportSourcesMarkup"));
+});
+
+test("MT5 and domestic futures use the same compact order-list structure", async () => {
+  for (const platform of ["mt5", "domestic_futures"]) {
+    const item = campaign("C-COMPACT", {
+      platform,
+      symbol: platform === "domestic_futures" ? "V2701" : "XAUUSD",
+      display_symbol: platform === "domestic_futures" ? "PVC2701" : "XAUUSD",
+      opened_at_utc: "2026-10-20T03:00:00Z",
+      net_pnl: -72.02,
+    });
+    const { view, controller } = controllerWith(
+      { search: platform === "domestic_futures" ? "?platform=domestic_futures" : "" },
+      {},
+      { platform, campaigns: [item] },
+    );
+
+    await controller.loadList();
+
+    const html = view.getElementById("orderRows").innerHTML;
+    assert.match(view.getElementById("orderHead").innerHTML, /<th>订单信息<\/th><th>R 值<\/th><th>净盈亏<\/th>/);
+    assert.match(html, /campaign-list-order/);
+    assert.match(html, /campaign-list-contract/);
+    assert.match(html, /<span class="campaign-list-opened">11:00<\/span>/);
+    assert.match(html, />-72\.02<\/strong>/);
+    assert.doesNotMatch(html, /\$-?72\.02/);
+  }
+});
+
+test("domestic futures order groups use the exchange trade date for night orders", () => {
+  const groups = groupCampaignsByDay([
+    campaign("C-NIGHT", {
+      platform: "domestic_futures",
+      trade_date: "2026-10-20",
+      opened_at_utc: "2026-10-19T13:00:00Z",
+    }),
+  ], "domestic_futures");
+
+  assert.equal(groups[0].key, "2026-10-20");
+  assert.match(groups[0].label, /10月20日/);
+});
+
+test("removing a featured campaign requires confirmation", () => {
+  assert.equal(shouldConfirmFeaturedRemoval({ is_featured: true }), true);
+  assert.equal(shouldConfirmFeaturedRemoval({ is_featured: false }), false);
+});
+
+test("featured action is separated and rendered as a solid orange star", () => {
+  assert.match(orderDetailSource, /featured-action/);
+  assert.match(orderDetailSource, /detail-action-divider/);
+  assert.match(orderDetailSource, /确认取消精选/);
+  assert.match(ordersStyle, /\.detail-icon-action\.featured-action\.is-active/);
+  assert.match(ordersStyle, /\.campaign-featured-mark svg[\s\S]*fill: currentColor/);
 });
 
 test("check-in calendar renders a month grid with weekday headers and counts", () => {
@@ -227,7 +382,7 @@ test("random featured campaign remains visible while its detail is loading", asy
   const selected = campaign("C-RANDOM", { display_order_no: "C-RANDOM" });
   const { api, controller } = controllerWith(
     { search: "" },
-    { "/api/campaigns/random-featured": { campaign: selected } },
+    { "/api/campaigns/random-featured?platform=mt5": { campaign: selected } },
     { campaigns: [campaign("C-FIRST")], detail: { ...selected, positions: [] } },
   );
 
@@ -236,7 +391,43 @@ test("random featured campaign remains visible while its detail is loading", asy
 
   assert.equal(controller.getState().campaign, "C-RANDOM");
   assert.ok(controller.getPage().campaigns.some((item) => item.id === "C-RANDOM"));
-  assert.equal(api.paths[api.paths.indexOf("/api/campaigns/random-featured")], "/api/campaigns/random-featured");
+  assert.equal(
+    api.paths[api.paths.indexOf("/api/campaigns/random-featured?platform=mt5")],
+    "/api/campaigns/random-featured?platform=mt5",
+  );
+});
+
+test("domestic futures random featured request keeps the platform scope", async () => {
+  const selected = campaign("C-FUT-RANDOM", {
+    platform: "domestic_futures",
+  });
+  const { api, controller } = controllerWith(
+    { search: "?platform=domestic_futures" },
+    {
+      "/api/campaigns/random-featured?platform=domestic_futures": { campaign: selected },
+      "/api/campaigns?featured=1&page=1&page_size=12&platform=domestic_futures": {
+        campaigns: [selected],
+        total: 1,
+        page: 1,
+        page_size: 12,
+      },
+      "/api/campaigns/C-FUT-RANDOM?platform=domestic_futures": {
+        ...selected,
+        screenshot_url: "/media/screenshots/manual-futures.png",
+        positions: [],
+      },
+    },
+    { platform: "domestic_futures" },
+  );
+
+  await controller.randomFeaturedCampaign();
+
+  assert.ok(api.paths.includes("/api/campaigns/random-featured?platform=domestic_futures"));
+  assert.ok(api.paths.includes("/api/campaigns/C-FUT-RANDOM?platform=domestic_futures"));
+  assert.equal(
+    controller.getPage().campaigns[0].screenshot_url,
+    "/media/screenshots/manual-futures.png",
+  );
 });
 
 test("random campaign stays selected when a capacity refresh returns another page", () => {
@@ -458,7 +649,7 @@ test("combined campaign summary renders and saves campaign classification", asyn
 
 test("order table keeps scene and strategy out of the main-order index", () => {
   const renderSource = ordersSource.slice(ordersSource.indexOf("function renderCampaignPositionRow"), ordersSource.indexOf("function bindRowInteractions"));
-  assert.match(renderSource, /<tr><th>开仓时间<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
+  assert.match(renderSource, /<tr><th>订单信息<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
   assert.doesNotMatch(renderSource, /<th>交易场景<\/th>|<th>交易策略<\/th>/);
 });
 
@@ -536,6 +727,13 @@ test("orders workspace keeps shared light contrast and a full-width calendar gri
   assert.match(ordersStyle, /\.checkin-calendar-weekdays span\s*\{[^}]*white-space:\s*nowrap/);
 });
 
+test("order list aligns amounts and keeps the three columns balanced", () => {
+  assert.match(ordersStyle, /\.orders-table th:nth-child\(2\),\s*\.orders-table td:nth-child\(2\)\s*\{[\s\S]*?width:\s*4\.3rem[\s\S]*?text-align:\s*center/s);
+  assert.match(ordersStyle, /\.orders-table th:nth-child\(3\),\s*\.orders-table td:nth-child\(3\)\s*\{[\s\S]*?width:\s*6rem[\s\S]*?text-align:\s*right/s);
+  assert.match(ordersStyle, /\.campaign-list-pnl,\s*\.campaign-day-summary strong:last-child\s*\{[\s\S]*?font-size:\s*12px[\s\S]*?font-variant-numeric:\s*tabular-nums/s);
+  assert.match(ordersStyle, /\.campaign-day-summary strong:last-child\s*\{[\s\S]*?background:\s*color-mix\(/s);
+});
+
 test("scratch campaigns carry the legacy state styling and a compact PnL emphasis", async () => {
   const { view, controller } = controllerWith(
     { search: "" },
@@ -550,11 +748,17 @@ test("scratch campaigns carry the legacy state styling and a compact PnL emphasi
   assert.doesNotMatch(ordersHtml, /class="table-legend"/);
 });
 
-test("the main-order list clips at the measured panel height and leaves overflow to pagination", () => {
-  assert.match(ordersStyle, /\.trades-panel \.table-wrap\s*\{[^}]*overflow:\s*hidden/);
-  assert.doesNotMatch(ordersStyle, /\.trades-panel \.table-wrap\s*\{[^}]*overflow:\s*auto/);
+test("the main-order list keeps the aligned panel height and scrolls continuously", () => {
+  assert.match(ordersStyle, /\.trades-panel \.table-wrap[\s\S]*overflow-y:\s*auto/);
+  assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
   assert.match(ordersSource, /applyListPanelHeight/);
-  assert.match(ordersSource, /calculateCampaignPageSize/);
+  assert.match(ordersSource, /loadMore/);
+  assert.doesNotMatch(ordersSource, /syncListCapacity|scheduleListCapacitySync/);
+});
+
+test("desktop order list height is capped by the visible viewport", () => {
+  assert.equal(calculateOrderListMaxHeight({ viewportHeight: 900, top: 188, bottomGap: 16 }), 696);
+  assert.equal(calculateOrderListMaxHeight({ viewportHeight: 620, top: 700, bottomGap: 16 }), 0);
 });
 
 test("execution ledger separates entry and exit direction and closes the final complete exit", () => {
@@ -568,8 +772,26 @@ test("execution ledger separates entry and exit direction and closes the final c
         { time_utc: "2026-10-16T01:05:00Z", time_msc: 2, price: 101, volume: 1 },
       ],
       exit_deals: [
-        { time_utc: "2026-10-16T01:10:00Z", time_msc: 3, price: 102, volume: 0.5, profit: 1 },
-        { time_utc: "2026-10-16T01:15:00Z", time_msc: 4, price: 103, volume: 1.5, profit: 2 },
+        {
+          time_utc: "2026-10-16T01:10:00Z",
+          time_msc: 3,
+          price: 102,
+          volume: 0.5,
+          profit: 1,
+          commission: -0.2,
+          swap: -0.1,
+          fee: -0.05,
+        },
+        {
+          time_utc: "2026-10-16T01:15:00Z",
+          time_msc: 4,
+          price: 103,
+          volume: 1.5,
+          profit: 2,
+          commission: -0.3,
+          swap: -0.2,
+          fee: -0.1,
+        },
       ],
     }],
   });
@@ -581,6 +803,20 @@ test("execution ledger separates entry and exit direction and closes the final c
   ]);
   assert.match(records[0].time, /周五/);
   assert.doesNotMatch(records[0].time, /UTC/);
+  assert.equal(records[2].pnlValue, 1);
+  assert.equal(records[2].feesValue, -0.35);
+  assert.equal(records[2].netPnlValue, 0.65);
+  assert.equal(records[3].pnlValue, 2);
+  assert.equal(records[3].feesValue, -0.6);
+  assert.equal(records[3].netPnlValue, 1.4);
+  assert.equal(records[3].pnl, "$2.00");
+  assert.equal(records[3].fees, "-$0.60");
+  assert.equal(records[3].netPnl, "$1.40");
+  assert.match(orderDetailSource, /<th>手续费<\/th><th>盈亏<\/th><th>净盈亏<\/th>/);
+});
+
+test("order action icons have a wide hit-area gap", () => {
+  assert.match(ordersStyle, /\.detail-order-actions\s*\{[\s\S]*gap:\s*14px/);
 });
 
 test("screenshot layout preserves the image's natural aspect ratio", () => {
@@ -638,5 +874,6 @@ test("readOrdersState parses filters, pagination, and selection", () => {
 });
 
 test("order detail prefers the human-readable contract display name", () => {
-  assert.match(orderDetailSource, /campaign\.display_symbol \|\| campaign\.contract_name \|\| campaign\.symbol/);
+  assert.match(orderDetailSource, /campaignContractDisplay\(campaign\)/);
+  assert.match(orderDetailSource, /detail-contract-code/);
 });

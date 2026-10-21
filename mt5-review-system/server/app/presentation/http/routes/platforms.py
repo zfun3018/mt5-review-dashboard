@@ -71,10 +71,53 @@ def register(router, storage) -> None:
         batch = storage.get_import_batch(batch_id, platform)
         return ok({"batch": batch}) if batch else not_found("Import batch not found")
 
+    def revert_batch(path: str, query: Query, body: Body):
+        batch_id = path_part(path, 4)
+        platform = first(query, "platform", "mt5") or "mt5"
+        payload = request_body(body)
+        return ok(
+            storage.revert_import_batch(
+                batch_id,
+                platform,
+                confirm=bool(payload.get("confirm")),
+            )
+        )
+
+    def unmatched_executions(path: str, query: Query, body: Body):
+        platform = first(query, "platform", "mt5") or "mt5"
+        batch_id = first(query, "batch_id", "") or None
+        return ok(
+            {
+                "executions": storage.list_unmatched_import_executions(
+                    platform, batch_id
+                )
+            }
+        )
+
+    def match_executions(path: str, query: Query, body: Body):
+        payload = request_body(body)
+        return created(
+            storage.match_import_executions(
+                str(payload.get("open_execution_id") or ""),
+                str(payload.get("close_execution_id") or ""),
+                payload.get("quantity"),
+                platform=str(payload.get("platform") or "mt5"),
+            )
+        )
+
     router.add("GET", "/api/platforms", platforms)
     router.add("GET", "/api/platforms/import-batches", import_batches)
     router.add("GET", "/api/platforms/import-calendar", import_calendar)
     router.add("GET", "/api/platforms/import-summary", import_summary)
+    router.add("GET", "/api/platforms/unmatched-executions", unmatched_executions)
     router.add_prefix("GET", "/api/platforms/import-batches/", import_batch_detail)
+    router.add_prefix(
+        "POST",
+        "/api/platforms/import-batches/",
+        revert_batch,
+        suffix="/revert",
+        reads_body=True,
+    )
     router.add("POST", "/api/platforms/import-csv", import_csv, reads_body=True)
     router.add("POST", "/api/platforms/import-file", import_file, reads_body=True)
+    router.add("POST", "/api/platforms/unmatched-executions/match", match_executions, reads_body=True)

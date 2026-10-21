@@ -13,7 +13,7 @@ from ..data.trade_commands import list_trades
 from ..domain.analytics import (
     build_cumulative_return_curve,
     build_equity_curve,
-    build_weekday_hour_heatmap,
+    build_hour_heatmap,
     build_month_calendar,
     build_session_stats,
     build_trade_metrics,
@@ -116,7 +116,7 @@ def get_dashboard(
         "periods": periods,
         "equity": build_cumulative_return_curve(analysis_campaigns, snapshots, now_utc=anchor, hours=None),
         "calendar": build_month_calendar(analysis_campaigns, selected_year, selected_month),
-        "heatmap": build_weekday_hour_heatmap(analysis_campaigns),
+        "heatmap": build_hour_heatmap(analysis_campaigns, anchor_utc=anchor),
         "sessions": build_session_stats(analysis_campaigns),
         "system_evaluation": build_daily_campaign_evaluation(analysis_campaigns, threshold),
         "mode_evaluation": {

@@ -1114,6 +1114,51 @@ class HttpRouterTest(unittest.TestCase):
             HTTPStatus.NOT_FOUND,
         )
 
+    def test_data_cleanup_routes_forward_scope_and_confirmation(self):
+        response = self.router.dispatch(
+            "GET", "/api/data/accounts", {"platform": ["domestic_futures"]}, None
+        )
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(
+            self.storage.calls,
+            [("list_data_accounts", ("domestic_futures",), {})],
+        )
+
+        self.storage.calls.clear()
+        body = {
+            "platform": "domestic_futures",
+            "account": "ACC",
+            "start_date": "2026-10-20",
+            "end_date": "2026-10-20",
+        }
+        response = self.router.dispatch("POST", "/api/data/cleanup/preview", {}, body)
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(
+            self.storage.calls,
+            [("preview_data_cleanup", (), {
+                "platform": "domestic_futures",
+                "account": "ACC",
+                "start_date": "2026-10-20",
+                "end_date": "2026-10-20",
+            })],
+        )
+
+        self.storage.calls.clear()
+        response = self.router.dispatch(
+            "POST", "/api/data/cleanup", {}, {**body, "confirm": True}
+        )
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(
+            self.storage.calls,
+            [("cleanup_data", (), {
+                "platform": "domestic_futures",
+                "account": "ACC",
+                "start_date": "2026-10-20",
+                "end_date": "2026-10-20",
+                "confirm": True,
+            })],
+        )
+
 class HttpAdapterTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -1213,7 +1258,6 @@ class HttpAdapterTest(unittest.TestCase):
         )
         self.assertEqual(traversal_status, HTTPStatus.NOT_FOUND)
         self.assertNotIn(b"private", traversal_body)
-
 
 if __name__ == "__main__":
     unittest.main()

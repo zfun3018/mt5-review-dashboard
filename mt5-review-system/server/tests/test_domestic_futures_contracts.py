@@ -7,7 +7,14 @@ from app.platform_adapters.contracts import NormalizedExecution
 
 
 class DomesticFuturesContractsTest(unittest.TestCase):
-    def test_contract_display_uses_common_product_code(self):
+    def test_contract_display_uses_chinese_common_name_and_expands_short_month(self):
+        display = contract_display("FG701")
+
+        self.assertEqual(display["product_code"], "FG")
+        self.assertEqual(display["product_name"], "玻璃")
+        self.assertEqual(display["contract_name"], "玻璃2701")
+
+    def test_contract_display_uses_industry_common_index_code(self):
         display = contract_display(" IF2611 ")
 
         self.assertEqual(display["product_code"], "IF")
@@ -20,6 +27,13 @@ class DomesticFuturesContractsTest(unittest.TestCase):
         self.assertEqual(display["product_code"], "V")
         self.assertEqual(display["product_name"], "PVC")
         self.assertEqual(display["contract_name"], "PVC2701")
+
+    def test_contract_display_uses_pe_for_polyethylene(self):
+        display = contract_display("L2701")
+
+        self.assertEqual(display["product_code"], "L")
+        self.assertEqual(display["product_name"], "PE")
+        self.assertEqual(display["contract_name"], "PE2701")
 
     def test_contract_display_normalizes_pta_alias(self):
         display = contract_display("TA2701")

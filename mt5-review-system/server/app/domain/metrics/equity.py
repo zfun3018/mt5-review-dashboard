@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.domain.analytics import build_cumulative_return_curve, parse_dt
-from app.domain.analysis_context import AnalysisContext
-from app.domain.metric_contracts import MetricDefinition, MetricResult
+from ..analytics import build_cumulative_return_curve, parse_dt
+from ..analysis_context import AnalysisContext
+from ..metric_contracts import MetricDefinition, MetricResult
 
 
 DEFINITION_VERSION = "1"

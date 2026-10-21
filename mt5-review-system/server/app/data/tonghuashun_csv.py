@@ -25,7 +25,7 @@ _ALIASES = {
     "volume": ("手数", "成交量", "数量", "成交数量", "quantity", "volume"),
     "pnl": ("平仓盈亏", "平仓盈亏(元)", "盈亏", "平仓收益", "pnl"),
     "fee": ("手续费", "手续费(元)", "交易手续费", "费用", "fee"),
-    "ticket": ("成交编号", "成交序号", "成交号", "订单号", "委托编号", "trade_id", "ticket", "order_id"),
+    "ticket": ("成交序号", "成交编号", "成交号", "订单号", "委托编号", "trade_id", "ticket", "order_id"),
     "account": ("资金账号", "账号", "账户", "客户号"),
     "date": ("实际成交日期", "成交日期", "交易日期", "trade_date", "date"),
 }
@@ -159,6 +159,9 @@ def _parse_tonghuashun_table(
         trades=matched.trades,
     )
     result.update(preview)
+    result["_normalized_executions"] = deduplicated.executions
+    result["_duplicate_executions"] = deduplicated.duplicates
+    result["_invalid_issues"] = tuple(issues)
     if "pnl" not in columns or any(not _has_value(row, columns.get("pnl")) for _, row in records):
         result["warnings"].append("导出未完整提供平仓盈亏，导入交易的盈亏将按原始数据记为 0；请确认原始导出列。")
     return result
@@ -178,9 +181,12 @@ def _empty_result(filename: str, sheet_name: str) -> dict[str, Any]:
         "trades": [],
         "unpaired_rows": [],
         "invalid_rows": [],
+        "conflict_rows": [],
         "issues": [],
         "day_counts": {},
         "warnings": [],
+        "_duplicate_executions": (),
+        "_invalid_issues": (),
     }
 
 

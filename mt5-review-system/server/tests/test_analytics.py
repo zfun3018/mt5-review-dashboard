@@ -114,6 +114,28 @@ class AnalyticsTest(unittest.TestCase):
         self.assertEqual(monday["hours"][22]["net_pnl"], 120.0)
         self.assertEqual(tuesday["hours"][9]["net_pnl"], -30.0)
 
+    def test_recent_hour_heatmap_exposes_date_and_chinese_weekday_labels(self):
+        anchor = datetime(2026, 8, 12, 8, 0, tzinfo=timezone.utc)
+
+        heatmap = build_hour_heatmap([], anchor_utc=anchor, days=7)
+
+        self.assertEqual(
+            [row["label"] for row in heatmap["days"]],
+            [
+                "8月6日 周四",
+                "8月7日 周五",
+                "8月8日 周六",
+                "8月9日 周日",
+                "8月10日 周一",
+                "8月11日 周二",
+                "8月12日 周三",
+            ],
+        )
+        self.assertEqual(
+            [row["weekday_label"] for row in heatmap["days"]],
+            ["周四", "周五", "周六", "周日", "周一", "周二", "周三"],
+        )
+
     def test_builds_weekday_hour_heatmap_across_the_selected_history(self):
         trades = [
             {"close_time_utc": "2026-08-10T14:30:00+00:00", "pnl": 120.0},

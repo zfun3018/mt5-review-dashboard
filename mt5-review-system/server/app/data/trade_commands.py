@@ -23,6 +23,7 @@ from ..platforms import normalize_platform
 from .campaign_repository import CampaignRepository
 from .catalog_commands import _ensure_classification_option, _validate_classification_assignment
 from .catalog_repository import CatalogRepository
+from .import_repository import import_sources_for_trade_ids
 
 
 MAX_MANUAL_SCREENSHOT_BYTES = 15 * 1024 * 1024
@@ -65,9 +66,11 @@ def list_trades(include_deleted: bool = False, platform: str = "mt5") -> list[di
             (platform,),
         ).fetchall()
         custom_values = _custom_values_for_trade_ids(conn, [row["id"] for row in rows])
+        import_sources = import_sources_for_trade_ids(conn, [row["id"] for row in rows])
     result = [dict(row) for row in rows]
     for row in result:
         row["custom_fields"] = custom_values.get(str(row["id"]), {})
+        row["import_sources"] = import_sources.get(str(row["id"]), [])
     return result
 
 
@@ -88,10 +91,12 @@ def get_trade(
             (trade_id, normalize_platform(platform)),
         ).fetchone()
         custom_values = _custom_values_for_trade_ids(conn, [row["id"]]) if row else {}
+        import_sources = import_sources_for_trade_ids(conn, [row["id"]]) if row else {}
     if not row:
         return None
     result = dict(row)
     result["custom_fields"] = custom_values.get(str(result["id"]), {})
+    result["import_sources"] = import_sources.get(str(result["id"]), [])
     return result
 
 
@@ -510,6 +515,7 @@ def _upsert_trade_conn(
     trade.setdefault("swap", 0.0)
     trade.setdefault("fee", 0.0)
     trade.setdefault("platform", "mt5")
+    trade.setdefault("trade_date", None)
     trade.setdefault("product_name", "")
     trade.setdefault("contract_name", "")
     trade.setdefault("review_text", "")
@@ -529,18 +535,19 @@ def _upsert_trade_conn(
     conn.execute(
         """
         INSERT INTO trades (
-            id, platform, account, order_no, position_id, order_ticket, deal_ticket, symbol, product_name, contract_name, side, lots,
+            id, platform, trade_date, account, order_no, position_id, order_ticket, deal_ticket, symbol, product_name, contract_name, side, lots,
             open_time_utc, close_time_utc, duration_seconds, entry_price, exit_price, pnl,
             commission, swap, fee, screenshot_path, review_text, trend_id, remark,
             trade_type, strategy, source, raw_json
         ) VALUES (
-            :id, :platform, :account, :order_no, :position_id, :order_ticket, :deal_ticket, :symbol, :product_name, :contract_name, :side, :lots,
+            :id, :platform, :trade_date, :account, :order_no, :position_id, :order_ticket, :deal_ticket, :symbol, :product_name, :contract_name, :side, :lots,
             :open_time_utc, :close_time_utc, :duration_seconds, :entry_price, :exit_price, :pnl,
             :commission, :swap, :fee, :screenshot_path, :review_text, :trend_id, :remark,
             :trade_type, :strategy, :source, :raw_json
         )
         ON CONFLICT(id) DO UPDATE SET
             platform = excluded.platform,
+            trade_date = excluded.trade_date,
             account = excluded.account,
             order_no = excluded.order_no,
             position_id = excluded.position_id,

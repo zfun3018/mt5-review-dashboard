@@ -33,12 +33,13 @@ def _serialize_trade(
     trade["display_order_no"] = display_no
     trade["custom_fields"] = (custom_values or {}).get(trade["id"], {})
     trade["session_label"] = _trade_session_label(trade["close_time_utc"])
-    screenshot_exists = MediaRepository(runtime_paths()).exists(
-        str(trade.get("screenshot_path") or "")
-    )
-    trade["screenshot_missing"] = bool(trade["screenshot_path"]) and not screenshot_exists
+    media = MediaRepository(runtime_paths())
+    raw_screenshot_path = str(trade.get("screenshot_path") or "")
+    screenshot_path = media.normalize_relative_path(raw_screenshot_path)
+    screenshot_exists = media.exists(screenshot_path or raw_screenshot_path)
+    trade["screenshot_missing"] = bool(raw_screenshot_path.strip()) and not screenshot_exists
     if screenshot_exists:
-        trade["screenshot_url"] = f"/media/{trade['screenshot_path']}"
+        trade["screenshot_url"] = f"/media/{screenshot_path}"
     else:
         trade["screenshot_url"] = ""
     return trade

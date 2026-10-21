@@ -4,6 +4,7 @@ import inspect
 from typing import Any, Callable
 
 from ..domain.analytics import to_beijing
+from ..platforms import DOMESTIC_FUTURES_PLATFORM
 from . import PageRequest
 
 
@@ -89,7 +90,7 @@ class AlbumService:
                 "archived": bool(values.get("archived", False)),
             },
             "trades": page_trades,
-            "days": _group_days(page_trades),
+            "days": _group_days(page_trades, platform),
             "total": result.total,
             "page": result.page,
             "page_size": result.page_size,
@@ -319,7 +320,12 @@ def _serialize_trade(
     trade: dict[str, Any], catalog: dict[str, Any]
 ) -> dict[str, Any]:
     serialized = dict(trade)
-    serialized["album_date"] = to_beijing(trade["close_time_utc"]).date().isoformat()
+    if str(trade.get("platform") or "mt5") == DOMESTIC_FUTURES_PLATFORM and trade.get("trade_date"):
+        serialized["album_date"] = str(trade["trade_date"])
+        serialized["album_date_label"] = "ORDER TRADE DATE"
+    else:
+        serialized["album_date"] = to_beijing(trade["close_time_utc"]).date().isoformat()
+        serialized["album_date_label"] = "BEIJING CLOSE DATE"
     serialized["album_tags"] = _tags_for_trade(trade, catalog)
     return serialized
 
@@ -348,13 +354,18 @@ def _apply_checkin_status(trades: list[dict[str, Any]], repository) -> None:
         trade["reading_checkin_count"] = int(summary.get("count", 0))
 
 
-def _group_days(trades: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _group_days(trades: list[dict[str, Any]], platform: str = "mt5") -> list[dict[str, Any]]:
     groups: dict[str, list[dict[str, Any]]] = {}
     for trade in trades:
         groups.setdefault(trade["album_date"], []).append(trade)
     return [
         {
             "date": day,
+            "date_label": (
+                "ORDER TRADE DATE"
+                if str(platform or "mt5") == DOMESTIC_FUTURES_PLATFORM
+                else "BEIJING CLOSE DATE"
+            ),
             "order_count": len(day_trades),
             "net_pnl": round(
                 sum(float(trade.get("net_pnl") or 0) for trade in day_trades), 2
