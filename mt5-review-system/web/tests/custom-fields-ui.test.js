@@ -63,6 +63,18 @@ test("dashboard charts use GridStack layout and ECharts with responsive sizing",
   assert.match(chartOptions, /type:\s*"bar"/);
 });
 
+test("dashboard metric explanations expose optional server metadata and explicit states", () => {
+  assert.match(dashboardHtml, /id="metricExplanationMeta"/);
+  assert.match(dashboardJs, /metric_meta/);
+  assert.match(dashboardJs, /definition_version/);
+  assert.match(dashboardJs, /sample_count/);
+  assert.match(dashboardJs, /coverage/);
+  assert.match(dashboardJs, /warnings/);
+  assert.match(dashboardJs, /insufficient_data/);
+  assert.match(dashboardJs, /not_applicable/);
+  assert.doesNotMatch(dashboardJs, /numeric < 30/);
+});
+
 test("custom field type and options are sent when fields are added or saved", () => {
   assert.match(settingsHtml, /newCustomFieldType/);
   assert.match(schemaSource, /field_type:\s*fieldType/);

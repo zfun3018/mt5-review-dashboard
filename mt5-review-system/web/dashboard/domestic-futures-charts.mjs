@@ -10,9 +10,24 @@ const EMPTY_GRAPHIC = (message) => ({
   },
 });
 
+const CHART_STATE_LABELS = Object.freeze({
+  insufficient_data: "样本不足",
+  incomplete_data: "数据不完整",
+  not_applicable: "不适用",
+});
+
+export function chartMetricState(payload = {}, key) {
+  const status = String(payload?.metric_meta?.[key]?.status || "");
+  return CHART_STATE_LABELS[status] ? {status, label: CHART_STATE_LABELS[status]} : null;
+}
+
 function toFiniteNumber(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function hasFiniteValue(value) {
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
 }
 
 function shortDate(value, fallback) {
@@ -47,7 +62,10 @@ function beijingDateKey(point) {
 export function collapseEquityPointsByBeijingDay(points = []) {
   const result = [];
   const dayIndexes = new Map();
-  points.forEach((point, index) => {
+  points.filter((point) => {
+    const timestamp = String(point?.time_bj || point?.time_utc || "");
+    return Number.isFinite(Date.parse(timestamp)) && hasFiniteValue(point?.cumulative_return);
+  }).forEach((point, index) => {
     const isBaseline = index === 0 && (point?.trade_id === "baseline" || Number(point?.cumulative_return) === 0);
     if (isBaseline) {
       result.push(point);
@@ -101,7 +119,8 @@ function axisBounds(values) {
 }
 
 export function buildNetPerformanceOption(payload = {}) {
-  const points = collapseEquityPointsByBeijingDay(sortByTime(Array.isArray(payload.equity) ? payload.equity : []));
+  const state = chartMetricState(payload, "equity_curve");
+  const points = state ? [] : collapseEquityPointsByBeijingDay(sortByTime(Array.isArray(payload.equity) ? payload.equity : []));
   const labels = points.map((point, index) => shortDate(point.time_bj, `点 ${index + 1}`));
   const values = points.map((point) => toFiniteNumber(point.cumulative_return));
   const bounds = axisBounds(values);
@@ -152,12 +171,15 @@ export function buildNetPerformanceOption(payload = {}) {
         data: [{yAxis: 0}],
       },
     }],
-    graphic: empty ? [EMPTY_GRAPHIC("当前范围暂无累计曲线")] : [],
+    graphic: empty ? [EMPTY_GRAPHIC(state?.label || "当前范围暂无累计曲线")] : [],
   };
 }
 
 export function buildMonthlyPnlOption(payload = {}) {
-  const rows = [...(Array.isArray(payload.monthly_pnl) ? payload.monthly_pnl : [])].sort((left, right) => String(left?.month || "").localeCompare(String(right?.month || "")));
+  const state = chartMetricState(payload, "monthly_pnl");
+  const rows = [...(Array.isArray(payload.monthly_pnl) ? payload.monthly_pnl : [])]
+    .filter((row) => !state && String(row?.month || "").trim() && hasFiniteValue(row?.net_pnl))
+    .sort((left, right) => String(left?.month || "").localeCompare(String(right?.month || "")));
   const labels = rows.map((row, index) => {
     const month = String(row.month || "");
     return month.length >= 7 ? `${month.slice(5, 7)}月` : month || `第 ${index + 1} 月`;
@@ -207,20 +229,21 @@ export function buildMonthlyPnlOption(payload = {}) {
         data: [{yAxis: 0}],
       },
     }],
-    graphic: empty ? [EMPTY_GRAPHIC("暂无月度盈亏数据")] : [],
+    graphic: empty ? [EMPTY_GRAPHIC(state?.label || "暂无月度盈亏数据")] : [],
   };
 }
 
 export function buildHeatmapOption(payload = {}) {
+  const state = chartMetricState(payload, "hour_heatmap");
   const rows = Array.isArray(payload.heatmap?.days) ? payload.heatmap.days : [];
   const hours = Array.from({length: 24}, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
   const dates = rows.map((row) => row.label || row.weekday_label || shortDate(row.date, ""));
   const data = [];
   rows.forEach((row, rowIndex) => {
+    if (state) return;
     (row.hours || []).forEach((cell) => {
-      const pnl = toFiniteNumber(cell.net_pnl);
-      const count = toFiniteNumber(cell.order_count);
-      data.push([toFiniteNumber(cell.hour), rowIndex, pnl, count]);
+      if (!hasFiniteValue(cell?.hour) || !hasFiniteValue(cell?.net_pnl) || !hasFiniteValue(cell?.order_count)) return;
+      data.push([Number(cell.hour), rowIndex, Number(cell.net_pnl), Number(cell.order_count)]);
     });
   });
   const maxAbs = Math.max(toFiniteNumber(payload.heatmap?.max_abs_pnl), 1);
@@ -257,7 +280,7 @@ export function buildHeatmapOption(payload = {}) {
       itemStyle: {borderColor: "#f4f8f7", borderWidth: 2, borderRadius: 3},
       emphasis: {itemStyle: {shadowBlur: 8, shadowColor: "rgba(6, 157, 145, .24)"}},
     }],
-    graphic: empty ? [EMPTY_GRAPHIC("当前范围暂无时段数据")] : [],
+    graphic: empty ? [EMPTY_GRAPHIC(state?.label || "当前范围暂无时段数据")] : [],
   };
 }
 

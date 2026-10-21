@@ -194,6 +194,67 @@ test("dashboard tolerates metric metadata and omitted platform-specific sections
   assert.equal(controller.getState().preset, "all");
 });
 
+test("dashboard renders server-owned metric states and metadata without deriving quality", async () => {
+  const view = new FakeView();
+  const button = new FakeElement();
+  button.dataset.metricInfo = "r_metrics";
+  view.allElements.push(button);
+  const { heatmap, sessions, ...analysisWithoutOptionalSections } = ANALYSIS;
+  const api = recordingApi({
+    "/api/analysis": {
+      ...analysisWithoutOptionalSections,
+      metrics: { order_count: 0, net_pnl: 0, payoff_ratio: 0 },
+      r_metrics: { sample_count: 0, complete_count: 0, sqn_status: "insufficient_data", sqn: 0 },
+      metric_meta: {
+        summary: {
+          status: "insufficient_data",
+          sample_count: 0,
+          definition_version: "2",
+          coverage: 0,
+          warnings: ["没有足够样本"],
+        },
+        r_metrics: {
+          status: "insufficient_data",
+          sample_count: 0,
+          definition_version: "2",
+          coverage: 0,
+          warnings: ["R 数据不足"],
+        },
+        sessions: {
+          status: "not_applicable",
+          sample_count: 0,
+          definition_version: "1",
+          coverage: null,
+          warnings: ["当前平台不支持时段统计"],
+        },
+      },
+    },
+  });
+  const controller = createDashboardController({
+    api,
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+
+  const summary = view.getElementById("rMetricSummary").innerHTML;
+  assert.match(summary, /样本不足/);
+  assert.doesNotMatch(summary, />0<\/strong>/);
+  assert.match(view.getElementById("sessions").innerHTML, /不适用/);
+
+  button.dataset.metricContext = "{}";
+  button.dispatchEvent({ type: "click", stopPropagation() {} });
+  const explanation = view.getElementById("metricExplanationBody").innerHTML;
+  const metadata = view.getElementById("metricExplanationMeta").innerHTML;
+  assert.match(explanation, /公式/);
+  assert.match(metadata, /公式版本[\s\S]*2/);
+  assert.match(metadata, /样本数[\s\S]*0/);
+  assert.match(metadata, /覆盖范围[\s\S]*0%/);
+  assert.match(metadata, /R 数据不足/);
+});
+
 test("dashboard URL state round-trips preset, start, end, equity days, year, and month", () => {
   const state = readDashboardState(
     "?preset=custom&start=2026-08-01&end=2026-08-31&equity_days=31&year=2026&month=8",

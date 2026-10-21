@@ -1,6 +1,7 @@
 import {
   buildHeatmapOption,
   buildMonthlyPnlOption,
+  chartMetricState,
   collapseEquityPointsByBeijingDay,
   formatEquityAxisDate,
 } from "./domestic-futures-charts.mjs";
@@ -33,7 +34,8 @@ function compactAxisValue(value) {
 }
 
 export function buildMt5EquityOption(payload = {}) {
-  const points = collapseEquityPointsByBeijingDay(sortByTime(Array.isArray(payload.equity) ? payload.equity : []));
+  const state = chartMetricState(payload, "equity_curve");
+  const points = state ? [] : collapseEquityPointsByBeijingDay(sortByTime(Array.isArray(payload.equity) ? payload.equity : []));
   const values = points.map((point) => toFiniteNumber(point.cumulative_return));
   const bounds = axisBounds(values);
   return {
@@ -71,7 +73,7 @@ export function buildMt5EquityOption(payload = {}) {
       areaStyle: {color: "rgba(6, 157, 145, 0.13)"},
       markLine: {silent: true, symbol: "none", label: {show: false}, lineStyle: {color: "#b8c9c5", type: "dashed"}, data: [{yAxis: 0}]},
     }],
-    graphic: points.length < 2 ? [{type: "text", left: "center", top: "middle", style: {text: "当前范围暂无累计曲线", fill: "#6d7e83", fontSize: 12}}] : [],
+    graphic: points.length < 2 ? [{type: "text", left: "center", top: "middle", style: {text: state?.label || "当前范围暂无累计曲线", fill: "#6d7e83", fontSize: 12}}] : [],
   };
 }
 

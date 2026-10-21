@@ -62,6 +62,64 @@ test("MT5 cumulative chart reduces dense intraday points to daily display closes
   ]);
 });
 
+test("charts omit missing equity and monthly values instead of plotting zero", async () => {
+  const {buildMt5EquityOption, buildMt5MonthlyPnlOption} = await import(moduleUrl("dashboard/mt5-dashboard-charts.mjs"));
+  const equity = buildMt5EquityOption({
+    equity: [
+      {time_bj: "2026-10-01T10:00:00+08:00", cumulative_return: 10},
+      {time_bj: "2026-10-02T10:00:00+08:00", cumulative_return: null},
+      {time_bj: "2026-10-03T10:00:00+08:00"},
+    ],
+  });
+  const monthly = buildMt5MonthlyPnlOption({
+    monthly_pnl: [
+      {month: "2026-10", net_pnl: 20},
+      {month: "2026-11", net_pnl: null},
+    ],
+  });
+
+  assert.deepEqual(equity.series[0].data, [["2026-10-01T10:00:00+08:00", 10]]);
+  assert.deepEqual(monthly.series[0].data, [20]);
+  assert.deepEqual(monthly.xAxis.data, ["10月"]);
+});
+
+test("heatmap omits cells with missing server values instead of plotting zero", async () => {
+  const {buildHeatmapOption} = await import(moduleUrl("dashboard/domestic-futures-charts.mjs"));
+  const option = buildHeatmapOption({
+    heatmap: {
+      max_abs_pnl: 100,
+      days: [{
+        label: "周一",
+        hours: [
+          {hour: 9, net_pnl: 50, order_count: 2},
+          {hour: 10, net_pnl: null, order_count: 2},
+          {hour: 11, net_pnl: -20},
+        ],
+      }],
+    },
+  });
+
+  assert.deepEqual(option.series[0].data, [[9, 0, 50, 2]]);
+});
+
+test("chart metric states suppress zero placeholders and show the server state", async () => {
+  const {buildMt5EquityOption} = await import(moduleUrl("dashboard/mt5-dashboard-charts.mjs"));
+  const {buildHeatmapOption} = await import(moduleUrl("dashboard/domestic-futures-charts.mjs"));
+  const equity = buildMt5EquityOption({
+    equity: [{time_bj: "2026-10-01T10:00:00+08:00", cumulative_return: 0}],
+    metric_meta: {equity_curve: {status: "insufficient_data"}},
+  });
+  const heatmap = buildHeatmapOption({
+    heatmap: {max_abs_pnl: 100, days: [{label: "周一", hours: [{hour: 9, net_pnl: 50, order_count: 1}]}]},
+    metric_meta: {hour_heatmap: {status: "not_applicable"}},
+  });
+
+  assert.deepEqual(equity.series[0].data, []);
+  assert.match(equity.graphic[0].style.text, /样本不足/);
+  assert.deepEqual(heatmap.series[0].data, []);
+  assert.match(heatmap.graphic[0].style.text, /不适用/);
+});
+
 test("MT5 cumulative chart formats time-axis timestamps as Beijing dates", async () => {
   const {buildMt5EquityOption} = await import(moduleUrl("dashboard/mt5-dashboard-charts.mjs"));
   const option = buildMt5EquityOption({
@@ -145,4 +203,20 @@ test("MT5 heatmap uses a high-contrast red-white-green scale", async () => {
 
   assert.deepEqual(option.visualMap.inRange.color, ["#b4233f", "#ffffff", "#007f73"]);
   assert.equal(option.visualMap.dimension, 2);
+});
+
+test("MT5 heatmap uses the backend date and weekday labels", async () => {
+  const {buildHeatmapOption} = await import(moduleUrl("dashboard/domestic-futures-charts.mjs"));
+  const option = buildHeatmapOption({
+    heatmap: {
+      max_abs_pnl: 100,
+      days: [
+        {date: "2026-10-19", label: "10月19日 周一", hours: [{hour: 9, net_pnl: 50, order_count: 1}]},
+        {date: "2026-10-20", label: "10月20日 周二", hours: [{hour: 9, net_pnl: -25, order_count: 1}]},
+      ],
+    },
+  });
+
+  assert.deepEqual(option.yAxis.data, ["10月19日 周一", "10月20日 周二"]);
+  assert.match(option.tooltip.formatter({value: [9, 0, 50, 1]}), /10月19日 周一/);
 });

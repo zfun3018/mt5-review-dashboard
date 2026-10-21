@@ -63,53 +63,28 @@ function minutesToClock(minutes) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function metricQuality(metricKey, value, context = {}) {
-  const hasValue = value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
-  const numeric = Number(value);
-  if (metricKey === "campaign_count") {
-    if (!Number.isFinite(numeric) || numeric < 30) return { label: "样本不足", tone: "insufficient" };
-    if (numeric < 100) return { label: "一般", tone: "average" };
-    return { label: "好", tone: "good" };
-  }
-  if (!hasValue) return { label: "样本不足", tone: "insufficient" };
-  const rMetricKeys = ["scratch", "decisive_win_rate", "all_sample_win_rate", "expectancy_r", "sqn"];
-  const rSampleSize = Number(context.completeCount ?? context.sampleCount);
-  if (rMetricKeys.includes(metricKey) && Number.isFinite(rSampleSize) && rSampleSize <= 0) {
-    return { label: "样本不足", tone: "insufficient" };
-  }
-  if (["cash_profit_factor", "payoff_ratio"].includes(metricKey)) {
-    if (numeric < 1) return { label: "差", tone: "bad" };
-    if (numeric < 1.5) return { label: "一般", tone: "average" };
-    return { label: "好", tone: "good" };
-  }
-  if (["cash_win_rate", "decisive_win_rate", "all_sample_win_rate"].includes(metricKey)) {
-    if (numeric < 0.4) return { label: "差", tone: "bad" };
-    if (numeric < 0.5) return { label: "一般", tone: "average" };
-    return { label: "好", tone: "good" };
-  }
-  if (metricKey === "expectancy_r") {
-    if (numeric < 0) return { label: "差", tone: "bad" };
-    if (numeric === 0) return { label: "一般", tone: "average" };
-    return { label: "好", tone: "good" };
-  }
-  if (metricKey === "sqn") {
-    if (context.sqn_status && context.sqn_status !== "available") return { label: "样本不足", tone: "insufficient" };
-    if (numeric < 1) return { label: "差", tone: "bad" };
-    if (numeric < 2) return { label: "一般", tone: "average" };
-    return { label: "好", tone: "good" };
-  }
-  if (metricKey === "scratch") {
-    if (numeric > 0.3) return { label: "差", tone: "bad" };
-    if (numeric > 0.15) return { label: "一般", tone: "average" };
-    return { label: "好", tone: "good" };
-  }
-  return { label: "一般", tone: "average" };
+const METRIC_STATE_LABELS = Object.freeze({
+  insufficient_data: {label: "样本不足", tone: "insufficient"},
+  incomplete_data: {label: "数据不完整", tone: "incomplete"},
+  estimated: {label: "估算", tone: "estimated"},
+  not_applicable: {label: "不适用", tone: "not-applicable"},
+});
+
+function metricState(meta = {}) {
+  const state = METRIC_STATE_LABELS[String(meta?.status || "")];
+  return state ? {...state, status: String(meta.status)} : null;
 }
 
-function metricQualityBadge(metricKey, value, context = {}) {
-  const result = metricQuality(metricKey, value, context);
-  const label = result.tone === "insufficient" ? "!" : result.label;
-  return `<em class="metric-quality metric-quality-${result.tone}" title="${result.label}">${label}</em>`;
+function metricValue(value, formatter, meta = {}) {
+  const state = metricState(meta);
+  if (state && !["available", "estimated"].includes(state.status)) return state.label;
+  return formatter(value);
+}
+
+function metricQualityBadge(meta = {}) {
+  const state = metricState(meta);
+  if (!state) return "";
+  return `<em class="metric-quality metric-quality-${state.tone}" title="${state.label}">${state.label}</em>`;
 }
 
 function compactMetricText(value) {
@@ -125,13 +100,40 @@ function metricExplanation(metricKey, context) {
 }
 
 function metricContext(metrics = {}, extra = {}) {
-  return {
+  const context = {
     scratchThresholdR: Number(metrics.scratch_threshold_r ?? 0.15),
     sampleCount: Number(metrics.sample_count || 0),
     completeCount: Number(metrics.complete_count || 0),
     missingCount: Number(metrics.missing_count || 0),
     missingPositionCount: Number(extra.missingPositionCount || 0),
   };
+  if (extra.metricMeta) context.metricMeta = extra.metricMeta;
+  return context;
+}
+
+function formatMetricCoverage(value) {
+  if (value === null || value === undefined || value === "") return "未提供";
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 1
+    ? `${Math.round(numeric * 100)}%`
+    : String(value);
+}
+
+function renderMetricMetadata(meta = {}) {
+  if (!meta || typeof meta !== "object" || !Object.keys(meta).length) return "";
+  const status = METRIC_STATE_LABELS[String(meta.status || "")];
+  const version = meta.definition_version ?? meta.formula_version;
+  const warnings = Array.isArray(meta.warnings) ? meta.warnings : meta.warnings ? [meta.warnings] : [];
+  const rows = [
+    status ? `<div><dt>状态</dt><dd>${escapeHtml(status.label)}</dd></div>` : "",
+    version !== undefined && version !== null ? `<div><dt>公式版本</dt><dd>${escapeHtml(version)}</dd></div>` : "",
+    meta.sample_count !== undefined && meta.sample_count !== null ? `<div><dt>样本数</dt><dd>${escapeHtml(meta.sample_count)}</dd></div>` : "",
+    meta.coverage !== undefined ? `<div><dt>覆盖范围</dt><dd>${escapeHtml(formatMetricCoverage(meta.coverage))}</dd></div>` : "",
+  ].filter(Boolean).join("");
+  const warningMarkup = warnings.length
+    ? `<div><dt>警告</dt><dd><ul>${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul></dd></div>`
+    : "";
+  return rows || warningMarkup ? `<dl class="metric-meta-list">${rows}${warningMarkup}</dl>` : "";
 }
 
 export function getDashboardWorkspaceConfig(platform = "mt5") {
@@ -172,6 +174,15 @@ export function createDashboardController({
 
   function getElement(id) {
     return typeof view.getElementById === "function" ? view.getElementById(id) : null;
+  }
+
+  function metricMetaFor(key) {
+    return payload?.metric_meta?.[key] || {};
+  }
+
+  function metricMetaForKey(key) {
+    const summaryKeys = new Set(["net_pnl", "campaign_count", "cash_profit_factor", "cash_win_rate", "payoff_ratio"]);
+    return metricMetaFor(summaryKeys.has(key) ? "summary" : "r_metrics");
   }
 
   function setHtml(id, html) {
@@ -285,23 +296,25 @@ export function createDashboardController({
   function renderRMetricSummary() {
     const metrics = payload?.r_metrics || {};
     const cash = payload?.metrics || payload || {};
-    const sqn = metrics.sqn_status === "available" ? Number(metrics.sqn).toFixed(2) : "!";
+    const summaryMeta = metricMetaFor("summary");
+    const rMeta = metricMetaFor("r_metrics");
+    const formatSqn = (value) => metrics.sqn_status === "available" ? Number(value).toFixed(2) : "!";
     const items = [
-      ["net_pnl", "总盈利", formatMoney(cash.net_pnl), profitClass(cash.net_pnl)],
-      ["campaign_count", "交易笔数", String(cash.order_count ?? metrics.sample_count ?? 0), ""],
-      ["payoff_ratio", "净盈亏比", formatRatio(cash.payoff_ratio), ""],
-      ["decisive_win_rate", "净胜率（剔除打平）", formatPercent(metrics.decisive_win_rate)],
-      ["expectancy_r", "平均数学期望（ER）", formatRValue(metrics.expectancy_r)],
-      ["sqn", "收益稳定度（SQN）", sqn],
-      ["z_score", "Z 分数", compactMetricText(formatZScore(metrics.z_score))],
+      ["net_pnl", "总盈利", metricValue(cash.net_pnl, formatMoney, summaryMeta), metricState(summaryMeta) ? "" : profitClass(cash.net_pnl), summaryMeta],
+      ["campaign_count", "交易笔数", metricValue(cash.order_count ?? metrics.sample_count ?? 0, String, summaryMeta), "", summaryMeta],
+      ["payoff_ratio", "净盈亏比", metricValue(cash.payoff_ratio, formatRatio, summaryMeta), "", summaryMeta],
+      ["decisive_win_rate", "净胜率（剔除打平）", metricValue(metrics.decisive_win_rate, formatPercent, rMeta), "", rMeta],
+      ["expectancy_r", "平均数学期望（ER）", metricValue(metrics.expectancy_r, formatRValue, rMeta), "", rMeta],
+      ["sqn", "收益稳定度（SQN）", metricValue(metrics.sqn, formatSqn, rMeta), "", rMeta],
+      ["z_score", "Z 分数", metricValue(metrics.z_score, (value) => compactMetricText(formatZScore(value)), rMeta), "", rMeta],
     ];
     setHtml(
       "rMetricSummary",
       items
         .map(
-          ([key, label, value, tone = ""]) => `
+          ([key, label, value, tone = "", meta = {}]) => `
             <div class="r-metric-item">
-              <span>${escapeHtml(label)} ${metricInfoButton(key, label, metrics)}</span>
+              <span>${escapeHtml(label)} ${metricInfoButton(key, label, metrics, {metricMeta: meta})}</span>
               <strong class="${tone}">${escapeHtml(value)}</strong>
             </div>
           `,
@@ -312,16 +325,24 @@ export function createDashboardController({
 
   function renderEquity() {
     const sourcePoints = payload?.equity || [];
-    const delta = Number(sourcePoints.at(-1)?.cumulative_return || 0);
+    const equityMeta = metricMetaFor("equity_curve");
+    const rawDelta = sourcePoints.at(-1)?.cumulative_return;
+    const delta = Number(rawDelta);
+    const deltaText = metricValue(rawDelta, (value) => {
+      const amount = Number(value);
+      const safeAmount = Number.isFinite(amount) ? amount : 0;
+      return `${safeAmount >= 0 ? "+" : ""}${formatMoney(safeAmount)} 区间回报`;
+    }, equityMeta);
     const deltaNode = getElement("equityDelta");
     if (deltaNode) {
-      deltaNode.textContent = `${delta >= 0 ? "+" : ""}${formatMoney(delta)} 区间回报`;
-      deltaNode.className = `status-pill ${profitClass(delta)}`;
+      deltaNode.textContent = deltaText;
+      deltaNode.className = `status-pill ${metricState(equityMeta) ? "" : profitClass(delta)}`;
     }
   }
 
   function renderSystemEvaluationSummary() {
     const periods = payload?.periods || {};
+    const periodsMeta = metricMetaFor("periods");
     const items = [
       ["本日", periods.today],
       ["本周", periods.week],
@@ -333,19 +354,19 @@ export function createDashboardController({
       items
         .map(([label, item]) => {
           const r = item.r_metrics || {};
-          const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "!";
+          const sqn = metricValue(r.sqn, (value) => r.sqn_status === "available" ? Number(value).toFixed(2) : "!", periodsMeta);
           return `
             <article class="evaluation-summary-card">
-              <header><span>${escapeHtml(label)}</span><strong class="${profitClass(item.net_pnl)}">${escapeHtml(formatMoney(item.net_pnl))}</strong></header>
+              <header><span>${escapeHtml(label)}</span><strong class="${metricState(periodsMeta) ? "" : profitClass(item.net_pnl)}">${escapeHtml(metricValue(item.net_pnl, formatMoney, periodsMeta))}</strong></header>
               <div class="evaluation-summary-grid-inner">
-                <span>交易笔数<strong>${r.sample_count || 0}</strong></span>
-                <span>总盈亏比<strong>${formatRatio(item.profit_factor)}</strong></span>
-                <span>净盈亏比<strong>${formatRatio(item.payoff_ratio)}</strong></span>
-                <span>总胜率<strong>${formatPercent(item.cash_win_rate ?? item.win_rate)}</strong></span>
-                <span>净胜率（剔除打平）<strong>${formatPercent(r.decisive_win_rate)}</strong></span>
-                <span>平均数学期望（ER）<strong>${compactMetricText(formatRValue(r.expectancy_r))}</strong></span>
+                <span>交易笔数<strong>${metricValue(r.sample_count, String, periodsMeta)}</strong></span>
+                <span>总盈亏比<strong>${metricValue(item.profit_factor, formatRatio, periodsMeta)}</strong></span>
+                <span>净盈亏比<strong>${metricValue(item.payoff_ratio, formatRatio, periodsMeta)}</strong></span>
+                <span>总胜率<strong>${metricValue(item.cash_win_rate ?? item.win_rate, formatPercent, periodsMeta)}</strong></span>
+                <span>净胜率（剔除打平）<strong>${metricValue(r.decisive_win_rate, formatPercent, periodsMeta)}</strong></span>
+                <span>平均数学期望（ER）<strong>${metricValue(r.expectancy_r, (value) => compactMetricText(formatRValue(value)), periodsMeta)}</strong></span>
                 <span>收益稳定度（SQN）<strong>${sqn}</strong></span>
-                <span class="evaluation-z-row"><span>交易结果连续性（Z 分数） ${metricInfoButton("z_score", "交易结果连续性（Z 分数）", r)}</span><strong>${escapeHtml(compactMetricText(formatZScore(r.z_score || item.z_score)))}</strong></span>
+                <span class="evaluation-z-row"><span>交易结果连续性（Z 分数） ${metricInfoButton("z_score", "交易结果连续性（Z 分数）", r, {metricMeta: periodsMeta})}</span><strong>${escapeHtml(metricValue(r.z_score || item.z_score, (value) => compactMetricText(formatZScore(value)), periodsMeta))}</strong></span>
               </div>
             </article>
           `;
@@ -356,25 +377,26 @@ export function createDashboardController({
 
   function renderSystemEvaluation() {
     const allRows = [...(payload?.system_evaluation || [])];
+    const evaluationMeta = metricMetaFor("system_evaluation");
     const rows = allRows.slice(-30).reverse();
     setHtml(
       "systemEvaluationRows",
       rows
         .map((row) => {
           const r = row.r_metrics || {};
-          const sqn = r.sqn_status === "available" ? Number(r.sqn).toFixed(2) : "!";
+          const sqn = metricValue(r.sqn, (value) => r.sqn_status === "available" ? Number(value).toFixed(2) : "!", evaluationMeta);
           return `
             <tr>
               <td><strong>${escapeHtml(row.date)}</strong></td>
-              <td class="${profitClass(row.net_pnl)}">${formatMoney(row.net_pnl)}</td>
-              <td>${row.order_count} ${metricQualityBadge("campaign_count", row.order_count, r)}</td>
-              <td>${formatRatio(row.profit_factor)} ${metricQualityBadge("cash_profit_factor", row.profit_factor, r)}</td>
-              <td>${formatRatio(row.payoff_ratio)} ${metricQualityBadge("payoff_ratio", row.payoff_ratio, row)}</td>
-              <td>${formatPercent(row.cash_win_rate ?? row.win_rate)} ${metricQualityBadge("cash_win_rate", row.cash_win_rate ?? row.win_rate, row)}</td>
-              <td>${formatPercent(r.decisive_win_rate)} ${metricQualityBadge("decisive_win_rate", r.decisive_win_rate, r)}</td>
-              <td>${formatPercent(r.scratch_rate)} ${metricQualityBadge("scratch", r.scratch_rate, r)}</td>
-              <td>${compactMetricText(formatRValue(r.expectancy_r))} ${metricQualityBadge("expectancy_r", r.expectancy_r, r)}</td>
-              <td>${sqn} ${metricQualityBadge("sqn", r.sqn, r)}</td>
+              <td class="${metricState(evaluationMeta) ? "" : profitClass(row.net_pnl)}">${metricValue(row.net_pnl, formatMoney, evaluationMeta)}</td>
+              <td>${metricValue(row.order_count, String, evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${metricValue(row.profit_factor, formatRatio, evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${metricValue(row.payoff_ratio, formatRatio, evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${metricValue(row.cash_win_rate ?? row.win_rate, formatPercent, evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${metricValue(r.decisive_win_rate, formatPercent, evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${metricValue(r.scratch_rate, formatPercent, evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${metricValue(r.expectancy_r, (value) => compactMetricText(formatRValue(value)), evaluationMeta)} ${metricQualityBadge(evaluationMeta)}</td>
+              <td>${sqn} ${metricQualityBadge(evaluationMeta)}</td>
             </tr>
           `;
         })
@@ -468,6 +490,12 @@ export function createDashboardController({
   function renderSessions() {
     if (!workspace.showSessions) return;
     const labels = { asia: "亚盘", europe: "欧盘", us: "美盘" };
+    const sessionsMeta = metricMetaFor("sessions");
+    const state = metricState(sessionsMeta);
+    if (state && state.status !== "estimated") {
+      setHtml("sessions", `<div class="detail-empty metric-state-${state.tone}">${state.label}</div>`);
+      return;
+    }
     const sessions = payload?.sessions || {};
     setHtml(
       "sessions",
@@ -539,6 +567,7 @@ export function createDashboardController({
     }
     const explanation = metricExplanation(button.dataset.metricInfo, context);
     setText("metricExplanationTitle", explanation.title);
+    setHtml("metricExplanationMeta", renderMetricMetadata(context.metricMeta || metricMetaForKey(button.dataset.metricInfo)));
     setHtml(
       "metricExplanationBody",
       `<p><strong>公式</strong>${escapeHtml(explanation.formula)}</p>
