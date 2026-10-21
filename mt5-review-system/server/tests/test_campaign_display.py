@@ -101,9 +101,9 @@ class CampaignDisplayTest(unittest.TestCase):
         result = _serialize_campaign_record(record, include_positions=False)
 
         self.assertEqual(result["symbol"], "IF2611")
-        self.assertEqual(result["product_name"], "IF")
-        self.assertEqual(result["contract_name"], "IF2611")
-        self.assertEqual(result["display_symbol"], "IF2611")
+        self.assertEqual(result["product_name"], "沪深300股指")
+        self.assertEqual(result["contract_name"], "沪深300股指2611")
+        self.assertEqual(result["display_symbol"], "沪深300股指2611")
 
 
 if __name__ == "__main__":

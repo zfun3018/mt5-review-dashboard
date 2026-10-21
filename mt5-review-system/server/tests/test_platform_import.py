@@ -231,6 +231,21 @@ class PlatformImportTest(TemporaryStorageCase):
         self.assertEqual(batches[1]["new_row_count"], 0)
         self.assertEqual(batches[1]["duplicate_count"], 2)
 
+    def test_duplicate_order_sources_use_the_current_batch_row_numbers(self):
+        shifted_csv = (
+            "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交序号\n"
+            "合计,,,,,,,,\n"
+            "2026-10-19 09:30:00,FG701,买,开,1400,1,,5,1001\n"
+            "2026-10-19 10:15:00,FG701,卖,平,1410,1,100,6,1002\n"
+        )
+        import_platform_file("domestic_futures", CSV_TEXT.encode(), "first.csv")
+        import_platform_file("domestic_futures", shifted_csv.encode(), "shifted.csv")
+
+        sources = storage.list_campaigns(platform="domestic_futures")["campaigns"][0]["import_sources"]
+
+        self.assertEqual([item["filename"] for item in sources], ["first.csv", "shifted.csv"])
+        self.assertEqual([item["source_rows"] for item in sources], [[2, 3], [3, 4]])
+
     def test_reimport_prefers_stable_trade_sequence_over_export_order_number(self):
         first = (
             "成交时间,合约,买/卖,开/平,成交价,手数,平仓盈亏,手续费,成交编号,成交序号\n"
@@ -328,6 +343,27 @@ class PlatformImportTest(TemporaryStorageCase):
         self.assertEqual(result["conflict_rows"][0]["differences"][0]["field"], "price")
         self.assertEqual(result["conflict_rows"][0]["differences"][0]["existing"], 4000.0)
         self.assertEqual(result["conflict_rows"][0]["differences"][0]["imported"], 4010.0)
+
+    def test_same_batch_execution_id_conflict_is_excluded_before_matching(self):
+        csv_text = (
+            "trade_date,trade_time,symbol,side,offset,quantity,price,fee,pnl,trade_id\n"
+            "2026-10-20,09:30:00,IF2611,buy,open,1,4000,5,,SAME-BATCH\n"
+            "2026-10-20,09:31:00,IF2611,buy,open,1,4010,5,,SAME-BATCH\n"
+        )
+
+        result = import_platform_file("domestic_futures", csv_text.encode(), "same-batch.csv")
+
+        self.assertEqual(result["new_row_count"], 1)
+        self.assertEqual(result["conflict_count"], 1)
+        self.assertEqual(result["imported"], 0)
+        self.assertEqual(result["conflict_rows"][0]["code"], "execution_conflict")
+        with storage.db() as conn:
+            self.assertEqual(
+                conn.execute(
+                    "SELECT COUNT(*) FROM import_executions WHERE platform = 'domestic_futures'"
+                ).fetchone()[0],
+                1,
+            )
 
     def test_import_file_rejects_unknown_extension(self):
         with self.assertRaises(ValueError) as context:

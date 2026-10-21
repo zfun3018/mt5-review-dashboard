@@ -334,6 +334,7 @@ def classify_import_executions_conn(
     duplicate_executions: list[NormalizedExecution] = []
     duplicate_issues: list[dict[str, Any]] = []
     conflict_issues: list[dict[str, Any]] = []
+    batch_identities: dict[str, NormalizedExecution] = {}
     for execution in executions:
         fingerprint = _execution_fingerprint(execution)
         identity_key = _execution_identity(execution)
@@ -372,6 +373,47 @@ def classify_import_executions_conn(
                     conn, batch_id, existing["id"], "conflict", execution.source_row_number
                 )
                 continue
+            if existing is None and identity_key:
+                batch_existing = batch_identities.get(identity_key)
+                if batch_existing is not None:
+                    if _execution_fingerprint(batch_existing) == fingerprint:
+                        duplicate_executions.append(execution)
+                        duplicate_issues.append(
+                            {
+                                "row_number": execution.source_row_number,
+                                "trade_date": execution.trade_date,
+                                "code": "duplicate_execution",
+                                "message": "成交记录在本次文件中重复，未重复计入",
+                                "details": {
+                                    "duplicate_reason": "本次文件内成交序号和成交字段完全一致",
+                                    "matched_by": "成交序号",
+                                    "existing_source_row_number": batch_existing.source_row_number,
+                                    "source_filename": execution.source_filename,
+                                    "source_sheet": execution.source_sheet,
+                                    "source_row_number": execution.source_row_number,
+                                    "trade_id": execution.trade_id,
+                                    "symbol": execution.symbol,
+                                },
+                            }
+                        )
+                    else:
+                        conflict_issues.append(
+                            {
+                                "row_number": execution.source_row_number,
+                                "trade_date": execution.trade_date,
+                                "code": "execution_conflict",
+                                "message": "本次文件内成交序号重复，但成交字段不一致",
+                                "details": {
+                                    "trade_id": execution.trade_id,
+                                    "existing_execution_id": "",
+                                    "existing_source_row_number": batch_existing.source_row_number,
+                                    "symbol": execution.symbol,
+                                    "matched_by": "本次文件内成交序号",
+                                    "differences": _execution_differences(execution, batch_existing),
+                                },
+                            }
+                        )
+                    continue
         if existing is not None:
             duplicate_executions.append(execution)
             duplicate_issues.append(
@@ -388,6 +430,8 @@ def classify_import_executions_conn(
             )
             continue
         new_executions.append(execution)
+        if identity_key:
+            batch_identities[identity_key] = execution
     return {
         "new_executions": tuple(new_executions),
         "duplicate_executions": tuple(duplicate_executions),
@@ -1157,17 +1201,22 @@ def _duplicate_execution_details(
 
 
 def _execution_differences(execution: NormalizedExecution, existing: Any) -> list[dict[str, Any]]:
+    def value(field: str) -> Any:
+        if isinstance(existing, NormalizedExecution):
+            return getattr(existing, field)
+        return existing[field]
+
     fields = (
-        ("trade_date", existing["trade_date"], execution.trade_date, False),
-        ("time_utc", existing["time_utc"], execution.time_utc, False),
-        ("symbol", existing["symbol"], execution.symbol, False),
-        ("side", existing["side"], execution.side, False),
-        ("offset", existing["offset"], execution.offset, False),
-        ("quantity", existing["quantity"], execution.quantity, True),
-        ("price", existing["price"], execution.price, True),
-        ("fee", existing["fee"], execution.fee, True),
-        ("pnl", existing["pnl"], execution.pnl, True),
-        ("trade_id", existing["trade_id"], execution.trade_id, False),
+        ("trade_date", value("trade_date"), execution.trade_date, False),
+        ("time_utc", value("time_utc"), execution.time_utc, False),
+        ("symbol", value("symbol"), execution.symbol, False),
+        ("side", value("side"), execution.side, False),
+        ("offset", value("offset"), execution.offset, False),
+        ("quantity", value("quantity"), execution.quantity, True),
+        ("price", value("price"), execution.price, True),
+        ("fee", value("fee"), execution.fee, True),
+        ("pnl", value("pnl"), execution.pnl, True),
+        ("trade_id", value("trade_id"), execution.trade_id, False),
     )
     differences = []
     for field, current, imported, numeric in fields:
@@ -1263,7 +1312,7 @@ def import_sources_for_trade_ids(conn, trade_ids: Iterable[str]) -> dict[str, li
         SELECT DISTINCT matches.trade_id, batches.id AS batch_id, batches.filename,
                batches.started_at, batches.file_sha256, executions.id AS execution_id,
                executions.trade_id AS source_trade_id, executions.offset,
-               executions.source_sheet, executions.source_row_number
+               executions.source_sheet, batch_links.source_row_number
         FROM import_execution_matches AS matches
         JOIN import_batch_executions AS batch_links
           ON batch_links.execution_id IN (matches.open_execution_id, matches.close_execution_id)
@@ -1274,7 +1323,7 @@ def import_sources_for_trade_ids(conn, trade_ids: Iterable[str]) -> dict[str, li
         JOIN import_executions AS executions
           ON executions.id = batch_links.execution_id
         WHERE matches.trade_id IN ({placeholders})
-        ORDER BY batches.started_at, executions.source_row_number, executions.id
+        ORDER BY batches.started_at, batch_links.source_row_number, executions.id
         """,
         ids,
     ).fetchall()

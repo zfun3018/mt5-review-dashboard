@@ -211,7 +211,7 @@ def _scope_rows(conn, platform: str, account: str, start: str, end: str) -> dict
     execution_ids: set[str] = set()
     if platform == DOMESTIC_FUTURES_PLATFORM:
         rows = conn.execute(
-            "SELECT id FROM import_executions WHERE platform = ? AND account = ? AND trade_date BETWEEN ? AND ? AND status != 'reverted'",
+            "SELECT id FROM import_executions WHERE platform = ? AND account = ? AND trade_date BETWEEN ? AND ?",
             (platform, account, start, end),
         ).fetchall()
         execution_ids = {str(row["id"]) for row in rows}

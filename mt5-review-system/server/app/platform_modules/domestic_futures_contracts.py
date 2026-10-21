@@ -5,10 +5,13 @@ import re
 
 _PRODUCT_NAMES = {
     # China Financial Futures Exchange.
-    "IF": "IF",
-    "IC": "IC",
-    "IM": "IM",
-    "IH": "IH",
+    "IF": "沪深300股指",
+    "IC": "中证500股指",
+    "IM": "中证1000股指",
+    "IH": "上证50股指",
+    "TF": "5年期国债",
+    "TS": "2年期国债",
+    "T": "10年期国债",
     # Shanghai Futures Exchange and INE.
     "RB": "螺纹钢",
     "HC": "热卷",

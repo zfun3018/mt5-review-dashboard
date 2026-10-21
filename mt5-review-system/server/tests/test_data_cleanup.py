@@ -3,21 +3,29 @@ from __future__ import annotations
 import json
 
 from app import storage
+from app.data.data_cleanup_repository import list_accounts
 from tests.support import TemporaryStorageCase, insert_analysis_trade
 
 
 class DataCleanupTest(TemporaryStorageCase):
-    def _insert_import_metadata(self, *, account="ACC", trade_date="2026-10-20"):
+    def _insert_import_metadata(
+        self,
+        *,
+        account="ACC",
+        trade_date="2026-10-20",
+        batch_status="committed",
+        execution_status="matched",
+    ):
         with storage.db() as conn:
             conn.execute(
                 """
                 INSERT INTO import_batches (
                     id, platform, source_kind, source_format, filename, status,
                     started_at, completed_at, source_row_count, new_row_count, order_count
-                ) VALUES (?, 'domestic_futures', 'tonghuashun', 'xls', ?, 'committed',
+                ) VALUES (?, 'domestic_futures', 'tonghuashun', 'xls', ?, ?,
                           '2026-10-20T01:00:00+00:00', '2026-10-20T01:01:00+00:00', 2, 2, 1)
                 """,
-                ("B-CLEAN", "selected.xls"),
+                ("B-CLEAN", "selected.xls", batch_status),
             )
             conn.execute(
                 """
@@ -29,7 +37,7 @@ class DataCleanupTest(TemporaryStorageCase):
                 ) VALUES (?, ?, ?, 'B-CLEAN', 'domestic_futures', ?, ?,
                           '2026-10-19T13:30:00+00:00', 'FG701', 'long', 'open', 1, 0, 100,
                           1, 0, 'OPEN-1', 'ORDER-1', 'tonghuashun', 'selected.xls',
-                          '成交明细', 2, ?, 'matched')
+                          '成交明细', 2, ?, ?)
                 """,
                 (
                     "EXE-CLEAN",
@@ -38,6 +46,7 @@ class DataCleanupTest(TemporaryStorageCase):
                     account,
                     trade_date,
                     json.dumps({"trade_date": trade_date}),
+                    execution_status,
                 ),
             )
             conn.execute(
@@ -110,6 +119,45 @@ class DataCleanupTest(TemporaryStorageCase):
             self.assertIsNotNone(conn.execute("SELECT 1 FROM trades WHERE id = 'DOM-OTHER-DATE'").fetchone())
             self.assertIsNotNone(conn.execute("SELECT 1 FROM trades WHERE id = 'DOM-OTHER-ACCOUNT'").fetchone())
             self.assertIsNotNone(conn.execute("SELECT 1 FROM trades WHERE id = 'MT5-SAME-DATE'").fetchone())
+
+    def test_cleanup_removes_reverted_import_facts_and_batches_in_scope(self):
+        self._insert_import_metadata(batch_status="reverted", execution_status="reverted")
+
+        self.assertIn("ACC", list_accounts("domestic_futures"))
+        preview = storage.preview_data_cleanup(
+            platform="domestic_futures",
+            account="ACC",
+            start_date="2026-10-20",
+            end_date="2026-10-20",
+        )
+        self.assertEqual(preview["import_execution_count"], 1)
+
+        result = storage.cleanup_data(
+            platform="domestic_futures",
+            account="ACC",
+            start_date="2026-10-20",
+            end_date="2026-10-20",
+            confirm=True,
+        )
+
+        self.assertEqual(result["deleted_import_execution_count"], 1)
+        self.assertNotIn("ACC", list_accounts("domestic_futures"))
+        with storage.db() as conn:
+            self.assertIsNone(
+                conn.execute(
+                    "SELECT 1 FROM import_batch_executions WHERE batch_id = 'B-CLEAN'"
+                ).fetchone()
+            )
+            self.assertIsNone(
+                conn.execute(
+                    "SELECT 1 FROM import_executions WHERE id = 'EXE-CLEAN'"
+                ).fetchone()
+            )
+            self.assertIsNone(
+                conn.execute(
+                    "SELECT 1 FROM import_batches WHERE id = 'B-CLEAN'"
+                ).fetchone()
+            )
 
     def test_mt5_cleanup_uses_beijing_close_date(self):
         insert_analysis_trade(

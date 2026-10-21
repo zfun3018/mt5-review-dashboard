@@ -512,8 +512,8 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
         conn.execute("ALTER TABLE import_executions ADD COLUMN identity_key TEXT NOT NULL DEFAULT ''")
     conn.execute(
         "UPDATE import_executions SET identity_key = "
-        "CASE WHEN trade_id != '' THEN platform || '|' || account || '|' || trade_date || '|' || trade_id "
-        "ELSE '' END WHERE identity_key = ''"
+        "CASE WHEN trade_id != '' THEN platform || '|' || account || '|' || trade_id "
+        "ELSE '' END"
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_import_executions_identity "

@@ -18,8 +18,21 @@ class DomesticFuturesContractsTest(unittest.TestCase):
         display = contract_display(" IF2611 ")
 
         self.assertEqual(display["product_code"], "IF")
-        self.assertEqual(display["product_name"], "IF")
-        self.assertEqual(display["contract_name"], "IF2611")
+        self.assertEqual(display["product_name"], "沪深300股指")
+        self.assertEqual(display["contract_name"], "沪深300股指2611")
+
+    def test_contract_display_uses_common_names_for_index_and_treasury_futures(self):
+        expected = {
+            "IC": "中证500股指",
+            "IM": "中证1000股指",
+            "IH": "上证50股指",
+            "TF": "5年期国债",
+            "TS": "2年期国债",
+            "T": "10年期国债",
+        }
+        for code, name in expected.items():
+            with self.subTest(code=code):
+                self.assertEqual(contract_display(f"{code}2611")["product_name"], name)
 
     def test_contract_display_normalizes_alias_to_common_contract_name(self):
         display = contract_display("v2701")
@@ -70,8 +83,8 @@ class DomesticFuturesContractsTest(unittest.TestCase):
         )
 
         self.assertIsInstance(result, NormalizedExecution)
-        self.assertEqual(result.raw["product_name"], "IF")
-        self.assertEqual(result.raw["contract_name"], "IF2611")
+        self.assertEqual(result.raw["product_name"], "沪深300股指")
+        self.assertEqual(result.raw["contract_name"], "沪深300股指2611")
 
 
 if __name__ == "__main__":

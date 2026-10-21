@@ -2,11 +2,99 @@ import sqlite3
 import unittest
 
 from app import storage
+from app.data.import_repository import classify_import_executions_conn, create_import_batch
+from app.data.normalized_import import normalize_execution
 from app.platforms import DOMESTIC_FUTURES_PLATFORM
 from tests.support import TemporaryStorageCase
 
 
 class PlatformMigrationTest(TemporaryStorageCase):
+    def test_migrated_execution_identity_is_reused_by_new_imports(self):
+        original_batch = create_import_batch(
+            DOMESTIC_FUTURES_PLATFORM,
+            "legacy.csv",
+            "tonghuashun",
+            "csv",
+        )
+        with storage.db() as conn:
+            conn.execute(
+                """
+                INSERT INTO import_executions (
+                    id, fingerprint, identity_key, batch_id, platform, account, trade_date,
+                    time_utc, symbol, side, offset, quantity, remaining_quantity, price,
+                    fee, pnl, trade_id, order_id, source_kind, source_filename,
+                    source_sheet, source_row_number, raw_json, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "EXE-MIGRATED",
+                    "id|domestic_futures|ACC|LEGACY-1|2026-10-20|2026-10-20T01:30:00+00:00|IF2611|long|open|1.0|4000.0|0.0|0.0",
+                    "domestic_futures|ACC|2026-10-20|LEGACY-1",
+                    original_batch["id"],
+                    DOMESTIC_FUTURES_PLATFORM,
+                    "ACC",
+                    "2026-10-20",
+                    "2026-10-20T01:30:00+00:00",
+                    "IF2611",
+                    "long",
+                    "open",
+                    1,
+                    1,
+                    4000,
+                    0,
+                    0,
+                    "LEGACY-1",
+                    "",
+                    "tonghuashun",
+                    "legacy.csv",
+                    "",
+                    2,
+                    "{}",
+                    "unmatched",
+                ),
+            )
+
+        storage.init_db(seed=False)
+        reimport_batch = create_import_batch(
+            DOMESTIC_FUTURES_PLATFORM,
+            "reimport.csv",
+            "tonghuashun",
+            "csv",
+        )
+        execution = normalize_execution(
+            {
+                "trade_date": "2026-10-20",
+                "trade_time": "09:30:00",
+                "symbol": "IF2611",
+                "side": "buy",
+                "offset": "open",
+                "quantity": "1",
+                "price": "4000",
+                "account": "ACC",
+                "trade_id": "LEGACY-1",
+            },
+            {
+                "platform": DOMESTIC_FUTURES_PLATFORM,
+                "source_kind": "tonghuashun",
+                "source_filename": "reimport.csv",
+                "source_row_number": 2,
+            },
+        )
+        with storage.db() as conn:
+            result = classify_import_executions_conn(
+                conn,
+                reimport_batch["id"],
+                (execution,),
+            )
+
+        self.assertEqual(result["new_executions"], ())
+        self.assertEqual(len(result["duplicate_executions"]), 1)
+        with storage.db() as conn:
+            identity_key = conn.execute(
+                "SELECT identity_key FROM import_executions WHERE id = 'EXE-MIGRATED'"
+            ).fetchone()[0]
+        self.assertEqual(identity_key, "domestic_futures|ACC|LEGACY-1")
+
     def test_legacy_import_executions_without_identity_key_can_be_migrated(self):
         conn = sqlite3.connect(storage.DB_PATH)
         try:

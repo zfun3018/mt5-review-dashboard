@@ -35,8 +35,8 @@ class ImportSummaryApiTest(TemporaryStorageCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(response.payload["platform"], DOMESTIC_FUTURES_PLATFORM)
         self.assertEqual(response.payload["latest_trade"]["id"], "FUT-LATEST")
-        self.assertEqual(response.payload["latest_trade"]["product_name"], "IF")
-        self.assertEqual(response.payload["latest_trade"]["contract_name"], "IF2611")
+        self.assertEqual(response.payload["latest_trade"]["product_name"], "沪深300股指")
+        self.assertEqual(response.payload["latest_trade"]["contract_name"], "沪深300股指2611")
         self.assertNotEqual(response.payload["latest_trade"]["id"], "MT5-LATEST")
 
     def test_summary_is_empty_when_platform_has_no_trades(self):
