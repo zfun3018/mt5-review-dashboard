@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createDashboardController } from "../dashboard/dashboard.mjs";
+import { createDomesticFuturesDashboardController } from "../dashboard/domestic-futures-dashboard.mjs";
 import {
   readDashboardState,
   writeDashboardState,
@@ -25,6 +26,10 @@ class FakeElement {
 
   getAttribute(name) {
     return this.attributes.has(name) ? this.attributes.get(name) : null;
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
   }
 
   addEventListener(type, listener) {
@@ -253,6 +258,74 @@ test("dashboard renders server-owned metric states and metadata without deriving
   assert.match(metadata, /样本数[\s\S]*0/);
   assert.match(metadata, /覆盖范围[\s\S]*0%/);
   assert.match(metadata, /R 数据不足/);
+});
+
+test("dashboard suppresses calendar and mode zeros for server insufficient state", async () => {
+  const view = new FakeView();
+  const api = recordingApi({
+    "/api/analysis": {
+      ...ANALYSIS,
+      calendar: {
+        year: 2026,
+        month: 8,
+        month_net_pnl: 0,
+        month_order_count: 0,
+        month_win_rate: 0,
+        days: {"2026-08-02": {label: "2026-08-02", net_pnl: 0, order_count: 0, win_rate: 0}},
+      },
+      mode_evaluation: {
+        trade_type: [{key: "follow", label: "Follow", net_pnl: 0, order_count: 0, win_rate: 0, share: 0, profit_factor: 0}],
+        strategy: [],
+      },
+      metric_meta: {
+        calendar: {status: "insufficient_data"},
+        mode_evaluation: {status: "insufficient_data"},
+      },
+    },
+  });
+  const controller = createDashboardController({
+    api,
+    view,
+    location: { search: "" },
+    history: { replaceState() {} },
+  });
+
+  await controller.load();
+
+  assert.match(view.getElementById("calendarStats").innerHTML, /样本不足/);
+  assert.equal(view.getElementById("calendarGrid").innerHTML, "");
+  assert.match(view.getElementById("modeEvaluation").innerHTML, /样本不足/);
+  assert.doesNotMatch(view.getElementById("modeEvaluation").innerHTML, /0\.00|0%|0 笔/);
+});
+
+test("domestic dashboard shows explicit not-applicable states for omitted sections", async () => {
+  const view = new FakeView();
+  const { heatmap, sessions, ...analysisWithoutOptionalSections } = ANALYSIS;
+  const payload = {
+    ...analysisWithoutOptionalSections,
+    metric_meta: {
+        hour_heatmap: {status: "not_applicable"},
+      sessions: {status: "not_applicable"},
+    },
+  };
+  const api = {
+    async requestJson(requestPath) {
+      if (requestPath.startsWith("/api/analysis?")) return payload;
+      return {};
+    },
+  };
+  const controller = createDomesticFuturesDashboardController({
+    api,
+    view,
+    location: {search: ""},
+    history: {replaceState() {}},
+    platform: "domestic_futures",
+  });
+
+  await controller.load();
+
+  assert.match(view.getElementById("domesticHeatmap").innerHTML, /不适用/);
+  assert.match(view.getElementById("domesticSessions").innerHTML, /不适用/);
 });
 
 test("dashboard URL state round-trips preset, start, end, equity days, year, and month", () => {

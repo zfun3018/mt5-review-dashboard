@@ -409,6 +409,12 @@ export function createDashboardController({
   }
 
   function renderModeEvaluation() {
+    const modeMeta = metricMetaFor("mode_evaluation");
+    const modeState = metricState(modeMeta);
+    if (modeState && modeState.status !== "estimated") {
+      setHtml("modeEvaluation", `<div class="detail-empty metric-state-${modeState.tone}">${modeState.label}</div>`);
+      return;
+    }
     const evaluation = payload?.mode_evaluation || { trade_type: [], strategy: [] };
     const groups = [
       ["交易场景", evaluation.trade_type || []],
@@ -447,7 +453,14 @@ export function createDashboardController({
   function renderCalendar() {
     const calendar = payload?.calendar;
     if (!calendar) return;
+    const calendarMeta = metricMetaFor("calendar");
+    const calendarState = metricState(calendarMeta);
     setText("calendarMonthLabel", `${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
+    if (calendarState && calendarState.status !== "estimated") {
+      setHtml("calendarStats", `<div class="detail-empty metric-state-${calendarState.tone}">${calendarState.label}</div>`);
+      setHtml("calendarGrid", "");
+      return;
+    }
     setHtml(
       "calendarStats",
       [

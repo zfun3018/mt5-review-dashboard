@@ -3,7 +3,7 @@ import {escapeHtml, formatPercent, formatRatio, profitClass} from "../shared/js/
 import {mountShell} from "../shared/js/shell.mjs";
 import {normalizePlatform, readPlatform} from "../shared/js/platform.mjs";
 import {buildAnalysisQuery, readDashboardState, resolveAnalysisWindow, writeDashboardState} from "./dashboard-state.mjs";
-import {createDomesticFuturesCharts} from "./domestic-futures-charts.mjs";
+import {chartMetricState, createDomesticFuturesCharts} from "./domestic-futures-charts.mjs";
 import {loadLayout} from "./domestic-futures-layout.mjs";
 import {createDashboardGrid} from "./dashboard-grid.mjs";
 
@@ -229,6 +229,8 @@ function heatColor(pnl, maxAbs) {
 }
 
 function renderHeatmap(view, payload) {
+  const state = chartMetricState(payload, "hour_heatmap");
+  if (state) return renderEmpty(view, "domesticHeatmap", state.label);
   const heatmap = payload?.heatmap;
   if (!heatmap) return renderEmpty(view, "domesticHeatmap");
   const cells = (heatmap.days || []).map((day) => `<div class="domestic-heatmap-row"><strong>${safe(day.date.slice(5))}</strong><div class="domestic-heatmap-hours">${(day.hours || []).map((cell) => `<i style="background:${heatColor(cell.net_pnl, heatmap.max_abs_pnl)}" title="${safe(`${day.date} ${String(cell.hour).padStart(2, "0")}:00 ${money(cell.net_pnl)} ${cell.order_count || 0} 笔`)}">${cell.order_count ? `<b>${cell.order_count}</b>` : ""}</i>`).join("")}</div><span class="${profitClass(day.hours?.reduce((sum, cell) => sum + Number(cell.net_pnl || 0), 0))}">${money(day.hours?.reduce((sum, cell) => sum + Number(cell.net_pnl || 0), 0))}</span></div>`).join("");
@@ -236,6 +238,8 @@ function renderHeatmap(view, payload) {
 }
 
 function renderSessions(view, payload) {
+  const state = chartMetricState(payload, "sessions");
+  if (state) return renderEmpty(view, "domesticSessions", state.label);
   const labels = {asia: "亚盘", europe: "欧盘", us: "美盘"};
   const rows = Object.entries(payload?.sessions || {}).map(([key, item]) => `<div class="domestic-session-row"><div><strong>${labels[key] || safe(item.label)}</strong><small>${safe(item.window)} 北京时间</small></div><b class="${profitClass(item.net_pnl)}">${money(item.net_pnl)}</b><span>${item.order_count || 0} 笔 · 胜率 ${formatPercent(item.win_rate)}</span></div>`).join("");
   setHtml(view, "domesticSessions", rows || `<div class="domestic-empty">当前范围暂无时段数据</div>`);

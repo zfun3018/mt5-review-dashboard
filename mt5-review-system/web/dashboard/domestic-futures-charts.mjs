@@ -17,7 +17,9 @@ const CHART_STATE_LABELS = Object.freeze({
 });
 
 export function chartMetricState(payload = {}, key) {
-  const status = String(payload?.metric_meta?.[key]?.status || "");
+  const aliases = {hour_heatmap: ["hour_heatmap", "heatmap"]};
+  const meta = (aliases[key] || [key]).map((candidate) => payload?.metric_meta?.[candidate]).find(Boolean);
+  const status = String(meta?.status || "");
   return CHART_STATE_LABELS[status] ? {status, label: CHART_STATE_LABELS[status]} : null;
 }
 
