@@ -222,6 +222,34 @@ test("order list appends the next batch without splitting the visible workflow i
   assert.equal(api.paths[1], "/api/campaigns?page=2&page_size=50");
 });
 
+test("a stale list response cannot overwrite the latest list selection", async () => {
+  let releaseOld;
+  const oldResponse = new Promise((resolve) => {
+    releaseOld = resolve;
+  });
+  const newest = campaign("C-NEW", { display_symbol: "最新订单" });
+  const { controller } = controllerWith(
+    { search: "" },
+    {
+      "/api/campaigns?q=old&page=1&page_size=12": () => oldResponse,
+      "/api/campaigns?q=new&page=1&page_size=12": {
+        campaigns: [newest],
+        total: 1,
+        page: 1,
+        page_size: 12,
+      },
+    },
+  );
+
+  const oldRequest = controller.loadList({ q: "old" });
+  const newRequest = controller.loadList({ q: "new" });
+  await newRequest;
+  releaseOld({ campaigns: [campaign("C-OLD", { display_symbol: "旧订单" })], total: 1, page: 1, page_size: 12 });
+  await oldRequest;
+
+  assert.deepEqual(controller.getPage().campaigns.map((item) => item.id), ["C-NEW"]);
+});
+
 test("orders workspace uses a scroll status instead of page navigation controls", () => {
   assert.match(ordersHtml, /orderLoadStatus/);
   assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
@@ -530,6 +558,35 @@ test("?campaign= keeps the requested campaign selected", async () => {
   assert.equal(controller.getState().campaign, "C-2");
   const html = view.getElementById("orderRows").innerHTML;
   assert.match(html.match(/<tr class="([^"]*)" data-campaign-id="C-2"/)[1], /active/);
+});
+
+test("refreshing the list onto another campaign also loads that campaign detail", async () => {
+  const first = campaign("C-1", { display_symbol: "第一笔" });
+  const second = campaign("C-2", { display_symbol: "第二笔" });
+  let listCalls = 0;
+  const { view, controller } = controllerWith(
+    { search: "" },
+    {
+      "/api/campaigns?page=1&page_size=50": async () => {
+        listCalls += 1;
+        return {
+          campaigns: listCalls === 1 ? [first, second] : [second],
+          total: listCalls === 1 ? 2 : 1,
+          page: 1,
+          page_size: 50,
+        };
+      },
+      "/api/campaigns/C-1?platform=mt5": { ...first, positions: [] },
+      "/api/campaigns/C-2?platform=mt5": { ...second, positions: [] },
+    },
+  );
+
+  await controller.load();
+  await controller.loadList();
+
+  assert.match(view.getElementById("orderRows").innerHTML, /class="campaign-row active[^"]*" data-campaign-id="C-2"/);
+  assert.match(view.getElementById("orderDetail").innerHTML, /第二笔/);
+  assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /正在加载主订单详情/);
 });
 
 test("multi-Position campaigns are expanded as one main-order row per campaign", async () => {

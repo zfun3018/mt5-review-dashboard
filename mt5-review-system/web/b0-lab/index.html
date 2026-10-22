@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>B0 交易工作台实验室</title>
+    <link rel="stylesheet" href="../vendor/gridstack.min.css" />
+    <link rel="stylesheet" href="./b0-lab.css" />
+  </head>
+  <body>
+    <div class="workbench" data-b0-app data-mode="view" data-ready="false">
+      <nav class="workspace-rail" aria-label="工作区导航">
+        <a class="rail-brand" href="/" aria-label="返回当前项目"><span>R</span></a>
+        <div class="rail-nav">
+          <button class="rail-button is-active" type="button" aria-label="仪表盘" title="仪表盘"><i data-lucide="layout-dashboard"></i></button>
+          <button class="rail-button" type="button" aria-label="图表" title="图表"><i data-lucide="candlestick-chart"></i></button>
+          <button class="rail-button" type="button" aria-label="交易记录" title="交易记录"><i data-lucide="list-ordered"></i></button>
+          <button class="rail-button" type="button" aria-label="复盘笔记" title="复盘笔记"><i data-lucide="notebook-pen"></i></button>
+        </div>
+        <button class="rail-button rail-settings" type="button" aria-label="设置" title="设置"><i data-lucide="settings"></i></button>
+      </nav>
+
+      <main class="workbench-main">
+        <header class="topbar">
+          <div class="product-title">
+            <span class="product-code"><i data-lucide="activity"></i></span>
+            <div><strong>交易复盘</strong><span>Performance Workspace</span></div>
+          </div>
+          <div class="topbar-context">
+            <span class="sync-state"><i></i>LOCAL / LIVE</span>
+            <span class="environment-badge"><i data-lucide="flask-conical"></i>合成数据</span>
+            <button class="account-switcher" type="button"><span>MT5 · DEMO 01</span><i data-lucide="chevron-down"></i></button>
+          </div>
+        </header>
+
+        <section class="controlbar" aria-label="仪表盘控制">
+          <div class="view-heading">
+            <span>REVIEW / PERFORMANCE</span>
+            <h1>交易表现</h1>
+          </div>
+          <div class="control-cluster">
+            <div class="range-control" role="group" aria-label="时间范围">
+              <button type="button">30D</button>
+              <button class="is-active" type="button">90D</button>
+              <button type="button">YTD</button>
+              <button type="button">全部</button>
+            </div>
+            <label class="scenario-control" for="dataScenario">
+              <span>数据状态</span>
+              <select id="dataScenario">
+                <option value="value">完整数据</option>
+                <option value="loading">加载中</option>
+                <option value="empty">空数据</option>
+                <option value="insufficient">样本不足</option>
+                <option value="error">模块异常</option>
+              </select>
+            </label>
+          </div>
+          <div class="control-actions">
+            <button class="icon-command" type="button" data-action="reset" aria-label="重置布局" title="重置布局"><i data-lucide="rotate-ccw"></i></button>
+            <button class="command-button" type="button" data-action="catalog"><i data-lucide="panel-right-open"></i><span>打开模块库</span></button>
+            <button class="command-button command-button--primary" type="button" data-action="edit"><i data-lucide="move"></i><span>编辑布局</span></button>
+          </div>
+        </section>
+
+        <section class="market-strip" aria-label="账户摘要">
+          <div><em>01</em><span>净盈亏</span><strong class="is-profit">+¥23,930</strong><small>+23.93%</small></div>
+          <div><em>02</em><span>最大回撤</span><strong class="is-loss">-4.72%</strong><small>风险可控</small></div>
+          <div><em>03</em><span>Profit Factor</span><strong>1.84</strong><small>118 笔交易</small></div>
+          <div><em>04</em><span>胜率</span><strong>57.6%</strong><small>68 / 118</small></div>
+          <div class="market-status"><span class="status-dot"></span><strong>数据已同步</strong><small>10:32:18</small></div>
+        </section>
+
+        <section class="edit-status" data-edit-status aria-label="布局编辑状态">
+          <div class="edit-status__mode"><span class="edit-pulse"></span><strong>LAYOUT EDIT</strong></div>
+          <div class="edit-status__selection"><span>当前模块</span><strong data-edit-selection>累计权益与回撤</strong><b data-edit-size>8 × 5</b></div>
+          <div class="edit-status__grid"><i data-lucide="grid-3x3"></i><span>12 COL · SNAP 6</span></div>
+        </section>
+
+        <section class="dashboard-stage" aria-label="模块化交易仪表盘">
+          <div id="dashboardGrid" class="grid-stack"></div>
+          <div id="emptyWorkspace" class="workspace-empty" hidden>
+            <i data-lucide="panels-top-left"></i>
+            <strong>当前工作区没有模块</strong>
+            <button type="button" data-action="catalog">从模块库添加</button>
+          </div>
+        </section>
+      </main>
+
+      <aside class="module-catalog" id="moduleCatalog" aria-label="模块库" aria-hidden="true">
+        <header>
+          <div><span>MODULE CATALOG</span><h2>模块库</h2></div>
+          <button class="icon-command" type="button" data-action="close-catalog" aria-label="关闭模块库" title="关闭"><i data-lucide="x"></i></button>
+        </header>
+        <div class="catalog-filter"><i data-lucide="search"></i><input type="search" placeholder="筛选模块" aria-label="筛选模块" /></div>
+        <div class="catalog-list" data-catalog-list></div>
+        <footer><span><i data-lucide="database"></i> 数据由协调层统一提供</span><small>布局仅保存在本机浏览器</small></footer>
+      </aside>
+      <button class="catalog-scrim" type="button" data-action="close-catalog" aria-label="关闭模块库" tabindex="-1"></button>
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <script src="../vendor/echarts.min.js"></script>
+    <script src="../vendor/gridstack-all.js"></script>
+    <script src="../vendor/lucide.min.js"></script>
+    <script type="module" src="./app.mjs"></script>
+  </body>
+</html>

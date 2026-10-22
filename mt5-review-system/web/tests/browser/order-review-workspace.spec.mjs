@@ -269,4 +269,94 @@ test.describe("order review workspace", () => {
     await expect(page.locator(".detail-contract-code")).toHaveText("V2701");
     expect(errors).toEqual([]);
   });
+
+  test("keeps the selected detail and scroll position when adding an order to featured", async ({ page, syntheticServer }) => {
+    let featured = false;
+    let campaignListCalls = 0;
+    await page.route("**/api/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.pathname === "/api/custom-fields") return response(route, catalog);
+      if (url.pathname === "/api/classification-options") return response(route, { classification_options: catalog.classification_options });
+      if (url.pathname === "/api/analysis-settings") return response(route, { scratch_threshold_r: 0.15 });
+      if (url.pathname === "/api/campaigns" && request.method() === "GET") {
+        campaignListCalls += 1;
+        return response(route, { campaigns: [{ ...campaign, is_featured: featured }], total: 1, page: 1, page_size: 20 });
+      }
+      if (url.pathname === "/api/campaigns/C-ORDER-1" && request.method() === "GET") {
+        return response(route, { ...detail, ...campaign, is_featured: featured, positions: detail.positions });
+      }
+      if (url.pathname === "/api/campaigns/C-ORDER-1/featured" && request.method() === "PATCH") {
+        featured = Boolean(request.postDataJSON()?.featured);
+        return response(route, { ...campaign, is_featured: featured });
+      }
+      if (url.pathname === "/api/campaign-checkins") return response(route, { days: [], today: { count: 0 }, daily_goal: 1 });
+      return response(route, {});
+    });
+
+    await page.setViewportSize({ width: 390, height: 640 });
+    await page.goto(`${syntheticServer.baseURL}/orders/`);
+    await expect(page.locator("#featureCampaign")).toBeVisible();
+    await page.locator("#featureCampaign").scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => window.scrollY);
+    await page.locator("#featureCampaign").click();
+    await expect.poll(() => featured).toBe(true);
+    await page.waitForTimeout(200);
+    expect(campaignListCalls).toBe(1);
+    await expect(page.locator("#featureCampaign")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#detailReview")).toBeVisible();
+    await expect(page.locator("#orderDetail")).not.toContainText("正在加载主订单详情");
+    const after = await page.evaluate(() => window.scrollY);
+    expect(after).toBe(before);
+  });
+
+  test("removes a cancelled featured order and selects the next detail without reloading the list", async ({ page, syntheticServer }) => {
+    const first = { ...campaign, id: "C-FEATURED-1", display_symbol: "第一笔精选", is_featured: true };
+    const second = { ...campaign, id: "C-FEATURED-2", display_symbol: "第二笔精选", is_featured: true };
+    const details = {
+      [first.id]: { ...detail, ...first, positions: detail.positions },
+      [second.id]: { ...detail, ...second, positions: detail.positions },
+    };
+    const featuredIds = new Set([first.id, second.id]);
+    let campaignListCalls = 0;
+    page.on("dialog", (dialog) => dialog.accept());
+    await page.route("**/api/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.pathname === "/api/custom-fields") return response(route, catalog);
+      if (url.pathname === "/api/classification-options") return response(route, { classification_options: catalog.classification_options });
+      if (url.pathname === "/api/analysis-settings") return response(route, { scratch_threshold_r: 0.15 });
+      if (url.pathname === "/api/campaigns" && request.method() === "GET") {
+        campaignListCalls += 1;
+        return response(route, {
+          campaigns: [first, second].filter((item) => featuredIds.has(item.id)),
+          total: featuredIds.size,
+          page: 1,
+          page_size: 20,
+        });
+      }
+      if (url.pathname === "/api/campaigns/C-FEATURED-1/featured" && request.method() === "PATCH") {
+        featuredIds.delete(first.id);
+        return response(route, { ...first, is_featured: false });
+      }
+      if (url.pathname === "/api/campaigns/C-FEATURED-1" && request.method() === "GET") {
+        return response(route, details[first.id]);
+      }
+      if (url.pathname === "/api/campaigns/C-FEATURED-2" && request.method() === "GET") {
+        return response(route, details[second.id]);
+      }
+      if (url.pathname === "/api/campaign-checkins") return response(route, { days: [], today: { count: 0 }, daily_goal: 1 });
+      return response(route, {});
+    });
+
+    await page.goto(`${syntheticServer.baseURL}/orders/?listView=featured`);
+    await expect(page.locator('[data-campaign-id="C-FEATURED-1"]')).toHaveClass(/active/);
+    await page.locator("#featureCampaign").click();
+
+    await expect(page.locator('[data-campaign-id="C-FEATURED-1"]')).toHaveCount(0);
+    await expect(page.locator('[data-campaign-id="C-FEATURED-2"]')).toHaveClass(/active/);
+    await expect(page.locator(".detail-contract-name")).toContainText("第二笔精选");
+    await expect(page.locator("#orderDetail")).not.toContainText("正在加载主订单详情");
+    expect(campaignListCalls).toBe(1);
+  });
 });

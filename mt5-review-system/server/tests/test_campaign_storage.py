@@ -521,6 +521,59 @@ class CampaignStorageTest(TemporaryStorageCase):
         self.assertEqual(detail["review_text"], "write-side synchronized")
         self.assertNotIn("来源", detail["review_text"])
 
+    def test_campaign_review_fields_and_screenshot_survive_model_rebuild(self):
+        self._trade(
+            "P1",
+            "P1",
+            1.0,
+            "2026-08-01T00:00:00+00:00",
+            "2026-08-01T00:10:00+00:00",
+            100.0,
+            102.0,
+            2.0,
+        )
+        campaign_id = storage.list_campaigns()["campaigns"][0]["id"]
+        storage.update_campaign_review(
+            campaign_id,
+            {
+                "trade_type_tags": ["reversal"],
+                "strategy_tags": ["range"],
+                "mistake_tags": ["逆势交易", "未等确认"],
+                "review_text": "模型重建后仍应保留",
+            },
+        )
+        storage.update_campaign_initial_stop(campaign_id, 98.0)
+        encoded = base64.b64encode(b"campaign-review-image").decode("ascii")
+        saved = storage.replace_campaign_screenshot(
+            campaign_id,
+            {"image_data": f"data:image/png;base64,{encoded}", "filename": "review.png"},
+        )
+        screenshot_path = saved["screenshot_path"]
+
+        storage.init_db(seed=False)
+        storage.rebuild_campaign_models()
+
+        detail = storage.get_campaign(campaign_id)
+        self.assertEqual(detail["initial_stop_price"], 98.0)
+        self.assertEqual(detail["review_text"], "模型重建后仍应保留")
+        self.assertEqual(detail["trade_type_tags"], ["reversal"])
+        self.assertEqual(detail["strategy_tags"], ["range"])
+        self.assertEqual(detail["mistake_tags"], ["逆势交易", "未等确认"])
+        self.assertEqual(detail["screenshot_path"], screenshot_path)
+        self.assertTrue((storage.DATA_DIR / screenshot_path).is_file())
+        self.assertEqual(detail["positions"][0]["initial_stop_price"], 98.0)
+
+        album = storage.query_review_album(tags=["mistake:逆势交易"])
+        self.assertEqual(album["total"], 1)
+        album_trade = album["trades"][0]
+        self.assertEqual(album_trade["review_text"], "模型重建后仍应保留")
+        self.assertEqual(album_trade["screenshot_path"], screenshot_path)
+        strategy_row = next(
+            row for row in storage.get_analysis()["mode_evaluation"]["strategy"]
+            if row["key"] == "range"
+        )
+        self.assertEqual(strategy_row["order_count"], 1)
+
     def test_combined_campaign_classification_is_independent_from_child_orders(self):
         self._trade(
             "P1",

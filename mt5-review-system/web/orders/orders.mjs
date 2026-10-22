@@ -221,12 +221,14 @@ export function createOrdersController({
   let selectedCampaignId = state.campaign || null;
   let selectedPositionId = null;
   let selectedTradeId = null;
+  let workspaceReady = false;
   const collapsedDayKeys = new Set();
   const trades = new Map();
   let listHeightSyncTimer = null;
   let loadMoreInFlight = false;
   let hasMoreCampaigns = true;
   let listGeneration = 0;
+  let detailGeneration = 0;
   let listLoadError = "";
   let detachListScroll = null;
 
@@ -772,6 +774,29 @@ export function createOrdersController({
     detailModule.render();
   }
 
+  function syncFeaturedAction(campaign) {
+    const button = getElement("featureCampaign");
+    if (!button || !campaign?.id) return;
+    const featured = Boolean(campaign.is_featured);
+    const label = featured ? "取消精选" : "加入精选";
+    button.setAttribute("title", label);
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(featured));
+    button.classList?.toggle?.("is-active", featured);
+
+    const group = button.parentElement;
+    const badge = group?.querySelector?.(".featured-status-badge");
+    if (featured && !badge && typeof view.createElement === "function") {
+      const nextBadge = view.createElement("span");
+      nextBadge.className = "featured-status-badge";
+      nextBadge.innerHTML = '<i data-lucide="star" aria-hidden="true"></i>已精选';
+      group.appendChild(nextBadge);
+    } else if (!featured) {
+      badge?.remove?.();
+    }
+    globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
+  }
+
   function rerender() {
     renderCampaignRows();
     renderDetail();
@@ -816,15 +841,35 @@ export function createOrdersController({
     }
   }
 
-  async function loadList(partialState, { pinnedCampaign = null } = {}) {
+  function captureWorkspaceScroll() {
+    const windowObject = view.defaultView || globalThis;
+    const tableWrap = view.querySelector?.(".trades-panel .table-wrap");
+    return {
+      windowObject,
+      windowScrollX: Number(windowObject.scrollX || 0),
+      windowScrollY: Number(windowObject.scrollY || 0),
+      tableWrap,
+      tableScrollTop: Number(tableWrap?.scrollTop || 0),
+    };
+  }
+
+  function restoreWorkspaceScroll(snapshot) {
+    if (!snapshot) return;
+    if (snapshot.tableWrap) snapshot.tableWrap.scrollTop = snapshot.tableScrollTop;
+    snapshot.windowObject.scrollTo?.(snapshot.windowScrollX, snapshot.windowScrollY);
+  }
+
+  async function loadList(partialState, { pinnedCampaign = null, showLoading = true, preserveScroll = false, loadSelectedDetail = true } = {}) {
     if (partialState) state = normalizeListState({ ...state, ...partialState });
     const generation = ++listGeneration;
     loadMoreInFlight = false;
     listLoadError = "";
     const query = buildCampaignsQuery(state);
-    renderRegion("orderRegion", { state: "loading", message: "正在读取订单列表" });
+    const scrollSnapshot = preserveScroll ? captureWorkspaceScroll() : null;
+    if (showLoading) renderRegion("orderRegion", { state: "loading", message: "正在读取订单列表" });
     try {
       const result = await gate.run("campaigns", (signal) => api.requestJson(`/api/campaigns?${query}`, { signal }));
+      if (generation !== listGeneration) return null;
       const pageSize = result?.page_size || state.pageSize;
       page = {
         campaigns: mergePinnedCampaigns(result?.campaigns || [], pinnedCampaign, pageSize),
@@ -833,11 +878,20 @@ export function createOrdersController({
         page_size: pageSize,
       };
       hasMoreCampaigns = page.page * page.page_size < page.total;
-      resolveSelection(page.campaigns);
+      const selectionChanged = resolveSelection(page.campaigns);
+      const shouldLoadSelectedDetail = Boolean(
+        workspaceReady
+        && loadSelectedDetail
+        && selectedCampaignId
+        && (selectionChanged || !campaignDetail || campaignDetail.id !== selectedCampaignId),
+      );
       rebuildTrades();
       renderCampaignRows();
       renderLoadStatus();
       renderDetail();
+      renderRegion("orderRegion", { state: "idle" });
+      if (shouldLoadSelectedDetail) await selectCampaign(selectedCampaignId);
+      restoreWorkspaceScroll(scrollSnapshot);
       return result;
     } catch (error) {
       if (error?.name === "AbortError") return null;
@@ -959,32 +1013,45 @@ export function createOrdersController({
   }
 
   function resolveSelection(campaigns) {
-    if (selectedCampaignId && campaigns.some((campaign) => campaign.id === selectedCampaignId)) return;
+    const previousCampaignId = selectedCampaignId;
+    let nextCampaignId = null;
+    if (selectedCampaignId && campaigns.some((campaign) => campaign.id === selectedCampaignId)) {
+      nextCampaignId = selectedCampaignId;
+    }
     if (state.trade) {
       const match = campaigns.find((campaign) => (campaign.source_trade_ids || []).includes(state.trade));
-      if (match) {
-        selectedCampaignId = match.id;
-        return;
-      }
+      if (match) nextCampaignId = match.id;
     }
-    if (state.campaign && campaigns.some((campaign) => campaign.id === state.campaign)) {
-      selectedCampaignId = state.campaign;
-      return;
+    if (!nextCampaignId && state.campaign && campaigns.some((campaign) => campaign.id === state.campaign)) {
+      nextCampaignId = state.campaign;
     }
-    selectedCampaignId = campaigns[0]?.id || null;
+    if (!nextCampaignId) nextCampaignId = campaigns[0]?.id || null;
+    selectedCampaignId = nextCampaignId;
+    const changed = String(previousCampaignId || "") !== String(nextCampaignId || "");
+    if (changed) {
+      selectedPositionId = null;
+      selectedTradeId = null;
+      campaignDetail = null;
+    } else if (campaignDetail && String(campaignDetail.id) !== String(selectedCampaignId || "")) {
+      campaignDetail = null;
+    }
+    return changed;
   }
 
   async function selectCampaign(campaignId) {
     selectedCampaignId = campaignId;
     if (!campaignId) {
+      detailGeneration += 1;
       campaignDetail = null;
       renderDetail();
       return;
     }
+    let detail = null;
     try {
-      await loadCampaignDetail(campaignId);
+      detail = await loadCampaignDetail(campaignId);
+      if (!detail || String(selectedCampaignId) !== String(campaignId)) return;
       if (state.trade) {
-        const selectedPosition = (campaignDetail?.positions || []).find((item) =>
+        const selectedPosition = (detail.positions || []).find((item) =>
           [item.source_trade, ...(item.source_trades || [])].some(
             (trade) => String(trade?.id) === String(state.trade),
           ),
@@ -1002,12 +1069,20 @@ export function createOrdersController({
   }
 
   async function loadCampaignDetail(campaignId) {
+    const requestGeneration = ++detailGeneration;
     const params = new URLSearchParams();
     if (state.deleted === "deleted") params.set("deleted", "deleted");
-    campaignDetail = await gate.run("detail", (signal) => api.requestJson(
+    const detail = await gate.run("detail", (signal) => api.requestJson(
       platformApiPath(`/api/campaigns/${encodeURIComponent(campaignId)}${params.size ? `?${params}` : ""}`),
       { signal },
     ));
+    if (
+      requestGeneration !== detailGeneration
+      || String(selectedCampaignId || "") !== String(campaignId)
+      || !detail
+      || String(detail.id || "") !== String(campaignId)
+    ) return null;
+    campaignDetail = detail;
     const listedCampaign = page.campaigns.find((campaign) => campaign?.id === campaignId);
     if (listedCampaign && campaignDetail?.id === campaignId) {
       for (const field of ["screenshot_url", "screenshot_missing", "screenshot_source"]) {
@@ -1029,7 +1104,7 @@ export function createOrdersController({
     });
     const campaignId = result?.campaign?.id || selectedCampaignId;
     if (campaignId) await loadCampaignDetail(campaignId);
-    await loadList();
+    await loadList(undefined, { showLoading: false, preserveScroll: true });
     return result;
   }
 
@@ -1107,13 +1182,40 @@ export function createOrdersController({
 
   async function toggleCampaignFeatured(campaign, featured) {
     if (!campaign?.id) return null;
+    const campaignId = String(campaign.id);
+    const nextFeatured = Boolean(featured);
     const updated = await api.requestJson(`/api/campaigns/${encodeURIComponent(campaign.id)}/featured`, {
       method: "PATCH",
-      body: { featured: Boolean(featured) },
+      body: { featured: nextFeatured },
     });
-    Object.assign(campaign, updated || {}, { is_featured: Boolean(featured) });
-    if (campaignDetail?.id === campaign.id) Object.assign(campaignDetail, updated || {}, { is_featured: Boolean(featured) });
-    await afterMutation();
+    Object.assign(campaign, updated || {}, { is_featured: nextFeatured });
+    if (String(campaignDetail?.id || "") === campaignId) {
+      Object.assign(campaignDetail, updated || {}, { is_featured: nextFeatured });
+    }
+
+    const scrollSnapshot = captureWorkspaceScroll();
+    const removingFromFeaturedView = state.listView === "featured" && !nextFeatured;
+    if (removingFromFeaturedView) {
+      page.campaigns = page.campaigns.filter((item) => String(item?.id || "") !== campaignId);
+      page.total = Math.max(0, Number(page.total || 0) - 1);
+      hasMoreCampaigns = page.page * page.page_size < page.total;
+      if (String(selectedCampaignId || "") === campaignId) {
+        const nextCampaign = page.campaigns[0] || null;
+        selectedCampaignId = nextCampaign?.id || null;
+        selectedPositionId = null;
+        selectedTradeId = null;
+        campaignDetail = null;
+        commitState({ campaign: selectedCampaignId || "", trade: "" });
+      }
+    }
+    renderCampaignRows();
+    if (removingFromFeaturedView) {
+      if (selectedCampaignId) await selectCampaign(selectedCampaignId);
+      else renderDetail();
+    } else {
+      syncFeaturedAction(campaign);
+    }
+    restoreWorkspaceScroll(scrollSnapshot);
     return updated;
   }
 
@@ -1163,7 +1265,7 @@ export function createOrdersController({
         if (error?.name !== "AbortError") toast(error?.message || "详情刷新失败", { tone: "error" });
       }
     }
-    await loadList();
+    await loadList(undefined, { showLoading: false, preserveScroll: true });
     await loadCheckinCalendar();
   }
 
@@ -1210,10 +1312,11 @@ export function createOrdersController({
   async function load() {
     state = normalizeListState({ ...readOrdersState(location.search), page: 1, pageSize: ORDER_BATCH_SIZE });
     await loadCatalog();
-    await loadList();
+    await loadList(undefined, { loadSelectedDetail: false });
     if (selectedCampaignId) {
       await selectCampaign(selectedCampaignId);
     }
+    workspaceReady = true;
   }
 
   function init() {

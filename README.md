@@ -78,6 +78,8 @@ http://127.0.0.1:8787
 - [AI 部署指南](docs/AI-DEPLOYMENT-GUIDE.md)：AI 协作部署、验证、备份恢复、回滚和发布后的检查；
 - [运行与开发说明](mt5-review-system/README.md)：启动、EA 配置、回灌、接口和测试；
 - [版本路线](docs/VERSION-ROUTE.md)：版本规则、当前状态和未来开发计划；
+- [B 计划设计方案](docs/plans/2026-10-22-plan-b-trading-workbench-design.md)：下一代交易复盘工作台、模块化仪表盘、行情图表、AI Skills 和桌面化后手；
+- `http://127.0.0.1:8787/b0-lab/`：B0 模块化仪表盘 Demo；随正式本地服务运行，只使用合成数据，不读取当前业务数据库；
 - [变更记录](CHANGELOG.md)：已交付版本的历史内容；
 - [发布指南](docs/RELEASE-GUIDE.md)：如何准备版本并创建 GitHub Release；
 - [贡献规范](CONTRIBUTING.md)、[安全策略](SECURITY.md) 和 [AI 协作规则](AGENTS.md)；
