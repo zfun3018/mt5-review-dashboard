@@ -32,14 +32,28 @@ def build_fixed_period_summaries(
 
 
 def build_monthly_pnl(
-    trades: list[dict[str, Any]], limit: int = 12
+    trades: list[dict[str, Any]], limit: int = 12, *, include_product_pnl: bool = False
 ) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for trade in trades:
         closed = to_beijing(trade["close_time_utc"])
         grouped[closed.strftime("%Y-%m")].append(trade)
     months = sorted(grouped)[-max(1, int(limit)) :]
-    return [{"month": month, **build_trade_metrics(grouped[month])} for month in months]
+    result = []
+    for month in months:
+        row = {"month": month, **build_trade_metrics(grouped[month])}
+        if include_product_pnl:
+            products: dict[str, float] = defaultdict(float)
+            for trade in grouped[month]:
+                symbol = str(trade.get("symbol") or "").strip()
+                product_name = contract_display(symbol)["product_name"] if symbol else "未命名品种"
+                products[product_name] += trade_net_pnl(trade)
+            row["product_pnl"] = [
+                {"product_name": product_name, "net_pnl": round(net_pnl, 2)}
+                for product_name, net_pnl in sorted(products.items())
+            ]
+        result.append(row)
+    return result
 
 
 def build_contract_rankings(

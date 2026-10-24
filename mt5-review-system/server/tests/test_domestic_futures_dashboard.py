@@ -80,6 +80,23 @@ class DomesticFuturesDashboardTest(unittest.TestCase):
         self.assertEqual(rankings["losses"][0]["symbol"], "PVC2701")
         self.assertEqual(rankings["losses"][0]["net_pnl"], -540.0)
 
+    def test_monthly_product_pnl_groups_campaigns_by_beijing_close_month_and_product(self):
+        monthly = build_monthly_pnl([
+            trade("fg-near", "2026-09-30T16:00:00+00:00", "FG701", 10, fee=-1),
+            trade("fg-far", "2026-10-02T01:00:00+00:00", "FG801", -4, fee=-1),
+            trade("if", "2026-10-02T02:00:00+00:00", "IF2611", 7, commission=-2),
+        ], include_product_pnl=True)
+
+        self.assertEqual(len(monthly), 1)
+        october = monthly[0]
+        self.assertEqual(october["month"], "2026-10")
+        self.assertEqual(october["net_pnl"], 9.0)
+        self.assertEqual(october["product_pnl"], [
+            {"product_name": "沪深300股指", "net_pnl": 5.0},
+            {"product_name": "玻璃", "net_pnl": 4.0},
+        ])
+        self.assertEqual(sum(row["net_pnl"] for row in october["product_pnl"]), october["net_pnl"])
+
     def test_contract_rankings_replace_placeholder_names_from_symbol(self):
         rankings = build_contract_rankings([
             {

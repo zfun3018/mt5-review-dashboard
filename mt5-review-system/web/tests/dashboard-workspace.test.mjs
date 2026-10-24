@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { createDashboardController } from "../dashboard/dashboard.mjs";
 import { createDomesticFuturesDashboardController } from "../dashboard/domestic-futures-dashboard.mjs";
+import {buildDomesticCalendarOption} from "../dashboard/domestic-futures-charts.mjs";
+import {
+  DOMESTIC_FUTURES_DASHBOARD_MODULES,
+  MT5_DASHBOARD_MODULES,
+} from "../dashboard/dashboard-module-registry.mjs";
 import {
   readDashboardState,
   writeDashboardState,
@@ -17,6 +22,7 @@ class FakeElement {
     this.attributes = new Map();
     this.dataset = {};
     this.listeners = new Map();
+    this.children = new Map();
     this.style = {};
   }
 
@@ -48,12 +54,19 @@ class FakeElement {
   getBoundingClientRect() {
     return { left: 0, top: 0, bottom: 0, width: 0, height: 0 };
   }
+
+  querySelector(selector) {
+    if (!selector?.startsWith?.("[data-layout-module=") && !selector?.startsWith?.("[data-module=")) return null;
+    if (!this.children.has(selector)) this.children.set(selector, new FakeElement());
+    return this.children.get(selector);
+  }
 }
 
 class FakeView {
   constructor() {
     this.elements = new Map();
     this.allElements = [];
+    this.moduleRoots = new Map();
   }
 
   getElementById(id) {
@@ -70,8 +83,10 @@ class FakeView {
     return this.allElements;
   }
 
-  querySelector() {
-    return null;
+  querySelector(selector) {
+    if (!selector?.startsWith?.("[data-layout-module=") && !selector?.startsWith?.("[data-module=")) return null;
+    if (!this.moduleRoots.has(selector)) this.moduleRoots.set(selector, new FakeElement());
+    return this.moduleRoots.get(selector);
   }
 
   addEventListener() {}
@@ -163,6 +178,50 @@ test("dashboard resolves a preset into a dated analysis window", async () => {
   assert.equal(api.paths[0].includes("equity_days=7"), true);
   assert.equal(api.paths[0].includes("start="), true);
   assert.equal(api.paths[0].includes("end="), true);
+});
+
+test("dashboard ignores a late analysis response from an older filter request", async () => {
+  const view = new FakeView();
+  const pending = [];
+  const api = {
+    requestJson(requestPath) {
+      if (!requestPath.startsWith("/api/analysis")) return Promise.resolve(null);
+      return new Promise((resolve) => pending.push(resolve));
+    },
+  };
+  const controller = createDashboardController({
+    api,
+    view,
+    location: {search: ""},
+    history: {replaceState() {}},
+  });
+
+  const olderRequest = controller.load();
+  const newerRequest = controller.load();
+  pending[1]({...ANALYSIS, metrics: {...ANALYSIS.metrics, net_pnl: 222}});
+  await newerRequest;
+  pending[0]({...ANALYSIS, metrics: {...ANALYSIS.metrics, net_pnl: 111}});
+  await olderRequest;
+
+  const summary = view.getElementById("rMetricSummary").innerHTML;
+  assert.match(summary, /222/);
+  assert.doesNotMatch(summary, /111/);
+});
+
+test("MT5 dashboard marks every registered module as error when the analysis request fails", async () => {
+  const view = new FakeView();
+  const api = {
+    async requestJson(requestPath) {
+      if (requestPath.startsWith("/api/analysis")) throw new Error("analysis unavailable");
+      return null;
+    },
+  };
+  const controller = createDashboardController({api, view, location: {search: ""}, history: {replaceState() {}}});
+
+  await controller.load();
+
+  assert.equal(view.moduleRoots.size, MT5_DASHBOARD_MODULES.length);
+  for (const root of view.moduleRoots.values()) assert.equal(root.getAttribute("data-module-state"), "error");
 });
 
 test("dashboard tolerates metric metadata and omitted platform-specific sections", async () => {
@@ -298,20 +357,49 @@ test("dashboard suppresses calendar and mode zeros for server insufficient state
   assert.doesNotMatch(view.getElementById("modeEvaluation").innerHTML, /0\.00|0%|0 笔/);
 });
 
-test("domestic dashboard shows explicit not-applicable states for omitted sections", async () => {
+test("domestic calendar chart exposes the server not-applicable state without fake values", () => {
+  const option = buildDomesticCalendarOption({
+    calendar: {year: 2026, month: 10, days: {}},
+    metric_meta: {calendar: {status: "not_applicable"}},
+  });
+  assert.equal(option.series[0].data.length, 0);
+  assert.equal(option.graphic[0].style.text, "不适用");
+});
+
+test("domestic dashboard ignores a late analysis response from an older filter request", async () => {
   const view = new FakeView();
-  const { heatmap, sessions, ...analysisWithoutOptionalSections } = ANALYSIS;
-  const payload = {
-    ...analysisWithoutOptionalSections,
-    metric_meta: {
-        hour_heatmap: {status: "not_applicable"},
-      sessions: {status: "not_applicable"},
+  const pending = [];
+  const api = {
+    requestJson(requestPath) {
+      if (!requestPath.startsWith("/api/analysis")) return Promise.resolve(null);
+      return new Promise((resolve) => pending.push(resolve));
     },
   };
+  const controller = createDomesticFuturesDashboardController({
+    api,
+    view,
+    location: {search: ""},
+    history: {replaceState() {}},
+    platform: "domestic_futures",
+  });
+
+  const olderRequest = controller.load();
+  const newerRequest = controller.load();
+  pending[1]({...ANALYSIS, calendar: {...ANALYSIS.calendar, year: 2027, month: 1}});
+  await newerRequest;
+  pending[0]({...ANALYSIS, calendar: {...ANALYSIS.calendar, year: 2025, month: 2}});
+  await olderRequest;
+
+  assert.match(view.getElementById("domesticCalendarSummary").innerHTML, /2027年1月/);
+  assert.doesNotMatch(view.getElementById("domesticCalendarSummary").innerHTML, /2025年2月/);
+});
+
+test("domestic futures dashboard marks every registered module as error when the analysis request fails", async () => {
+  const view = new FakeView();
   const api = {
     async requestJson(requestPath) {
-      if (requestPath.startsWith("/api/analysis?")) return payload;
-      return {};
+      if (requestPath.startsWith("/api/analysis")) throw new Error("analysis unavailable");
+      return null;
     },
   };
   const controller = createDomesticFuturesDashboardController({
@@ -324,8 +412,9 @@ test("domestic dashboard shows explicit not-applicable states for omitted sectio
 
   await controller.load();
 
-  assert.match(view.getElementById("domesticHeatmap").innerHTML, /不适用/);
-  assert.match(view.getElementById("domesticSessions").innerHTML, /不适用/);
+  const dashboardRoot = view.getElementById("domesticDashboard");
+  assert.equal(dashboardRoot.children.size, DOMESTIC_FUTURES_DASHBOARD_MODULES.length);
+  for (const root of dashboardRoot.children.values()) assert.equal(root.getAttribute("data-module-state"), "error");
 });
 
 test("dashboard URL state round-trips preset, start, end, equity days, year, and month", () => {

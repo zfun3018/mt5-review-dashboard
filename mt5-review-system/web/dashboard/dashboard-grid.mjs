@@ -7,6 +7,7 @@ function runtimeFor(GridStack) {
 export function buildDashboardGridOptions({editable = false} = {}) {
   return {
     column: 12,
+    columnOpts: {breakpoints: [{w: 760, c: 1, layout: "list"}], columnMax: 12},
     cellHeight: 48,
     margin: 12,
     animate: false,
@@ -15,7 +16,7 @@ export function buildDashboardGridOptions({editable = false} = {}) {
     disableDrag: !editable,
     disableResize: !editable,
     alwaysShowResizeHandle: editable,
-    draggable: {handle: ".grid-stack-item-content", cancel: "button, input, a, select, textarea"},
+    draggable: {handle: editable ? ".panel-head, .domestic-panel-head" : ".grid-stack-item-content", cancel: "button, input, a, select, textarea"},
     resizable: {handles: "e, se, s, sw, w"},
   };
 }
@@ -60,6 +61,9 @@ function configureGridItems(root, layout, selector, document) {
     gridItem.setAttribute("gs-min-h", String(item.minH));
     gridItem.setAttribute("gs-max-w", String(item.maxW));
     gridItem.setAttribute("gs-max-h", String(item.maxH));
+    gridItem.dataset.layoutKind = item.kind || "content";
+    gridItem.dataset.layoutFit = item.fit || "scroll";
+    module.dataset.contentFit = item.fit || "scroll";
     gridItem.hidden = item.visible === false;
     applyModuleSettings(module, item, selector);
     return gridItem;

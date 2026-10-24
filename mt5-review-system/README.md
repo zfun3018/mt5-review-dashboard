@@ -68,7 +68,7 @@ $env:MT5_REVIEW_PORT = "8787"
 .\tools\install_ea.ps1
 ```
 
-3. 在 MetaEditor 中打开并编译 `mt5-ea/MT5ReviewBridge.mq5`；
+3. 在 MetaEditor 中分别打开并编译 `mt5-ea/MT5ReviewBridge.mq5` 与 `mt5-ea/MT5ReviewM1CsvExporter.mq5`；
 4. 在 MT5 中刷新导航器，把 EA 挂载到长期打开的图表；
 5. 在“工具 → 选项 → EA 交易”中允许 WebRequest：
 
@@ -77,6 +77,12 @@ http://127.0.0.1:8787
 ```
 
 如果服务运行在另一台电脑，改用那台电脑的可信局域网地址。EA 同时写入本地 JSONL，作为 WebRequest 失败时的兜底。
+
+EA 行情请求默认使用 `http://127.0.0.1:8787/api/v1/market/bar-requests/claim` 和 `http://127.0.0.1:8787/api/v1/market/bar-requests`。若修改服务 host/port，必须同时修改 `InpBridgeUrl`、`InpMarketRequestsUrl` 和 `InpMarketResultsUrl`，并在 MT5 WebRequest 允许列表中加入对应 host。行情每轮最多领取并处理 1 个请求；MT5 的 `WebRequest` 是同步调用，行情轮询放在权益快照上报之后，每次 HTTP 超时默认 500ms，两次请求的最坏网络等待约 1 秒，无法保证交易回调零等待。
+
+行情时间转换复用 `InpServerUtcOffsetHours` 固定 broker/server UTC 时差。该值必须按终端服务器当前时差配置；EA 尚不具备历史夏令时规则，跨 DST 区间的历史行情时间需要人工验收。接口会显式返回 `market_calendar_unmodeled` warning，固定周期缺口不能直接解释为行情丢失，因为交易时段、周末和节假日尚未建模。
+
+`MT5ReviewM1CsvExporter` 是单独的行情导出 EA，不替换交易同步 Bridge。将它挂载到要导出品种的任意图表，设置 `InpServerUtcOffsetMinutes`、`InpOffsetValidFromServer` 和 `InpOffsetValidToServer`，确认所填偏移对整个导出区间都有效后，才将 `InpConfirmOffsetStableForExportRange` 设为 `true`。默认值会拒绝导出；如果最近最多 50,000 根 M1 K 线跨过经纪商夏令时切换点，单一偏移无法覆盖该范围，EA 会停止导出，需缩小 `InpMaxBars` 到一个偏移稳定区间。不得把服务器时间直接当 UTC 或北京时间。CSV 和 `.meta.json` 精度元数据写入终端 `MQL5/Files` 下，文件名按本地账户和品种隔离；账户号仅用于本地文件名，不要分享原始导出文件。当前版本先提供可靠拒绝机制，历史偏移表和自动分段导出仍待后续扩展。
 
 如果实时 WebRequest 没有成功，可以增量回灌：
 

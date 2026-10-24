@@ -11,7 +11,7 @@ from ..r_metrics import r_metrics_definition
 
 from .calendar import calendar_definitions
 from .domestic_futures import domestic_metric_definitions
-from .equity import equity_definition
+from .equity import drawdown_definition, equity_definition
 from .modes import mode_definitions
 from .summary import summary_definition
 from .time_patterns import time_pattern_definitions
@@ -21,6 +21,7 @@ def build_metric_registry() -> MetricRegistry:
     definitions = [summary_definition(), r_metrics_definition()]
     definitions.extend(mode_definitions())
     definitions.append(equity_definition())
+    definitions.append(drawdown_definition())
     definitions.extend(calendar_definitions())
     definitions.extend(time_pattern_definitions())
     definitions.extend(domestic_metric_definitions())

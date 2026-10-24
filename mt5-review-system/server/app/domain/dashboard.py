@@ -85,6 +85,15 @@ def build_campaign_period_metrics(
         "week": [],
         "month": [],
         "year": [],
+        "yesterday": [],
+        "last_7_days": [],
+        "last_30_days": [],
+        "last_365_days": [],
+    }
+    rolling_starts = {
+        "last_7_days": anchor_date - timedelta(days=6),
+        "last_30_days": anchor_date - timedelta(days=29),
+        "last_365_days": anchor_date - timedelta(days=364),
     }
     for campaign in campaigns:
         closed_at = campaign.get("closed_at_utc")
@@ -101,10 +110,15 @@ def build_campaign_period_metrics(
             buckets["week"].append(campaign)
         if closed_date >= anchor_date:
             buckets["today"].append(campaign)
+        if closed_date == anchor_date - timedelta(days=1):
+            buckets["yesterday"].append(campaign)
+        for key, start_date in rolling_starts.items():
+            if start_date <= closed_date <= anchor_date:
+                buckets[key].append(campaign)
 
     return {
         key: build_r_metrics(buckets[key], threshold)
-        for key in ("today", "week", "month", "year")
+        for key in buckets
     }
 
 
@@ -121,6 +135,15 @@ def build_trade_period_summaries(
         "week": [],
         "month": [],
         "year": [],
+        "yesterday": [],
+        "last_7_days": [],
+        "last_30_days": [],
+        "last_365_days": [],
+    }
+    rolling_starts = {
+        "last_7_days": anchor_date - timedelta(days=6),
+        "last_30_days": anchor_date - timedelta(days=29),
+        "last_365_days": anchor_date - timedelta(days=364),
     }
     for trade in trades:
         close_time = trade.get("close_time_utc") or trade.get("closed_at_utc")
@@ -137,10 +160,44 @@ def build_trade_period_summaries(
             buckets["week"].append(trade)
         if closed_date >= anchor_date:
             buckets["today"].append(trade)
+        if closed_date == anchor_date - timedelta(days=1):
+            buckets["yesterday"].append(trade)
+        for key, start_date in rolling_starts.items():
+            if start_date <= closed_date <= anchor_date:
+                buckets[key].append(trade)
 
     return {
         key: _period_summary(buckets[key])
-        for key in ("today", "week", "month", "year")
+        for key in buckets
+    }
+
+
+def campaign_period_date_ranges(anchor: datetime) -> dict[str, dict[str, str]]:
+    anchor_date = to_beijing(anchor).date()
+    week_start = anchor_date - timedelta(days=anchor_date.weekday())
+    month_start = anchor_date.replace(day=1)
+    year_start = anchor_date.replace(month=1, day=1)
+    return {
+        "today": {"start": anchor_date.isoformat(), "end": anchor_date.isoformat()},
+        "week": {"start": week_start.isoformat(), "end": anchor_date.isoformat()},
+        "month": {"start": month_start.isoformat(), "end": anchor_date.isoformat()},
+        "year": {"start": year_start.isoformat(), "end": anchor_date.isoformat()},
+        "yesterday": {
+            "start": (anchor_date - timedelta(days=1)).isoformat(),
+            "end": (anchor_date - timedelta(days=1)).isoformat(),
+        },
+        "last_7_days": {
+            "start": (anchor_date - timedelta(days=6)).isoformat(),
+            "end": anchor_date.isoformat(),
+        },
+        "last_30_days": {
+            "start": (anchor_date - timedelta(days=29)).isoformat(),
+            "end": anchor_date.isoformat(),
+        },
+        "last_365_days": {
+            "start": (anchor_date - timedelta(days=364)).isoformat(),
+            "end": anchor_date.isoformat(),
+        },
     }
 
 

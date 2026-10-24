@@ -8,7 +8,6 @@ from tests.support import TemporaryStorageCase, insert_trade
 
 
 class CampaignStorageTest(TemporaryStorageCase):
-
     def _trade(
         self,
         trade_id,

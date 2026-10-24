@@ -97,7 +97,7 @@ class StoragePresentationTest(unittest.TestCase):
         restored = storage.restore_trade("DELETE-1")
         self.assertEqual(restored["id"], "DELETE-1")
 
-    def test_analysis_filters_by_beijing_date_range(self):
+    def test_analysis_range_metrics_filter_but_periods_use_latest_activity_anchor(self):
         for trade_id, close_time, pnl, trade_type in [
             ("RANGE-1", "2026-08-17T16:30:00+00:00", 10.0, "follow"),
             ("RANGE-2", "2026-08-18T16:30:00+00:00", -4.0, "reversal"),
@@ -131,9 +131,14 @@ class StoragePresentationTest(unittest.TestCase):
 
         self.assertEqual(analysis["metrics"]["order_count"], 1)
         self.assertEqual(analysis["metrics"]["net_pnl"], 10.0)
+        self.assertEqual(analysis["periods"]["yesterday"]["order_count"], 1)
         self.assertEqual(analysis["periods"]["today"]["order_count"], 1)
-        self.assertEqual(analysis["periods"]["week"]["order_count"], 1)
-        self.assertEqual(analysis["periods"]["month"]["order_count"], 1)
+        self.assertEqual(analysis["periods"]["week"]["order_count"], 2)
+        self.assertEqual(analysis["periods"]["month"]["order_count"], 2)
+        self.assertEqual(analysis["period_ranges"]["today"], {
+            "start": "2026-08-19",
+            "end": "2026-08-19",
+        })
         self.assertEqual(analysis["periods"]["today"]["z_score"]["classification"], "insufficient_data")
         self.assertEqual(analysis["system_evaluation"][0]["date"], "2026-08-18")
         self.assertEqual(analysis["mode_evaluation"]["trade_type"][0]["key"], "follow")

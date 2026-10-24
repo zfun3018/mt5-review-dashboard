@@ -179,19 +179,6 @@ export function calculateCampaignPageSize({
   return Math.min(max, Math.max(min, capacity));
 }
 
-export function calculateOrderListMaxHeight({
-  viewportHeight,
-  top = 0,
-  bottomGap = 16,
-  min = 0,
-} = {}) {
-  const viewport = Number(viewportHeight);
-  const offset = Number(top);
-  const gap = Number(bottomGap);
-  if (![viewport, offset, gap].every(Number.isFinite)) return null;
-  return Math.max(Number(min) || 0, viewport - offset - gap);
-}
-
 export function mergePinnedCampaigns(campaigns = [], pinnedCampaign = null, pageSize = null) {
   const source = Array.isArray(campaigns) ? campaigns : [];
   if (!pinnedCampaign?.id) return source;
@@ -547,7 +534,7 @@ export function createOrdersController({
               <span class="campaign-day-summary">
               <strong>${escapeHtml(group.label)}</strong>
               <span>${group.campaigns.length}笔</span>
-              <strong class="${profitClass(groupPnl)}">${formatOrderListPnl(groupPnl)}</strong>
+              <strong class="${profitClass(groupPnl)} campaign-day-pnl-pill">${formatOrderListPnl(groupPnl)}</strong>
               </span>
             </button>
           </td>
@@ -614,22 +601,12 @@ export function createOrdersController({
     }
     const detailHeight = detailPanel.getBoundingClientRect().height;
     if (detailHeight > 0) {
-      const panelTop = panel.getBoundingClientRect().top;
-      const viewportHeight = view.defaultView?.innerHeight ?? globalThis.innerHeight;
-      const viewportMax = calculateOrderListMaxHeight({
-        viewportHeight,
-        top: panelTop,
-      });
-      const heightValue = viewportMax === null
-        ? detailHeight
-        : Math.min(detailHeight, viewportMax);
-      const height = `${Math.ceil(heightValue)}px`;
+      const height = `${Math.ceil(detailHeight)}px`;
+      panel.style.height = height;
+      panel.style.maxHeight = height;
       if (indexColumn) {
-        indexColumn.style.height = height;
-        indexColumn.style.maxHeight = height;
-      } else {
-        panel.style.height = height;
-        panel.style.maxHeight = height;
+        indexColumn.style.height = "";
+        indexColumn.style.maxHeight = "";
       }
     }
   }

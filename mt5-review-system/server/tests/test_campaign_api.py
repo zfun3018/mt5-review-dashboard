@@ -163,6 +163,7 @@ class CampaignApiTest(unittest.TestCase):
         self.assertEqual(analysis["metrics"]["net_pnl"], campaign["net_pnl"])
         self.assertEqual(album["total"], 1)
         self.assertEqual(album["trades"][0]["campaign_id"], campaign["id"])
+        self.assertEqual(album["trades"][0]["review_text"], updated["review_text"])
         self.assertEqual(album["trades"][0]["mistake_tags"], updated["mistake_tags"])
 
         clear_status, cleared = self.request(

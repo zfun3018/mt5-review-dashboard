@@ -147,16 +147,22 @@ test("order screenshot supports preview, replace, paste/upload, and delete", () 
   assert.match(ordersCss, /\.screenshot-overlay-controls\s*\{[\s\S]*position:\s*absolute/);
 });
 
-test("analysis workspace exposes cumulative return, shared filters, and evaluation summaries", () => {
+test("analysis workspace exposes cumulative return, shared filters, system matrix, and daily evaluation", () => {
   assert.match(dashboardHtml, /收益累计曲线/);
   assert.match(dashboardHtml, /id="timePreset"/);
   assert.doesNotMatch(dashboardHtml, /id="equityPreset"/);
-  assert.match(dashboardHtml, /id="systemEvaluationSummary"/);
+  assert.match(dashboardHtml, /id="systemEvaluationChart"/);
+  assert.match(dashboardHtml, /<h2 data-layout-title>交易系统评估<\/h2>/);
+  assert.match(dashboardHtml, /六项指标/);
+  assert.match(dashboardHtml, /data-layout-module="daily-evaluation"/);
   assert.doesNotMatch(dashboardHtml, /交易结果连续性说明（Z 分数）/);
   assert.match(dashboardJs, /cumulative_return/);
   assert.match(dashboardJs, /z_score/);
-  assert.match(dashboardJs, /renderSystemEvaluationSummary/);
+  assert.match(dashboardJs, /"daily-evaluation": renderSystemEvaluation/);
+  assert.match(dashboardJs, /"period-overview": \(\) => chartController\?\.updateModule\("systemEvaluation"/);
+  assert.doesNotMatch(dashboardJs, /allRows.slice(-30)/);
   assert.match(dashboardCharts, /buildMt5EquityOption/);
+  assert.match(dashboardCharts, /buildMt5SystemEvaluationOption/);
   assert.match(dashboardCharts, /buildMonthlyPnlOption/);
   assert.match(dashboardCharts, /buildHeatmapOption/);
   assert.match(dashboardCss, /\.r-metric-grid\s*\{[^}]*repeat\(7,/s);
@@ -165,9 +171,10 @@ test("analysis workspace exposes cumulative return, shared filters, and evaluati
   assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-column:\s*1 \/ -1/s);
 });
 
-test("system evaluation reserves a scrollable 30-row module body", () => {
+test("daily evaluation keeps all rows in the scrollable module body with recent dates first", () => {
   assert.match(dashboardCss, /\.evaluation-panel\s*\{[\s\S]*display:\s*flex/s);
   assert.match(dashboardCss, /\.evaluation-table-wrap\s*\{[\s\S]*flex:\s*1/s);
   assert.doesNotMatch(dashboardCss, /\.evaluation-table-wrap\s*\{[\s\S]*max-height:\s*330px/s);
-  assert.match(dashboardJs, /slice\(-30\)/);
+  assert.match(dashboardJs, /const rows = allRows\.reverse\(\)/);
+  assert.doesNotMatch(dashboardJs, /allRows\.slice\(-30\)/);
 });

@@ -1,7 +1,7 @@
 :root {
-  --album-accent: #f4c95d;
-  --album-accent-soft: rgba(244, 201, 93, 0.14);
-  --album-paper: #111917;
+  --album-accent: var(--color-accent);
+  --album-accent-soft: var(--color-accent-soft);
+  --album-paper: var(--color-surface-raised);
   --album-paper-soft: rgba(255, 255, 255, 0.035);
 }
 
@@ -57,7 +57,7 @@
   gap: 14px;
   margin-bottom: 18px;
   padding: 18px;
-  border-color: rgba(43, 212, 255, 0.28);
+  border-color: color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
 
 .album-checkin-head {
@@ -119,11 +119,6 @@
   color: var(--color-text);
   font-size: 16px;
   text-align: center;
-}
-
-.album-checkin-calendar-head .app-icon-button {
-  width: 36px;
-  height: 36px;
 }
 
 .album-checkin-calendar-head .app-icon-button:disabled {
@@ -227,19 +222,19 @@
 }
 
 .album-checkin-cell.level-1 {
-  border-color: rgba(43, 212, 255, 0.24);
-  background: rgba(43, 212, 255, 0.12);
+  border-color: rgba(57, 214, 160, 0.24);
+  background: rgba(57, 214, 160, 0.12);
 }
 
 .album-checkin-cell.level-2 {
-  border-color: rgba(43, 212, 255, 0.46);
-  background: rgba(43, 212, 255, 0.24);
+  border-color: rgba(57, 214, 160, 0.46);
+  background: rgba(57, 214, 160, 0.24);
   color: var(--color-text);
 }
 
 .album-checkin-cell.level-3 {
-  border-color: rgba(43, 212, 255, 0.72);
-  background: rgba(43, 212, 255, 0.38);
+  border-color: rgba(57, 214, 160, 0.72);
+  background: rgba(57, 214, 160, 0.38);
   color: var(--color-text);
 }
 
@@ -335,7 +330,7 @@
   min-width: 0;
   padding: 11px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-panel);
   background: var(--album-paper-soft);
 }
 
@@ -550,7 +545,7 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-panel);
   background: var(--album-paper);
   box-shadow: var(--shadow-raised);
 }
@@ -866,7 +861,7 @@
   margin-top: 7px;
   padding: 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-inner);
   resize: vertical;
   overflow-y: scroll;
   scrollbar-color: var(--color-accent) var(--color-surface-raised);

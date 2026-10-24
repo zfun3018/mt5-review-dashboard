@@ -692,12 +692,21 @@ export function createOrderDetailModule({
     node.innerHTML = `
       <div class="detail-body order-detail-workspace">
         <header class="detail-title order-detail-title">
-          <div>
+          <div class="order-detail-heading">
             <p class="eyebrow">主订单 · ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))}</p>
             <h2><span class="detail-contract-name">${escapeHtml(contractDisplay.name)}</span>${contractDisplay.code ? ` <span class="detail-contract-code">${escapeHtml(contractDisplay.code)}</span>` : ""} · ${campaign.side === "long" ? "多单" : "空单"}</h2>
             <span class="detail-time">开仓 ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} · ${formatVolume(campaign.entry_volume)} 手 · ${escapeHtml(rMultipleLabel(campaign))}</span>
           </div>
-          <div class="detail-order-actions">
+          <div class="detail-primary-review-fields" aria-label="订单风险与分类">
+            <div class="order-info-field stop-field ${stop ? "" : "missing"}">
+              <div class="field-label-row"><label for="campaignInitialStop">初始止损</label><span>${stop ? "已填写" : "待填写"}</span></div>
+              <input id="campaignInitialStop" class="numeric-cell-input" type="number" step="any" inputmode="decimal" value="${escapeAttr(stop)}" placeholder="请输入初始止损" />
+            </div>
+            ${renderTagPicker("trade_type_tags", "交易场景", sceneOptions, campaign.trade_type_tags || (campaign.trade_type ? [campaign.trade_type] : []))}
+            ${renderTagPicker("strategy_tags", "交易策略", strategyOptions, campaign.strategy_tags || (campaign.strategy ? [campaign.strategy] : []))}
+            <div class="order-info-save"><span id="saveState" aria-live="polite">自动保存已开启</span></div>
+          </div>
+          <div class="detail-order-actions" aria-label="订单操作">
             <span class="detail-action-group" aria-label="订单状态">
               <button id="featureCampaign" class="app-icon-button detail-icon-action featured-action${campaign.is_featured ? " is-active" : ""}" type="button" title="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-label="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-pressed="${Boolean(campaign.is_featured)}"><i data-lucide="star" aria-hidden="true"></i></button>
               ${campaign.is_featured ? '<span class="featured-status-badge"><i data-lucide="star" aria-hidden="true"></i>已精选</span>' : ""}
@@ -706,26 +715,19 @@ export function createOrderDetailModule({
             <span class="detail-action-group" aria-label="浏览操作">
               <button id="randomFeatured" class="app-icon-button detail-icon-action" type="button" title="随机一张精选订单" aria-label="随机一张精选订单"><i data-lucide="shuffle" aria-hidden="true"></i></button>
             </span>
-            <button id="checkinCampaign" class="app-icon-button detail-icon-action${campaign.checkin_checked_in_today ? " is-active" : ""}" type="button" title="${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"} · 累计 ${checkinCount} 次" aria-label="${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"}" aria-pressed="${Boolean(campaign.checkin_checked_in_today)}"><i data-lucide="${campaign.checkin_checked_in_today ? "undo-2" : "check-circle"}" aria-hidden="true"></i><span class="detail-action-count" aria-hidden="true">${checkinCount}</span><span class="sr-only">${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"}</span></button>
+            <button id="checkinCampaign" class="app-icon-button detail-icon-action detail-checkin-pill${campaign.checkin_checked_in_today ? " is-active" : ""}" type="button" title="${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"} · 累计 ${checkinCount} 次" aria-label="${campaign.checkin_checked_in_today ? "取消今日打卡" : "今日打卡"}" aria-pressed="${Boolean(campaign.checkin_checked_in_today)}"><i data-lucide="${campaign.checkin_checked_in_today ? "undo-2" : "check-circle"}" aria-hidden="true"></i><span class="detail-checkin-label">${campaign.checkin_checked_in_today ? "已打卡" : "今日打卡"}</span><span class="detail-action-count" aria-hidden="true">${checkinCount}</span></button>
             ${trade ? `<button id="${trade.deleted_at ? "restoreOrder" : "deleteOrder"}" class="app-icon-button detail-icon-action${trade.deleted_at ? "" : "is-danger"}" type="button" title="${trade.deleted_at ? "恢复订单" : "排除订单"}" aria-label="${trade.deleted_at ? "恢复订单" : "排除订单"}"><i data-lucide="${trade.deleted_at ? "archive-restore" : "archive"}" aria-hidden="true"></i></button>` : ""}
           </div>
         </header>
         <div class="detail-hero-grid">
           ${renderScreenshotEditor(campaign)}
           <div class="detail-review-column">
-            <section class="order-info-strip" aria-label="主订单信息">
+            <section class="order-info-strip" aria-label="犯错标签">
               <div class="order-info-main">
-                <div class="order-info-field stop-field ${stop ? "" : "missing"}">
-                  <div class="field-label-row"><label for="campaignInitialStop">初始止损</label><span>${stop ? "已填写" : "待填写"}</span></div>
-                  <input id="campaignInitialStop" class="numeric-cell-input" type="number" step="any" inputmode="decimal" value="${escapeAttr(stop)}" placeholder="请输入初始止损" />
-                </div>
-                ${renderTagPicker("trade_type_tags", "交易场景", sceneOptions, campaign.trade_type_tags || (campaign.trade_type ? [campaign.trade_type] : []))}
-                ${renderTagPicker("strategy_tags", "交易策略", strategyOptions, campaign.strategy_tags || (campaign.strategy ? [campaign.strategy] : []))}
                 ${renderTagPicker("mistake_tags", "犯错标签", mistakes, campaign.mistake_tags)}
-                <div class="order-info-save"><span id="saveState" aria-live="polite">自动保存已开启</span></div>
               </div>
-              ${customFieldInputs ? `<div class="field-grid detail-custom-fields">${customFieldInputs}</div>` : ""}
             </section>
+            ${customFieldInputs ? `<div class="field-grid detail-custom-fields">${customFieldInputs}</div>` : ""}
             <section class="review-editor-panel">
               <div class="section-head"><h3>复盘记录</h3><span id="reviewCount">${String(campaign.review_text || "").length} / 10000</span></div>
               <textarea id="detailReview" class="review-editor" maxlength="10000" placeholder="记录入场依据、执行过程、风险控制与改进计划">${escapeHtml(campaign.review_text || "")}</textarea>

@@ -11,6 +11,14 @@
   margin-bottom: var(--space-4);
 }
 
+/* GridStack keeps 12px of breathing room around every item. Align the
+   non-grid sections to the same visual edge as the module surfaces. */
+.market-clock,
+.filter-bar,
+.latest-import-summary {
+  margin-inline: 12px;
+}
+
 .mt5-dashboard-layout .grid-stack-item-content {
   overflow: visible;
 }
@@ -23,7 +31,17 @@
   min-width: 0;
   min-height: 0;
   margin: 0;
+  overflow: hidden;
+}
+
+.mt5-dashboard-layout .panel[data-content-fit="scroll"],
+.mt5-dashboard-layout .panel[data-content-fit="flow"] {
   overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.mt5-dashboard-layout .panel[data-content-fit="resize"] {
+  overflow: hidden;
 }
 
 .mt5-dashboard-layout .panel-head {
@@ -42,6 +60,7 @@
   grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   flex: 1 1 auto;
   align-content: start;
+  overflow: hidden;
 }
 
 .mt5-dashboard-layout .session-list {
@@ -77,21 +96,25 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 36px;
+  min-height: var(--control-height);
   margin-left: auto;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
+  padding: 0 16px;
+  border: 1px solid rgba(201, 250, 252, 0.65);
   border-radius: var(--radius-control);
-  color: var(--color-text);
-  background: var(--color-surface);
+  color: #0a1518;
+  background: linear-gradient(145deg, #b4edf0, #66bac7);
+  box-shadow: 0 12px 32px rgba(53, 155, 171, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  font-weight: 760;
   text-decoration: none;
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
 
 .dashboard-layout-link:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent-strong);
+  border-color: rgba(201, 250, 252, 0.82);
+  color: #081316;
+  background: linear-gradient(145deg, #c5f6f7, #7acbd5);
+  box-shadow: 0 15px 38px rgba(53, 155, 171, 0.39), inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .dashboard-layout-link svg {
@@ -121,9 +144,30 @@
   font-weight: 600;
 }
 
-/* Flat, high-contrast TradingView-like workspace hierarchy. */
+/* Keep dashboard panels aligned with the shared glass surface system. */
 .panel {
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+.panel[data-module-state="error"],
+.domestic-module[data-module-state="error"] { position: relative; }
+.panel[data-module-state="error"]::after,
+.domestic-module[data-module-state="error"]::after {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  border-radius: inherit;
+  color: var(--color-muted);
+  background: rgba(10, 28, 47, 0.72);
+  content: "模块暂不可用，请刷新重试";
+  font-size: var(--font-size-sm);
+  text-align: center;
+  pointer-events: none;
 }
 
 .dashboard-grid {
@@ -154,7 +198,10 @@
   padding: var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  background: var(--color-surface);
+  background: linear-gradient(145deg, rgba(34, 42, 53, 0.56), rgba(13, 17, 24, 0.47));
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
 }
 
 .market-alert {
@@ -172,7 +219,9 @@
 }
 
 .market-card.active {
-  border-color: var(--color-accent);
+  border-color: rgba(var(--color-accent-rgb), 0.72);
+  background: linear-gradient(145deg, rgba(var(--color-accent-rgb), 0.2), rgba(13, 17, 24, 0.66));
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42), 0 0 26px rgba(var(--color-accent-rgb), 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .market-card header {
@@ -326,10 +375,26 @@
 }
 
 .chart-frame {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
   padding: 0 var(--space-4) var(--space-4);
+}
+
+.chart-frame[data-chart-state="error"]::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  border-radius: inherit;
+  color: var(--color-muted);
+  background: rgba(10, 28, 47, 0.72);
+  content: "图表暂不可用，请刷新重试";
+  font-size: var(--font-size-sm);
+  text-align: center;
+  pointer-events: none;
 }
 
 .chart-frame--compact {
@@ -374,16 +439,20 @@
 }
 
 /* Calendar */
+.calendar-panel .panel-head {
+  padding: var(--space-2) var(--space-4) var(--space-1);
+}
+
 .month-nav {
   display: flex;
   gap: var(--space-2);
 }
 
 .calendar-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  padding: 0 var(--space-4) var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-2);
 }
 
 .calendar-month-label {
@@ -394,9 +463,13 @@
 }
 
 .calendar-stat {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
+  display: flex;
+  flex: 1 1 132px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
   background: var(--color-surface-raised);
@@ -408,72 +481,17 @@
 }
 
 .calendar-stat strong {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-body);
+  white-space: nowrap;
 }
 
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--space-1);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.day-name {
-  padding: var(--space-1);
-  color: var(--color-muted);
-  font-size: var(--font-size-xs);
-  text-align: center;
-}
-
-.day-cell {
-  display: grid;
-  gap: 2px;
-  min-height: 0;
-  aspect-ratio: 1 / 0.82;
-  padding: var(--space-1);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  overflow: hidden;
-}
-
-.day-cell.empty {
-  border-color: transparent;
-  background: transparent;
-}
-
-.day-cell .date {
-  font-size: var(--font-size-sm);
-  color: var(--color-muted);
-}
-
-.day-cell .pnl {
-  font-size: var(--font-size-sm);
-}
-
-.day-cell.has-trades {
-  cursor: default;
-}
-
-.day-cell.profit-day {
-  border-color: #72d8c5;
-  color: #087b6f;
-  background: #e0fff7;
-}
-
-.day-cell.profit-day .date,
-.day-cell.profit-day .pnl {
-  color: #087b6f;
-}
-
-.day-cell.loss-day {
-  border-color: #ef8fa4;
-  color: #b3264a;
-  background: #fff0f3;
-}
-
-.day-cell.loss-day .date,
-.day-cell.loss-day .pnl {
-  color: #b3264a;
+.calendar-chart {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 200px;
+  padding: 0 var(--space-3) var(--space-3);
+  contain: layout paint;
 }
 
 /* Heatmap */
@@ -601,48 +619,19 @@
   gap: var(--space-4);
 }
 
-.system-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-  padding: 0 var(--space-4) var(--space-3);
+.period-overview-chart {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 300px;
+  padding: 0 var(--space-3) var(--space-3);
+  contain: layout paint;
 }
 
-.evaluation-summary-card {
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface-raised);
-}
-
-.evaluation-summary-card header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: var(--space-2);
-}
-
-.evaluation-summary-grid-inner {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-.evaluation-summary-grid-inner > span {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--color-muted);
-  font-size: var(--font-size-xs);
-}
-
-.evaluation-summary-grid-inner > span strong {
-  color: var(--color-text);
-  justify-self: end;
-}
-
-.evaluation-z-row > span {
-  color: var(--color-muted);
+.daily-evaluation-panel > .evaluation-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .evaluation-pagination {
@@ -655,15 +644,6 @@
   font-size: var(--font-size-xs);
 }
 
-.evaluation-pagination > div {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.evaluation-z-row {
-  grid-column: 1 / -1;
-}
-
 .evaluation-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -672,10 +652,12 @@
   padding: 0 var(--space-4) var(--space-4);
 }
 
-.evaluation-table thead th {
+html[data-platform="mt5"] .evaluation-table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
+  background: #191f28;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .evaluation-table {
@@ -930,16 +912,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .system-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .evaluation-summary-grid-inner {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .evaluation-summary-grid-inner > span {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .period-overview-chart {
+    min-height: 300px;
   }
 
   .evaluation-pagination {
@@ -947,17 +921,23 @@
     flex-direction: column;
   }
 
-  .calendar-grid {
-    gap: 2px;
-    padding: 0 var(--space-2) var(--space-2);
+  .calendar-chart {
+    min-height: 200px;
   }
 
-  .day-cell {
-    aspect-ratio: 1 / 0.9;
+  .calendar-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .day-cell .date:last-child {
-    display: none;
+  .calendar-stat {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+
+  .calendar-stat strong {
+    font-size: var(--font-size-sm);
   }
 
   .heatmap {

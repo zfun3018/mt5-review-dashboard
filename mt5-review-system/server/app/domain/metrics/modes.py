@@ -16,13 +16,14 @@ from ..r_metrics import build_r_metrics
 
 
 DEFINITION_VERSION = "1"
+PERIODS_DEFINITION_VERSION = "2"
 
 
 def mode_definitions() -> tuple[MetricDefinition, ...]:
     return (
         MetricDefinition(
             key="periods",
-            definition_version=DEFINITION_VERSION,
+            definition_version=PERIODS_DEFINITION_VERSION,
             calculate=build_periods_result,
         ),
         MetricDefinition(
@@ -39,14 +40,17 @@ def mode_definitions() -> tuple[MetricDefinition, ...]:
 
 
 def build_periods_result(context: AnalysisContext) -> MetricResult:
-    campaigns = list(context.campaigns)
+    campaigns = list(context.reference_campaigns or context.campaigns)
     anchor = _anchor(context)
     periods = build_trade_period_summaries(campaigns, anchor)
     for key, metrics in build_campaign_period_metrics(
         campaigns, anchor, _threshold(context)
     ).items():
         periods.setdefault(key, {})["r_metrics"] = metrics
-    return _result("periods", periods, len(campaigns))
+    return _result(
+        "periods", periods, len(campaigns),
+        definition_version=PERIODS_DEFINITION_VERSION,
+    )
 
 
 def build_system_evaluation_result(context: AnalysisContext) -> MetricResult:
@@ -78,6 +82,11 @@ def _threshold(context: AnalysisContext) -> float:
 
 
 def _anchor(context: AnalysisContext) -> datetime:
+    configured = context.settings.get("fixed_period_anchor_utc")
+    if configured is not None:
+        from ..analytics import parse_dt
+
+        return parse_dt(configured)
     if context.anchor_utc is not None:
         return context.anchor_utc
     for campaign in reversed(context.campaigns):
@@ -91,13 +100,19 @@ def _anchor(context: AnalysisContext) -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _result(key: str, value, sample_count: int) -> MetricResult:
+def _result(
+    key: str,
+    value,
+    sample_count: int,
+    *,
+    definition_version: str = DEFINITION_VERSION,
+) -> MetricResult:
     return MetricResult(
         key=key,
         value=value,
         unit="mixed",
         status="available",
         sample_count=sample_count,
-        definition_version=DEFINITION_VERSION,
+        definition_version=definition_version,
         coverage=1.0 if sample_count else 0.0,
     )

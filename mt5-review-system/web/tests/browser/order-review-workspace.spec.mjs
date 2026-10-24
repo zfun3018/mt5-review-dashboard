@@ -91,7 +91,10 @@ test.describe("order review workspace", () => {
     const reviewBodies = [];
     const stopBodies = [];
     const screenshotBodies = [];
-    let persistedCampaign = { ...campaign };
+    let persistedCampaign = {
+      ...campaign,
+      mistake_tags: ["mistake_background", "mistake_averaging", "mistake_stop", "mistake_chase", "mistake_setup"],
+    };
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
     });
@@ -99,7 +102,21 @@ test.describe("order review workspace", () => {
     await page.route("**/api/**", async (route) => {
       const request = route.request();
       const url = new URL(request.url());
-      if (url.pathname === "/api/custom-fields") return response(route, catalog);
+      if (url.pathname === "/api/custom-fields") return response(route, {
+        ...catalog,
+        custom_fields: [{
+          id: "mistake-tags",
+          name: "犯错",
+          field_type: "multi",
+          options: [
+            { id: "mistake_background", label: "忽略关键背景" },
+            { id: "mistake_averaging", label: "逆势连续加仓" },
+            { id: "mistake_stop", label: "未按计划止损" },
+            { id: "mistake_chase", label: "错过后追单入场" },
+            { id: "mistake_setup", label: "交易条件不充分" },
+          ],
+        }],
+      });
       if (url.pathname === "/api/classification-options") return response(route, { classification_options: catalog.classification_options });
       if (url.pathname === "/api/analysis-settings") return response(route, { scratch_threshold_r: 0.15 });
       if (url.pathname === "/api/campaigns" && request.method() === "GET") {
@@ -138,6 +155,74 @@ test.describe("order review workspace", () => {
     await expect(page.locator(".campaign-kind-mark")).toHaveText("组");
     await expect(page.locator(".campaign-risk-mark")).toHaveText("!");
     await expect(page.locator("#campaignInitialStop")).toBeVisible();
+    await expect(page.locator('[data-tag-trigger="trade_type_tags"]')).toBeVisible();
+    await expect(page.locator('[data-tag-trigger="strategy_tags"]')).toBeVisible();
+    await expect(page.locator(".order-info-strip")).toContainText("犯错标签");
+    await expect(page.locator('.order-info-strip [data-tag-picker="mistake_tags"] .choice-value-pill')).toHaveCount(5);
+    await expect(page.locator(".order-info-strip")).not.toContainText("初始止损");
+    await expect(page.locator(".order-info-strip")).not.toContainText("交易场景");
+    await expect(page.locator(".order-info-strip")).not.toContainText("交易策略");
+    const tagFlow = await page.locator(".order-info-strip").evaluate((region) => {
+      const regionBox = region.getBoundingClientRect();
+      const tags = [...region.querySelectorAll(".choice-value-pill")].map((tag) => {
+        const box = tag.getBoundingClientRect();
+        return { top: box.top, left: box.left, right: box.right };
+      });
+      const header = document.querySelector(".detail-primary-review-fields").getBoundingClientRect();
+      const featured = document.querySelector("#featureCampaign").getBoundingClientRect();
+      const fields = document.querySelector(".detail-primary-review-fields");
+      const featuredButton = document.querySelector("#featureCampaign");
+      return {
+        width: regionBox.width,
+        maxWidth: region.parentElement.getBoundingClientRect().width,
+        scrollWidth: region.scrollWidth,
+        tagRows: new Set(tags.map((tag) => Math.round(tag.top))).size,
+        tagsContained: tags.every((tag) => tag.left >= regionBox.left && tag.right <= regionBox.right + 1),
+        reviewFieldsBeforeFeatured: Boolean(fields.compareDocumentPosition(featuredButton) & Node.DOCUMENT_POSITION_FOLLOWING)
+          && (window.innerWidth <= 560 || header.left < featured.left),
+      };
+    });
+    expect(tagFlow.width).toBeLessThanOrEqual(tagFlow.maxWidth + 1);
+    expect(tagFlow.scrollWidth).toBeLessThanOrEqual(tagFlow.width + 1);
+    expect(tagFlow.tagsContained).toBe(true);
+    expect(tagFlow.tagRows).toBeGreaterThan(1);
+    expect(tagFlow.reviewFieldsBeforeFeatured).toBe(true);
+    if (!isMobile) {
+      const headerAlignment = await page.evaluate(() => {
+        const bounds = [".order-detail-heading", ".detail-primary-review-fields", ".detail-order-actions"]
+          .map((selector) => document.querySelector(selector).getBoundingClientRect());
+        return {
+          leftToRight: bounds[0].right <= bounds[1].left + 1 && bounds[1].right <= bounds[2].left + 1,
+          centers: bounds.map((box) => box.top + box.height / 2),
+        };
+      });
+      expect(headerAlignment.leftToRight).toBe(true);
+      expect(Math.max(...headerAlignment.centers) - Math.min(...headerAlignment.centers)).toBeLessThanOrEqual(2);
+    }
+    await expect(page.locator("#checkinCampaign .detail-checkin-label")).toHaveText("今日打卡");
+    const reviewControlStyles = await page.evaluate(() => {
+      const style = (selector) => {
+        const node = document.querySelector(selector);
+        const computed = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return {radius: computed.borderRadius, width: rect.width, height: rect.height, display: computed.display};
+      };
+      return {
+        info: style(".order-info-strip"),
+        field: style(".detail-primary-review-fields .order-info-field"),
+        stop: style("#campaignInitialStop"),
+        choice: style('[data-tag-trigger="trade_type_tags"]'),
+        checkin: style("#checkinCampaign"),
+        dailyPnl: style(".campaign-day-summary .campaign-day-pnl-pill"),
+      };
+    });
+    expect(reviewControlStyles.info.radius).toBe("18px");
+    expect(reviewControlStyles.field.radius).toBe("0px");
+    expect(reviewControlStyles.stop.radius).toBe("999px");
+    expect(reviewControlStyles.choice.radius).toBe("999px");
+    expect(reviewControlStyles.checkin.radius).toBe("999px");
+    expect(reviewControlStyles.checkin.width).toBeGreaterThan(120);
+    expect(reviewControlStyles.dailyPnl.radius).toBe("999px");
     await page.locator("#campaignInitialStop").fill("2656.1");
     await page.locator("#campaignInitialStop").press("Tab");
     await expect.poll(() => stopBodies.at(-1)?.initial_stop_price).toBe(2656.1);
@@ -162,6 +247,8 @@ test.describe("order review workspace", () => {
       });
       return {
         listModules,
+        orderListPanel: rect(".trades-panel"),
+        detailPanel: rect(".detail-panel"),
         detailReview: rect(".detail-review-column"),
         orderInfo: rect(".order-info-strip"),
         review: rect(".review-editor-panel"),
@@ -171,6 +258,9 @@ test.describe("order review workspace", () => {
     });
     expect(composition.listModules).toHaveLength(2);
     expect(composition.listModules[0].bottom).toBeLessThanOrEqual(composition.listModules[1].top);
+    if (!isMobile) {
+      expect(Math.abs(composition.orderListPanel.height - composition.detailPanel.height)).toBeLessThanOrEqual(1);
+    }
     expect(composition.overflow).toBe(true);
     expect(composition.orderInfo.top).toBeLessThanOrEqual(composition.review.top);
     if (!isMobile) expect(composition.screenshot.width).toBeGreaterThan(composition.detailReview.width);
@@ -184,13 +274,35 @@ test.describe("order review workspace", () => {
     expect(Number.parseFloat(listLayout.pnlFontSize)).toBeGreaterThan(11);
     expect(listLayout.groupPnlFontSize).toBe(listLayout.pnlFontSize);
 
+    if (!isMobile) {
+      const stickyHeader = await page.locator(".trades-panel .table-wrap").evaluate((scroller) => {
+        const body = scroller.querySelector("tbody");
+        const source = body.querySelector("tr:not(.campaign-day-row)");
+        for (let index = 0; index < 18; index += 1) body.append(source.cloneNode(true));
+        scroller.scrollTop = 120;
+        const header = scroller.querySelector("thead th");
+        const headerBox = header.getBoundingClientRect();
+        const scrollerBox = scroller.getBoundingClientRect();
+        return {
+          scrollTop: scroller.scrollTop,
+          stickyTopOffset: headerBox.top - scrollerBox.top,
+          background: getComputedStyle(header).backgroundColor,
+          position: getComputedStyle(header).position,
+        };
+      });
+      expect(stickyHeader.scrollTop).toBeGreaterThan(0);
+      expect(Math.abs(stickyHeader.stickyTopOffset)).toBeLessThanOrEqual(1);
+      expect(stickyHeader.position).toBe("sticky");
+      expect(stickyHeader.background).toBe("rgb(21, 26, 34)");
+    }
+
     await page.locator('[data-tag-trigger="trade_type_tags"]').click();
     await page.locator('[data-campaign-choice-option="scene_reversal"]').click();
     await expect(page.locator(".choice-popover")).toBeHidden();
     await expect.poll(() => reviewBodies.at(-1)?.trade_type_tags).toEqual(["scene_reversal"]);
     await expect(page.locator('[data-tag-picker="trade_type_tags"] .choice-value-pill')).toHaveText("反转试单");
     await expect(page.locator('[data-tag-picker="trade_type_tags"] .field-label')).toContainText("单选");
-    await page.locator(".order-detail-title").click();
+    await page.locator(".detail-body").click({ position: { x: 8, y: 8 } });
     await expect(page.locator(".choice-popover")).toBeHidden();
 
     await page.evaluate(() => {

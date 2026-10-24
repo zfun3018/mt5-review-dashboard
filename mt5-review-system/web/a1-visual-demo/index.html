@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>A 计划视觉试验台 · 玻璃 UI</title>
+    <link rel="stylesheet" href="./visual-demo.css" />
+  </head>
+  <body>
+    <div class="demo-window" data-demo-window>
+      <aside class="sidebar" aria-label="演示导航">
+        <a class="brand" href="#top" aria-label="视觉试验台首页">
+          <span class="brand-mark">R</span>
+          <span class="brand-copy"><strong>交易复盘</strong><small>VISUAL LAB · A1</small></span>
+        </a>
+        <div class="nav-caption">工作区</div>
+        <nav class="nav-list">
+          <a class="nav-link is-active" href="#dashboard"><span class="nav-icon">▦</span><span>仪表盘</span></a>
+          <a class="nav-link" href="#orders"><span class="nav-icon">≡</span><span>订单复盘</span></a>
+          <a class="nav-link" href="#review"><span class="nav-icon">▤</span><span>复盘画册</span></a>
+          <a class="nav-link" href="#settings"><span class="nav-icon">☷</span><span>设置</span></a>
+        </nav>
+        <div class="sidebar-bottom">
+          <span class="status-orb" aria-hidden="true">●</span>
+          <span><strong>本地工作区</strong><small>仅用于视觉演示</small></span>
+        </div>
+      </aside>
+
+      <main id="top" class="main-surface">
+        <header class="topbar">
+          <div class="topbar-title"><span class="eyebrow">A PLAN · VISUAL SYSTEM</span><strong>玻璃风格试验台</strong></div>
+          <div class="topbar-actions">
+            <span class="demo-badge"><i></i>合成演示</span>
+            <button class="pill-button account-button" type="button" aria-label="演示账户选择">MT5 工作区 <span aria-hidden="true">⌄</span></button>
+          </div>
+        </header>
+
+        <section id="dashboard" class="page-content">
+          <div class="page-heading">
+            <div><span class="eyebrow">GLASS · DEPTH · CONTINUITY</span><h1>交易表现</h1><p>用于确认色彩、圆角、光影和组件层级的独立视觉样稿</p></div>
+            <button class="pill-button pill-button--primary" type="button" data-open-dialog><span aria-hidden="true">＋</span> 组件预览</button>
+          </div>
+
+          <section class="filter-panel glass-panel" aria-label="筛选控件样式">
+            <div class="segmented" role="group" aria-label="时间范围">
+              <button type="button">今天</button><button class="selected" type="button">近 7 天</button><button type="button">近 30 天</button><button type="button">全部</button>
+            </div>
+            <label class="select-wrap"><span>交易账户</span><select aria-label="交易账户"><option>MT5 · 主账户</option><option>MT5 · 模拟账户</option></select></label>
+            <span class="filter-spacer"></span>
+            <button class="pill-button" type="button"><span aria-hidden="true">⤢</span> 编辑布局</button>
+            <button class="circle-button" type="button" aria-label="更多筛选" title="更多筛选">•••</button>
+          </section>
+
+          <section class="metric-panel glass-panel" aria-labelledby="metric-heading">
+            <header class="module-header">
+              <span class="module-glyph module-glyph--cyan">↗</span>
+              <div><span class="eyebrow">PERFORMANCE SUMMARY</span><h2 id="metric-heading">账户表现</h2></div>
+              <span class="module-status">演示数据</span>
+            </header>
+            <div class="metric-grid">
+              <article class="metric-tile"><span>总净盈亏</span><strong class="positive">+¥2,480</strong><small>统计示例</small></article>
+              <article class="metric-tile"><span>交易组合</span><strong>24</strong><small>样本数量</small></article>
+              <article class="metric-tile"><span>净胜率</span><strong>58.3%</strong><small>演示指标</small></article>
+              <article class="metric-tile"><span>平均 R</span><strong>+0.42R</strong><small>演示指标</small></article>
+            </div>
+          </section>
+
+          <div class="content-grid">
+            <section class="chart-panel glass-panel" aria-labelledby="chart-heading">
+              <header class="module-header">
+                <span class="module-glyph module-glyph--amber">⌁</span>
+                <div><span class="eyebrow">CUMULATIVE RETURN</span><h2 id="chart-heading">收益累计曲线</h2></div>
+                <button class="circle-button" type="button" aria-label="图表选项">•••</button>
+              </header>
+              <div class="chart-area" role="img" aria-label="合成演示收益曲线">
+                <div class="chart-y-labels"><span>¥3k</span><span>¥2k</span><span>¥1k</span><span>¥0</span></div>
+                <svg viewBox="0 0 720 240" preserveAspectRatio="none" aria-hidden="true">
+                  <defs><linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#79c8d5" stop-opacity=".25"/><stop offset="1" stop-color="#79c8d5" stop-opacity="0"/></linearGradient><filter id="line-glow" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+                  <path class="chart-fill" d="M0 188 C45 182 48 156 93 164 S145 182 188 137 S245 157 287 112 S339 130 378 88 S430 112 474 74 S530 100 572 55 S630 77 670 39 S700 48 720 28 L720 240 L0 240 Z" />
+                  <path class="chart-line" d="M0 188 C45 182 48 156 93 164 S145 182 188 137 S245 157 287 112 S339 130 378 88 S430 112 474 74 S530 100 572 55 S630 77 670 39 S700 48 720 28" />
+                  <circle class="chart-point" cx="572" cy="55" r="5" />
+                </svg>
+                <div class="chart-x-labels"><span>10/01</span><span>10/07</span><span>10/14</span><span>10/21</span><span>10/23</span></div>
+                <span class="chart-note">合成曲线 · 非真实账户数据</span>
+              </div>
+            </section>
+
+            <section class="style-panel glass-panel" aria-labelledby="style-heading">
+              <header class="module-header">
+                <span class="module-glyph module-glyph--mint">✳</span>
+                <div><span class="eyebrow">MATERIAL & SHAPE</span><h2 id="style-heading">材质与形状约束</h2></div>
+              </header>
+              <div class="token-list">
+                <div class="token-row"><span class="token-sample token-sample--window"></span><span><strong>工作台外框</strong><small>28 px · 环境投影</small></span><b>28</b></div>
+                <div class="token-row"><span class="token-sample token-sample--panel"></span><span><strong>模块卡片</strong><small>24 px · 双层高光</small></span><b>24</b></div>
+                <div class="token-row"><span class="token-sample token-sample--inner"></span><span><strong>数据内卡</strong><small>18 px · 柔和内嵌</small></span><b>18</b></div>
+                <div class="token-row"><span class="token-sample token-sample--pill"></span><span><strong>按钮 / 标签</strong><small>999 px · 药丸</small></span><b>∞</b></div>
+              </div>
+              <div class="button-showcase">
+                <button class="circle-button" type="button" aria-label="刷新示例">↻</button>
+                <button class="pill-button" type="button">次级按钮</button>
+                <button class="pill-button pill-button--primary" type="button">主操作</button>
+              </div>
+            </section>
+          </div>
+
+          <section id="orders" class="component-panel glass-panel" aria-labelledby="component-heading">
+            <header class="module-header">
+              <span class="module-glyph module-glyph--cyan">◈</span>
+              <div><span class="eyebrow">CONTROL FAMILY</span><h2 id="component-heading">控件统一性</h2></div>
+              <span class="module-status module-status--amber">交互样式样本</span>
+            </header>
+            <div class="control-samples">
+              <div><label>选择项</label><button class="pill-button sample-select" type="button">交易方向 <span>⌄</span></button></div>
+              <div><label>状态标签</label><span class="tag tag--cyan">已复盘</span><span class="tag tag--amber">精选</span></div>
+              <div><label>圆形操作</label><button class="circle-button" type="button" aria-label="收藏示例">☆</button><button class="circle-button is-active" type="button" aria-label="已收藏示例">★</button></div>
+              <div><label>焦点状态</label><button class="pill-button focus-sample" type="button">键盘焦点</button></div>
+            </div>
+          </section>
+          <footer class="demo-footer"><span>STYLE ONLY · 不连接业务数据 / 不修改 A 计划页面</span><span>Graphite · Cyan · Amber</span></footer>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="preview-dialog" data-preview-dialog>
+      <div class="dialog-top"><span class="module-glyph module-glyph--amber">✦</span><button class="circle-button" type="button" data-close-dialog aria-label="关闭">×</button></div>
+      <span class="eyebrow">FLOATING SURFACE</span>
+      <h2>玻璃浮层样式</h2>
+      <p>统一边框高光、背景模糊、药丸操作和阴影深度。</p>
+      <div class="dialog-actions"><button class="pill-button" type="button" data-close-dialog>取消</button><button class="pill-button pill-button--primary" type="button" data-close-dialog>确认样式</button></div>
+    </dialog>
+    <script type="module" src="./visual-demo.mjs"></script>
+  </body>
+</html>

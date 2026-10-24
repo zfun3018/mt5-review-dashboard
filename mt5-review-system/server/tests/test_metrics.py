@@ -9,6 +9,7 @@ from app.analytics import (
     trade_net_pnl,
 )
 from app.domain.analysis_context import AnalysisContext
+from app.domain.dashboard import build_trade_period_summaries, campaign_period_date_ranges
 from app.domain.metrics import build_metric_registry
 
 
@@ -65,6 +66,26 @@ def _context(campaigns, *, snapshots=(), settings=None):
 
 
 class MetricsTest(unittest.TestCase):
+    def test_trade_period_summaries_include_yesterday_and_rolling_windows(self):
+        campaigns = [
+            _campaign("yesterday", "2026-08-02T15:59:00+00:00", 10.0),
+            _campaign("anchor-day", "2026-08-02T16:00:00+00:00", -4.0),
+            _campaign("seven-day-start", "2026-07-28T16:00:00+00:00", 3.0),
+            _campaign("outside-seven", "2026-07-27T15:59:00+00:00", 100.0),
+        ]
+
+        periods = build_trade_period_summaries(
+            campaigns, datetime(2026, 8, 3, 12, 0, tzinfo=timezone.utc)
+        )
+
+        self.assertEqual(periods["yesterday"]["order_count"], 1)
+        self.assertEqual(periods["yesterday"]["net_pnl"], 10.0)
+        self.assertEqual(periods["last_7_days"]["order_count"], 3)
+        self.assertEqual(periods["last_7_days"]["net_pnl"], 9.0)
+        self.assertEqual(periods["last_30_days"]["order_count"], 4)
+        self.assertEqual(periods["last_365_days"]["order_count"], 4)
+        self.assertAlmostEqual(periods["last_7_days"]["win_rate"], 2 / 3)
+
     def test_net_pnl_and_payoff_metrics_include_costs(self):
         trades = [
             trade("1", "2026-08-18T01:00:00+00:00", 100, commission=-5),
@@ -124,6 +145,14 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(len(modes), 2)
         self.assertEqual(sum(item["order_count"] for item in modes), 2)
         self.assertEqual(modes[0]["share"], 0.5)
+
+    def test_fixed_period_date_ranges_use_beijing_anchor_and_monday_week(self):
+        ranges = campaign_period_date_ranges(datetime.fromisoformat("2026-10-23T01:00:00+00:00"))
+
+        self.assertEqual(ranges["today"], {"start": "2026-10-23", "end": "2026-10-23"})
+        self.assertEqual(ranges["week"], {"start": "2026-10-19", "end": "2026-10-23"})
+        self.assertEqual(ranges["month"], {"start": "2026-10-01", "end": "2026-10-23"})
+        self.assertEqual(ranges["year"], {"start": "2026-01-01", "end": "2026-10-23"})
 
 
 class CommonMetricRegistryTest(unittest.TestCase):
@@ -235,6 +264,23 @@ class CommonMetricRegistryTest(unittest.TestCase):
         self.assertEqual(r_metrics.value["sqn_status"], "insufficient_sample")
         self.assertEqual(r_metrics.value["sample_count"], 2)
         self.assertEqual(r_metrics.value["complete_count"], 1)
+
+    def test_max_drawdown_uses_peak_to_trough_realized_campaign_curve(self):
+        context = _context(
+            [
+                _campaign("C-1", "2026-08-01T01:00:00+00:00", 12.5),
+                _campaign("C-2", "2026-08-02T01:00:00+00:00", -4.0),
+                _campaign("C-3", "2026-08-03T01:00:00+00:00", 3.0),
+                _campaign("C-4", "2026-08-04T01:00:00+00:00", -20.0),
+            ]
+        )
+
+        results = {result.key: result for result in build_metric_registry().evaluate(context)}
+        drawdown = results["max_drawdown"]
+
+        self.assertEqual(drawdown.value, {"amount": 21.0, "peak": 12.5, "trough": -8.5})
+        self.assertEqual(drawdown.sample_count, 4)
+        self.assertEqual(drawdown.status, "available")
 
 
 if __name__ == "__main__":

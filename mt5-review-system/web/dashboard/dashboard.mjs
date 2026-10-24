@@ -22,7 +22,10 @@ import {
 } from "./dashboard-state.mjs";
 import {loadLayout} from "./dashboard-layout.mjs";
 import {createDashboardGrid} from "./dashboard-grid.mjs";
+import {mountDashboardLayoutEditorMode} from "./dashboard-layout-editor-mode.mjs";
 import {createMt5DashboardCharts} from "./mt5-dashboard-charts.mjs";
+import {MT5_DASHBOARD_MODULES} from "./dashboard-module-registry.mjs";
+import {renderDashboardModules, setDashboardModulesError, setDashboardModulesLoading} from "./dashboard-module-runtime.mjs";
 
 function minutesInZone(date, zone) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -171,6 +174,8 @@ export function createDashboardController({
   let importSummary = null;
   let gridController = null;
   let chartController = null;
+  let layoutEditorController = null;
+  let loadRevision = 0;
 
   function getElement(id) {
     return typeof view.getElementById === "function" ? view.getElementById(id) : null;
@@ -229,12 +234,24 @@ export function createDashboardController({
     if (normalizePlatform(platform) !== "mt5") return;
     const layoutRoot = getElement("mt5DashboardLayout");
     gridController?.destroy?.();
+    layoutEditorController?.dispose?.();
+    const layout = loadLayout(globalThis.localStorage, "mt5");
+    const layoutEditing = new URLSearchParams(location.search).get("layout") === "edit";
     gridController = createDashboardGrid({
       root: layoutRoot,
-      layout: loadLayout(globalThis.localStorage, "mt5"),
+      layout,
       selector: "[data-layout-module]",
-      editable: false,
+      editable: layoutEditing,
       GridStack: globalThis.GridStack,
+      document: view,
+    });
+    layoutEditorController = mountDashboardLayoutEditorMode({
+      root: layoutRoot,
+      toolbar: getElement("mt5LayoutEditor"),
+      gridController,
+      layout,
+      platform: "mt5",
+      location,
       document: view,
     });
   }
@@ -340,45 +357,10 @@ export function createDashboardController({
     }
   }
 
-  function renderSystemEvaluationSummary() {
-    const periods = payload?.periods || {};
-    const periodsMeta = metricMetaFor("periods");
-    const items = [
-      ["本日", periods.today],
-      ["本周", periods.week],
-      ["本月", periods.month],
-      ["本年", periods.year],
-    ].filter(([, item]) => item);
-    setHtml(
-      "systemEvaluationSummary",
-      items
-        .map(([label, item]) => {
-          const r = item.r_metrics || {};
-          const sqn = metricValue(r.sqn, (value) => r.sqn_status === "available" ? Number(value).toFixed(2) : "!", periodsMeta);
-          return `
-            <article class="evaluation-summary-card">
-              <header><span>${escapeHtml(label)}</span><strong class="${metricState(periodsMeta) ? "" : profitClass(item.net_pnl)}">${escapeHtml(metricValue(item.net_pnl, formatMoney, periodsMeta))}</strong></header>
-              <div class="evaluation-summary-grid-inner">
-                <span>交易笔数<strong>${metricValue(r.sample_count, String, periodsMeta)}</strong></span>
-                <span>总盈亏比<strong>${metricValue(item.profit_factor, formatRatio, periodsMeta)}</strong></span>
-                <span>净盈亏比<strong>${metricValue(item.payoff_ratio, formatRatio, periodsMeta)}</strong></span>
-                <span>总胜率<strong>${metricValue(item.cash_win_rate ?? item.win_rate, formatPercent, periodsMeta)}</strong></span>
-                <span>净胜率（剔除打平）<strong>${metricValue(r.decisive_win_rate, formatPercent, periodsMeta)}</strong></span>
-                <span>平均数学期望（ER）<strong>${metricValue(r.expectancy_r, (value) => compactMetricText(formatRValue(value)), periodsMeta)}</strong></span>
-                <span>收益稳定度（SQN）<strong>${sqn}</strong></span>
-                <span class="evaluation-z-row"><span>交易结果连续性（Z 分数） ${metricInfoButton("z_score", "交易结果连续性（Z 分数）", r, {metricMeta: periodsMeta})}</span><strong>${escapeHtml(metricValue(r.z_score || item.z_score, (value) => compactMetricText(formatZScore(value)), periodsMeta))}</strong></span>
-              </div>
-            </article>
-          `;
-        })
-        .join("") || `<div class="detail-empty">当前范围暂无交易</div>`,
-    );
-  }
-
   function renderSystemEvaluation() {
     const allRows = [...(payload?.system_evaluation || [])];
     const evaluationMeta = metricMetaFor("system_evaluation");
-    const rows = allRows.slice(-30).reverse();
+    const rows = allRows.reverse();
     setHtml(
       "systemEvaluationRows",
       rows
@@ -404,7 +386,7 @@ export function createDashboardController({
     );
     setHtml(
       "systemEvaluationPagination",
-      rows.length ? `<span>显示最近 ${rows.length} / ${allRows.length} 个交易日 · 可在表格内滚动查看</span>` : "",
+      rows.length ? `<span>共 ${rows.length} 个交易日 · 最近 30 个交易日在前 · 向下滚动查看更早记录</span>` : "",
     );
   }
 
@@ -458,7 +440,6 @@ export function createDashboardController({
     setText("calendarMonthLabel", `${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
     if (calendarState && calendarState.status !== "estimated") {
       setHtml("calendarStats", `<div class="detail-empty metric-state-${calendarState.tone}">${calendarState.label}</div>`);
-      setHtml("calendarGrid", "");
       return;
     }
     setHtml(
@@ -478,26 +459,6 @@ export function createDashboardController({
         )
         .join(""),
     );
-
-    const dayNames = ["一", "二", "三", "四", "五", "六", "日"];
-    const days = Object.values(calendar.days || {});
-    const firstWeekday = (new Date(calendar.year, calendar.month - 1, 1).getDay() + 6) % 7;
-    const blanks = Array.from({ length: firstWeekday }, () => `<div class="day-cell empty"></div>`);
-    const cells = days.map((day) => {
-      const dayNumber = Number(day.label.slice(-2));
-      const pnl = Number(day.net_pnl);
-      const hasTrades = Number(day.order_count) > 0;
-      const tone = pnl < 0 ? "loss-day" : pnl > 0 ? "profit-day" : "";
-      return `
-        <div class="day-cell ${tone} ${hasTrades ? "has-trades" : ""}" data-calendar-day="${escapeAttr(day.label)}">
-          <span class="date">${dayNumber}</span>
-          <span class="pnl ${profitClass(pnl)}">${pnl === 0 ? "-" : formatMoney(pnl)}</span>
-          <span class="date">${day.order_count} 单 ${formatPercent(day.win_rate)}</span>
-        </div>
-      `;
-    });
-    setHtml("calendarGrid", dayNames.map((day) => `<div class="day-name">${day}</div>`).join("") + blanks.join("") + cells.join(""));
-    bindCalendarInteractions();
   }
 
   function renderSessions() {
@@ -532,14 +493,25 @@ export function createDashboardController({
     applyWorkspaceVisibility();
     renderLatestImportSummary();
     renderMarketClock();
-    renderRMetricSummary();
-    renderEquity();
-    renderSystemEvaluationSummary();
-    renderSystemEvaluation();
-    renderModeEvaluation();
-    renderCalendar();
-    renderSessions();
-    chartController?.update(payload || {});
+    const renderers = {
+      "r-metrics": renderRMetricSummary,
+      equity: () => chartController?.updateModule("equity", payload || {}),
+      calendar: () => {
+        renderCalendar();
+        chartController?.updateModule("calendar", payload || {});
+      },
+      "monthly-pnl": () => chartController?.updateModule("monthlyPnl", payload || {}),
+      heatmap: () => chartController?.updateModule("heatmap", payload || {}),
+      sessions: renderSessions,
+      "period-overview": () => chartController?.updateModule("systemEvaluation", payload || {}),
+      "daily-evaluation": renderSystemEvaluation,
+      "mode-evaluation": renderModeEvaluation,
+    };
+    renderDashboardModules(MT5_DASHBOARD_MODULES, {
+      findRoot: (selector) => view.querySelector?.(selector),
+      renderers,
+      metricMeta: payload?.metric_meta || {},
+    });
     bindMetricInfoButtons();
   }
 
@@ -678,22 +650,32 @@ export function createDashboardController({
   // --- lifecycle ---
 
   async function load() {
+    const revision = ++loadRevision;
     state = readDashboardState(location.search);
     const analysisWindow = resolveAnalysisWindow(state);
     const query = buildAnalysisQuery(state, analysisWindow);
     renderRegion("analysisRegion", { state: "loading", message: "正在读取分析数据" });
+    setDashboardModulesLoading(MT5_DASHBOARD_MODULES, {
+      findRoot: (selector) => view.querySelector?.(selector),
+    });
     try {
       const analysisRequest = gate.run("analysis", (signal) => api.requestJson(query ? `/api/analysis?${query}` : "/api/analysis", { signal }));
       const importRequest = workspace.showMarketClock
         ? Promise.resolve(null)
         : api.requestJson(`/api/platforms/import-summary?platform=${encodeURIComponent(normalizePlatform(platform))}`)
           .catch(() => null);
-      [payload, importSummary] = await Promise.all([analysisRequest, importRequest]);
+      const [nextPayload, nextImportSummary] = await Promise.all([analysisRequest, importRequest]);
+      if (revision !== loadRevision) return;
+      payload = nextPayload;
+      importSummary = nextImportSummary;
       calendarYear = payload?.calendar?.year ?? null;
       calendarMonth = payload?.calendar?.month ?? null;
       renderAll();
     } catch (error) {
-      if (error && error.name === "AbortError") return;
+      if (revision !== loadRevision || (error && error.name === "AbortError")) return;
+      setDashboardModulesError(MT5_DASHBOARD_MODULES, {
+        findRoot: (selector) => view.querySelector?.(selector),
+      });
       renderRegion("analysisRegion", {
         state: "error",
         message: error?.message || "读取分析数据失败",
@@ -731,7 +713,7 @@ export function createDashboardController({
       layoutLink.hidden = normalizePlatform(platform) !== "mt5";
       layoutLink.setAttribute(
         "href",
-        `./mock-domestic-futures-layout.html?platform=mt5&return=${encodeURIComponent("/dashboard/?platform=mt5")}`,
+        "./index.html?platform=mt5&layout=edit",
       );
     }
 
@@ -791,9 +773,11 @@ export function createDashboardController({
   }
 
   function dispose() {
+    loadRevision += 1;
     gate.abortAll();
     chartController?.dispose?.();
     gridController?.destroy?.();
+    layoutEditorController?.dispose?.();
   }
 
   return {

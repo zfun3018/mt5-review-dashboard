@@ -68,7 +68,7 @@ python .\tools\check_release.py
 python .\tools\check_release.py --skip-browser
 ```
 
-正式发布前仍应尽量运行完整检查。检查失败时先修复问题，不要创建 tag。
+正式发布前应运行完整检查。浏览器门禁覆盖视觉、仪表盘、订单复盘和工作区用例。检查失败时先修复问题，不要创建 tag。
 
 ### 5. 提交发布元数据
 

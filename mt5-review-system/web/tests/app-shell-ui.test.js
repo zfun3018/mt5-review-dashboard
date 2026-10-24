@@ -493,21 +493,50 @@ test("feedback helpers render accessible loading, error retry, and toast states"
   }
 });
 
-test("shared styles enforce stable navigation, mobile targets, and visible focus", () => {
+test("shared styles preserve the shell geometry and apply the glass control system", () => {
   const tokens = fs.readFileSync(path.join(webRoot, "shared/css/tokens.css"), "utf8");
   const base = fs.readFileSync(path.join(webRoot, "shared/css/base.css"), "utf8");
   const shell = fs.readFileSync(path.join(webRoot, "shared/css/shell.css"), "utf8");
   const components = fs.readFileSync(path.join(webRoot, "shared/css/components.css"), "utf8");
+  const domesticWorkspace = fs.readFileSync(path.join(webRoot, "shared/css/domestic-futures-workspace.css"), "utf8");
+  const domesticDashboard = fs.readFileSync(path.join(webRoot, "dashboard/domestic-futures-dashboard.css"), "utf8");
+  const dashboard = fs.readFileSync(path.join(webRoot, "dashboard/dashboard.css"), "utf8");
   const allStyles = [tokens, base, shell, components].join("\n");
 
   assert.match(tokens, /--sidebar-width:\s*224px/);
   assert.match(tokens, /--sidebar-collapsed-width:\s*64px/);
   assert.match(tokens, /--font-size-xs:\s*12px/);
   assert.match(tokens, /--font-size-display:\s*28px/);
+  assert.match(tokens, /--font-size-body:\s*13px/);
+  assert.match(tokens, /--radius-control:\s*999px/);
+  assert.match(tokens, /--radius-window:\s*28px/);
+  assert.match(tokens, /--radius-panel:\s*24px/);
+  assert.match(tokens, /--radius-inner:\s*18px/);
+  assert.match(tokens, /--control-height:\s*42px/);
+  assert.match(tokens, /--color-bg:\s*#080a0e/);
+  assert.match(tokens, /--color-bg-atmosphere:[^;]*radial-gradient/s);
+  assert.match(tokens, /--color-surface:\s*rgba\(18, 22, 29, 0\.58\)/);
+  assert.match(tokens, /--color-accent:\s*#79c8d5/);
+  assert.match(tokens, /--glass-blur:\s*38px/);
+  assert.match(tokens, /--glass-panel-blur:\s*32px/);
+  assert.match(tokens, /--shadow-panel:\s*0 32px 84px/);
+  assert.match(tokens, /--glass-saturation:\s*175%/);
+  assert.match(tokens, /--shadow-ambient:[^;]*,/);
   assert.doesNotMatch(shellSource, /THEME_OPTIONS|THEME_STORAGE_KEY|app-theme-button/);
   assert.match(shell, /grid-template-columns:\s*var\(--sidebar-width\)\s+minmax\(0,\s*1fr\)/);
+  assert.doesNotMatch(domesticWorkspace, /color-scheme:\s*light|#edf3f5|#fbfcfc/);
+  assert.match(domesticWorkspace, /\.app-page-bar,[\s\S]*?min-height:\s*72px/s);
+  assert.match(shell, /\.app-shell::before\s*\{[^}]*box-shadow:\s*20px 0 58px/s);
+  assert.match(domesticWorkspace, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
+  assert.doesNotMatch(domesticWorkspace, /\.app-navigation\s*\{[^}]*backdrop-filter:/s);
+  assert.match(shell, /\.app-navigation\s*\{[^}]*min-height:\s*calc\(100dvh - 24px\)/s);
+  assert.match(domesticDashboard, /\.domestic-module\s*\{[^}]*border-radius:\s*var\(--radius-panel\)[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
+  assert.match(dashboard, /\.panel\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
+  assert.match(shell, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
+  assert.match(shell, /\.app-page-bar\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-blur\)\)/s);
   assert.match(shell, /@media\s*\(max-width:\s*720px\)/);
-  assert.match(shell, /min-height:\s*44px/);
+  assert.match(components, /\.app-icon-button\s*\{[^}]*width:\s*var\(--control-height\)/s);
+  assert.doesNotMatch(components, /\.app-icon-button\s*\{\s*width:\s*44px/);
   const backdropRule = shell.match(/\.app-icon-button\.app-navigation__backdrop\s*\{([^}]*)\}/)?.[1] || "";
   assert.match(backdropRule, /display:\s*none/);
   assert.match(backdropRule, /width:\s*auto/);
@@ -523,11 +552,19 @@ test("shared styles enforce stable navigation, mobile targets, and visible focus
   );
   assert.match(
     shell,
+    /\.app-page-bar__actions\s*>\s*button,[\s\S]*?\.app-page-bar__menu\s*\{[^}]*min-height:\s*var\(--control-height\)/,
+  );
+  assert.match(
+    shell,
     /@media\s*\(max-width:\s*720px\)[\s\S]*\.app-shell\[data-navigation-collapsed="true"\] \.app-navigation__label[^{]*\{[^}]*display:\s*block/,
   );
-  assert.match(base, /:focus-visible[\s\S]*outline:\s*2px solid var\(--color-accent\)/);
+  assert.match(base, /:focus-visible[\s\S]*box-shadow:\s*0 0 0 3px rgba\(121, 200, 213, 0\.26\)/);
   assert.doesNotMatch(allStyles, /font-size:\s*clamp\(/);
-  assert.doesNotMatch(allStyles, /linear-gradient|radial-gradient/);
+  assert.match(components, /\.button,[\s\S]*?border-radius:\s*var\(--radius-pill\)/);
+  assert.match(components, /\.modal-surface\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-float-blur\)\)/s);
+  assert.match(components, /\.popover,[\s\S]*?backdrop-filter:\s*blur\(var\(--glass-float-blur\)\)/);
+  assert.match(components, /\.panel\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
+  assert.match(base, /\*::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:\s*var\(--radius-pill\)/s);
   assert.match(components, /\.filter-bar\s*\{/);
   assert.match(components, /\.filter-bar__group\s*\{/);
   assert.match(components, /\.modal-backdrop\s*\{/);

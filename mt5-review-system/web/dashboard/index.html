@@ -17,9 +17,14 @@
   <body>
     <div data-app-shell>
       <section id="domesticDashboard" class="domestic-dashboard" hidden aria-label="复盘仪表盘">
+        <section id="domesticLayoutEditor" class="layout-editor-toolbar" data-layout-editor aria-label="布局编辑" hidden>
+          <div class="layout-editor-toolbar__heading"><strong>真实模块布局编辑</strong><span data-layout-status></span></div>
+          <div class="layout-editor-toggle-list" data-layout-visibility aria-label="显示或隐藏模块"></div>
+          <div class="layout-editor-toolbar__actions"><button class="button" type="button" data-layout-reset>恢复默认</button><button class="button-primary" type="button" data-layout-save>保存并退出</button></div>
+        </section>
         <header class="domestic-dashboard-intro">
           <div><p class="domestic-kicker">ACCOUNT REVIEW WORKSPACE</p><p>围绕账户结果、成本压力与复盘质量组织数据，逐笔交易请前往订单复盘。</p></div>
-          <a class="domestic-layout-link" data-dashboard-layout-link href="./mock-domestic-futures-layout.html?platform=domestic_futures&amp;return=%2Fdashboard%2F%3Fplatform%3Ddomestic_futures" aria-label="打开仪表盘布局编辑器"><i data-lucide="layout-grid"></i><span>调整布局</span></a>
+          <a class="domestic-layout-link" data-dashboard-layout-link href="./index.html?platform=domestic_futures&amp;layout=edit" aria-label="打开仪表盘布局编辑器"><i data-lucide="layout-grid"></i><span>调整布局</span></a>
         </header>
         <section class="domestic-filter-bar" data-domestic-filter aria-label="国内期货分析范围">
           <div class="domestic-filter-group"><span class="domestic-filter-label">分析范围</span><div class="domestic-range" role="tablist" aria-label="分析范围">
@@ -36,11 +41,11 @@
         <div class="domestic-dashboard-stage">
           <section class="domestic-module domestic-period-module" data-module="period-overview"><header class="domestic-panel-head"><div><p class="domestic-kicker">PERIOD SNAPSHOT</p><h3 data-module-title>固定周期指标</h3><p data-module-subtitle>独立周期统计，不受上方时间筛选影响</p></div><span class="domestic-fixed-badge"><i data-lucide="lock-keyhole"></i>固定周期</span></header><div id="domesticFixedPeriods" class="domestic-period-grid"></div></section>
           <section class="domestic-module domestic-module-panel" data-module="net-performance"><header class="domestic-panel-head"><div><p class="domestic-kicker">NET PERFORMANCE</p><h3 data-module-title>累计净盈亏</h3><p data-module-subtitle>已包含手续费，按平仓成交时间归集</p></div></header><div id="domesticNetChart" class="domestic-net-chart" role="img" aria-label="累计净盈亏曲线"></div><div id="domesticNetSummary" class="domestic-chart-foot"></div></section>
-          <section class="domestic-module domestic-module-panel" data-module="risk-health"><header class="domestic-panel-head"><div><p class="domestic-kicker">RISK HEALTH</p><h3 data-module-title>账户风险状态</h3><p data-module-subtitle>已实现结果压力，不含保证金和未实现盈亏</p></div></header><div id="domesticRiskHealth" class="domestic-risk-content"></div></section>
-          <section class="domestic-module domestic-module-panel" data-module="monthly-pnl"><header class="domestic-panel-head"><div><p class="domestic-kicker">MONTHLY P/L</p><h3 data-module-title>按月盈亏</h3><p data-module-subtitle>按平仓月份汇总成本后的净盈亏</p></div></header><div id="domesticMonthlyChart" class="domestic-monthly-chart"></div></section>
-          <section class="domestic-module domestic-module-panel" data-module="daily-calendar"><header class="domestic-panel-head"><div><p class="domestic-kicker">DAILY P/L</p><h3 data-module-title>交易日历</h3><p data-module-subtitle>按北京时间展示每日净盈亏</p></div></header><div id="domesticCalendar"></div></section>
-          <section class="domestic-module domestic-module-panel" data-module="contract-contribution"><header class="domestic-panel-head"><div><p class="domestic-kicker">CONTRACT CONTRIBUTION</p><h3 data-module-title>合约贡献</h3><p data-module-subtitle>按净盈亏排序</p></div></header><div id="domesticContractContribution"></div></section>
-          <section class="domestic-module domestic-module-panel" data-module="contract-losses"><header class="domestic-panel-head"><div><p class="domestic-kicker">LOSS LEADERBOARD</p><h3 data-module-title>合约亏损榜</h3><p data-module-subtitle>净亏损最大的 10 个品种</p></div></header><div id="domesticContractLosses"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="risk-health"><header class="domestic-panel-head"><div><p class="domestic-kicker">RISK HEALTH</p><h3 data-module-title>账户风险状态</h3><p data-module-subtitle>已实现结果压力，不含保证金和未实现盈亏</p></div></header><div id="domesticRiskHealth" class="domestic-risk-content"><div class="domestic-risk-score"><span>风险压力评分</span><em id="domesticRiskLabel"></em></div><div id="domesticRiskGauge" class="domestic-risk-gauge" role="img" aria-label="风险压力评分仪表盘"></div><div id="domesticRiskFactors" class="domestic-risk-list"></div><small id="domesticRiskNote"></small></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="monthly-pnl"><header class="domestic-panel-head"><div><p class="domestic-kicker">MONTHLY P/L</p><h3 data-module-title>月度盈亏</h3><p data-module-subtitle>正柱为品种盈利堆叠，负柱为品种亏损堆叠，折线展示月度净盈亏</p></div></header><div id="domesticMonthlyChart" class="domestic-monthly-chart"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="daily-calendar"><header class="domestic-panel-head"><div><p class="domestic-kicker">DAILY P/L</p><h3 data-module-title>交易日历</h3><p data-module-subtitle>按北京时间展示每日净盈亏</p></div></header><div id="domesticCalendarSummary"></div><div id="domesticCalendarChart" class="domestic-calendar-chart" role="img" aria-label="每日盈亏日历图表"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="contract-contribution"><header class="domestic-panel-head"><div><p class="domestic-kicker">CONTRACT CONTRIBUTION</p><h3 data-module-title>合约贡献</h3><p data-module-subtitle>仅显示净盈利合约 · 花瓣长度表示盈利金额</p></div></header><div id="domesticContractContribution" class="domestic-contract-chart" role="img" aria-label="盈利合约贡献南丁格尔玫瑰图"></div></section>
+          <section class="domestic-module domestic-module-panel" data-module="contract-losses"><header class="domestic-panel-head"><div><p class="domestic-kicker">LOSS LEADERBOARD</p><h3 data-module-title>合约亏损榜</h3><p data-module-subtitle>按品种着色 · 面积表示净亏损金额</p></div></header><div id="domesticContractLosses" class="domestic-contract-chart" role="img" aria-label="按品种区分颜色的合约净亏损矩形树图"></div></section>
           <section class="domestic-module domestic-module-panel" data-module="data-health"><header class="domestic-panel-head"><div><p class="domestic-kicker">DATA HEALTH</p><h3 data-module-title>数据与导入</h3><p data-module-subtitle>导入数据质量概览</p></div></header><div id="domesticDataHealth"></div></section>
           <section class="domestic-module domestic-module-panel" data-module="review-coverage"><header class="domestic-panel-head"><div><p class="domestic-kicker">REVIEW COVERAGE</p><h3 data-module-title>复盘完成度</h3><p data-module-subtitle>账户整体复盘覆盖情况</p></div></header><div id="domesticReviewCoverage"></div></section>
           <section class="domestic-module domestic-module-panel" data-module="system-evaluation"><header class="domestic-panel-head"><div><p class="domestic-kicker">DAILY SYSTEM EVALUATION</p><h3 data-module-title>交易系统评估</h3><p data-module-subtitle>按交易日查看交易盈亏、手续费、净盈亏、胜率和盈亏比</p></div></header><div id="domesticSystemEvaluation"></div></section>
@@ -48,6 +53,11 @@
         </div>
       </section>
       <div id="legacyDashboard" hidden>
+      <section id="mt5LayoutEditor" class="layout-editor-toolbar" data-layout-editor aria-label="布局编辑" hidden>
+        <div class="layout-editor-toolbar__heading"><strong>真实模块布局编辑</strong><span data-layout-status></span></div>
+        <div class="layout-editor-toggle-list" data-layout-visibility aria-label="显示或隐藏模块"></div>
+        <div class="layout-editor-toolbar__actions"><button class="button" type="button" data-layout-reset>恢复默认</button><button class="button-primary" type="button" data-layout-save>保存并退出</button></div>
+      </section>
       <section id="analysisRegion" class="region-anchor" aria-live="polite"></section>
 
       <section id="latestImportSummary" class="latest-import-summary" aria-live="polite">最近导入订单：暂无</section>
@@ -73,7 +83,7 @@
           <label for="endDateFilter">结束日期</label>
           <input id="endDateFilter" type="date" title="结束日期" />
         </div>
-        <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./mock-domestic-futures-layout.html?platform=mt5" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
+        <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./index.html?platform=mt5&amp;layout=edit" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
       </section>
 
       <div class="mt5-dashboard-layout grid-stack" id="mt5DashboardLayout">
@@ -119,7 +129,7 @@
             </div>
           </div>
           <div id="calendarStats" class="calendar-stats"></div>
-          <div id="calendarGrid" class="calendar-grid"></div>
+          <div id="calendarChart" class="calendar-chart" role="img" aria-label="盈亏日历"></div>
         </article>
 
         <article class="panel monthly-pnl-panel" data-layout-module="monthly-pnl">
@@ -158,15 +168,25 @@
           </div>
           <div id="sessions" class="session-list"></div>
         </article>
-        <article class="panel evaluation-panel" data-layout-module="system-evaluation">
+        <article class="panel evaluation-panel period-overview-panel" data-layout-module="period-overview">
           <div class="panel-head">
             <div>
-              <p class="eyebrow">DAILY SYSTEM EVALUATION</p>
+              <p class="eyebrow">TRADING SYSTEM EVALUATION</p>
               <h2 data-layout-title>交易系统评估</h2>
-              <p class="layout-subtitle" data-layout-subtitle>按交易日查看交易结果质量</p>
+              <p class="layout-subtitle" data-layout-subtitle>六项指标各自比较四个周期，保留实际数值与独立刻度</p>
             </div>
           </div>
-          <div id="systemEvaluationSummary" class="system-summary-grid"></div>
+          <div id="systemEvaluationChart" class="period-overview-chart" role="img" aria-label="按昨日、近7天、近30天和近365天比较六项交易系统指标的小图组"></div>
+        </article>
+
+        <article class="panel evaluation-panel daily-evaluation-panel" data-layout-module="daily-evaluation">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">DAILY ORDER SUMMARY</p>
+              <h2 data-layout-title>每日订单汇总</h2>
+              <p class="layout-subtitle" data-layout-subtitle>按北京时间平仓日归组，默认查看最近 30 个交易日；向下滚动查看更早记录</p>
+            </div>
+          </div>
           <div class="table-wrap evaluation-table-wrap">
             <table class="evaluation-table">
               <thead>
@@ -229,7 +249,7 @@
       document.querySelectorAll("[data-dashboard-layout-link]").forEach((layoutLink) => {
         const domesticLink = Boolean(layoutLink.closest("#domesticDashboard"));
         const linkPlatform = domesticLink ? "domestic_futures" : "mt5";
-        layoutLink.href = `./mock-domestic-futures-layout.html?platform=${linkPlatform}&return=${encodeURIComponent(`/dashboard/?platform=${linkPlatform}`)}`;
+        layoutLink.href = `./index.html?platform=${linkPlatform}&layout=edit`;
         layoutLink.hidden = platform !== linkPlatform;
       });
       const controllerFactory = platform === "domestic_futures"

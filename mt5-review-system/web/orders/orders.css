@@ -2510,9 +2510,9 @@ html[data-platform="domestic_futures"] .detail-panel select {
 }
 
 .detail-icon-action {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: var(--control-height);
+  height: var(--control-height);
+  min-width: var(--control-height);
   padding: 0;
   border-color: var(--color-border);
   border-radius: 8px;
@@ -2673,6 +2673,10 @@ html[data-platform="domestic_futures"] .detail-panel select {
   min-height: 0;
 }
 
+.orders-layout > .detail-panel {
+  align-self: start;
+}
+
 .checkin-calendar-panel {
   min-width: 0;
   overflow: hidden;
@@ -2753,5 +2757,629 @@ html[data-platform="domestic_futures"] .detail-panel select {
 
   .detail-review-column .review-editor-panel {
     min-height: 240px;
+  }
+}
+
+/* Shared A-plan graphite glass states. These rules normalize legacy platform
+   overrides while keeping the existing order list and review layout intact. */
+html[data-platform] .orders-list-views {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+html[data-platform] .view-tab.active,
+html[data-platform] .view-tab:hover {
+  color: #0d1518 !important;
+  background: linear-gradient(145deg, #b0e8ed, #69bdca) !important;
+  box-shadow: 0 5px 16px rgba(66, 164, 180, 0.29), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+}
+
+html[data-platform] .orders-table tbody tr {
+  background: transparent !important;
+}
+
+html[data-platform] .orders-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #151a22 !important;
+  box-shadow: inset 0 -1px 0 var(--color-border), 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+
+html[data-platform] .orders-table tbody tr:hover,
+html[data-platform] .execution-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+html[data-platform] .orders-table tbody tr.active,
+html[data-platform] .campaign-detail-row.active {
+  background: var(--color-accent-soft) !important;
+  box-shadow: inset 3px 0 0 var(--color-accent), inset 0 0 0 1px rgba(var(--color-accent-rgb), 0.24) !important;
+}
+
+html[data-platform] .campaign-detail-row {
+  background: rgba(8, 10, 14, 0.32) !important;
+}
+
+html[data-platform] .campaign-detail-row:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+}
+
+html[data-platform] .campaign-row.scratch {
+  background: rgba(255, 255, 255, 0.025) !important;
+}
+
+html[data-platform] .campaign-row.scratch:not(.active):hover {
+  background: rgba(255, 255, 255, 0.065) !important;
+}
+
+html[data-platform] .campaign-row.scratch.active {
+  background: var(--color-warning-soft) !important;
+  box-shadow: inset 3px 0 0 var(--color-warning), inset 0 0 0 1px rgba(241, 198, 110, 0.28) !important;
+}
+
+html[data-platform] .campaign-row.scratch .order-main strong,
+html[data-platform] .campaign-row.scratch .campaign-r-cell,
+html[data-platform] .campaign-row.scratch .profit-text,
+html[data-platform] .campaign-row.scratch .loss-text {
+  color: var(--color-muted);
+}
+
+html[data-platform] .campaign-day-row td {
+  border-bottom-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: var(--color-text);
+}
+
+html[data-platform] .campaign-day-summary { color: var(--color-muted); }
+html[data-platform] .campaign-day-summary strong:first-child { color: var(--color-text); }
+
+html[data-platform] .campaign-day-chevron,
+html[data-platform] .campaign-expand,
+html[data-platform] .choice-cell,
+html[data-platform] .choice-option,
+html[data-platform] .choice-search {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.055) !important;
+  color: var(--color-text);
+}
+
+html[data-platform] .choice-value-pill {
+  border-color: color-mix(in srgb, var(--choice, var(--color-accent)) 38%, var(--color-border));
+  background: color-mix(in srgb, var(--choice, var(--color-accent)) 14%, transparent) !important;
+  color: var(--color-text) !important;
+}
+
+html[data-platform] .choice-option:hover,
+html[data-platform] .choice-option.selected {
+  border-color: rgba(var(--color-accent-rgb), 0.42);
+  background: rgba(var(--color-accent-rgb), 0.12) !important;
+}
+
+html[data-platform] .position-plan-risk,
+html[data-platform] .order-info-strip,
+html[data-platform] .review-editor-panel,
+html[data-platform] .execution-section,
+html[data-platform] .screenshot-editor,
+html[data-platform] .detail-section,
+html[data-platform] .campaign-position-list,
+html[data-platform] .campaign-risk-summary,
+html[data-platform] .choice-popover {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+
+html[data-platform] .choice-popover {
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
+}
+
+html[data-platform] .screenshot-editor .screenshot-preview,
+html[data-platform] .screenshot-preview,
+html[data-platform] .snapshot,
+html[data-platform] .shot-btn,
+html[data-platform] .image-modal img {
+  border-color: var(--color-border);
+  background: rgba(8, 10, 14, 0.6);
+}
+
+html[data-platform] .screenshot-editor.drag-over {
+  border-color: var(--color-accent);
+  background: rgba(var(--color-accent-rgb), 0.08);
+}
+
+html[data-platform] .custom-value-cell input,
+html[data-platform] .inline-stop-editor input,
+html[data-platform] .detail-panel input,
+html[data-platform] .detail-panel textarea,
+html[data-platform] .detail-panel select {
+  border-color: var(--color-border);
+  background: rgba(8, 10, 14, 0.56);
+  color: var(--color-text);
+}
+
+html[data-platform] .catalog-value,
+html[data-platform] .campaign-list-index,
+html[data-platform] .campaign-kind-mark,
+html[data-platform] .execution-type,
+html[data-platform] .execution-side.long {
+  border-color: rgba(var(--color-accent-rgb), 0.2);
+  background: rgba(var(--color-accent-rgb), 0.1);
+  color: var(--color-accent);
+}
+
+html[data-platform] .campaign-risk-mark,
+html[data-platform] .execution-side.short {
+  border-color: rgba(255, 109, 120, 0.2);
+  background: var(--color-negative-soft);
+  color: var(--color-negative);
+}
+
+html[data-platform] .execution-type.reduce {
+  border-color: rgba(var(--color-accent-rgb), 0.2);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+html[data-platform] .detail-icon-action {
+  border-color: var(--color-border);
+  border-radius: var(--radius-circle);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--color-muted);
+}
+
+html[data-platform] .detail-icon-action:hover,
+html[data-platform] .detail-icon-action:focus-visible,
+html[data-platform] .detail-icon-action.is-active {
+  border-color: rgba(var(--color-accent-rgb), 0.42);
+  background: rgba(var(--color-accent-rgb), 0.13);
+  color: var(--color-accent);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+html[data-platform] .detail-icon-action.featured-action.is-active {
+  border-color: rgba(var(--color-accent-rgb), 0.52);
+  background: rgba(var(--color-accent-rgb), 0.18);
+  color: var(--color-accent);
+}
+
+html[data-platform] .detail-icon-action.is-danger:hover,
+html[data-platform] .detail-icon-action.is-danger:focus-visible {
+  border-color: rgba(255, 109, 120, 0.48);
+  background: var(--color-negative-soft);
+  color: var(--color-negative);
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day.has-checkin {
+  border-color: rgba(var(--color-accent-rgb), 0.4);
+  background: rgba(var(--color-accent-rgb), 0.12);
+  color: var(--color-accent);
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day.is-today {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+/* Order review metadata follows the same layered glass and pill control system
+   as the surrounding detail cards. */
+html[data-platform] .order-info-strip {
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-inner);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.025)) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+html[data-platform] .order-info-main {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+
+html[data-platform] .order-info-field,
+html[data-platform] .campaign-tag-field {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  max-width: none;
+  gap: 7px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: var(--radius-squircle);
+  background: rgba(8, 10, 14, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+html[data-platform] .order-info-field label,
+html[data-platform] .campaign-tag-field .field-label {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+html[data-platform] .campaign-tag-field .field-label small {
+  margin-left: 3px;
+  color: var(--color-muted);
+  opacity: 0.78;
+}
+
+html[data-platform] .order-info-field .field-label-row span {
+  color: var(--color-warning);
+  font-size: 10px;
+}
+
+html[data-platform] .order-info-field:not(.missing) .field-label-row span {
+  color: var(--color-positive);
+}
+
+html[data-platform] .order-info-field .numeric-cell-input {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(8, 10, 14, 0.5);
+  color: var(--color-text);
+}
+
+html[data-platform] .order-info-field.missing .numeric-cell-input {
+  border-color: color-mix(in srgb, var(--color-warning) 48%, var(--color-border));
+}
+
+html[data-platform] .order-info-field .numeric-cell-input:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.16);
+}
+
+html[data-platform] .order-info-strip .choice-cell.detail-choice {
+  width: 100%;
+  min-height: 36px;
+  max-width: none;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(8, 10, 14, 0.5) !important;
+  color: var(--color-text);
+}
+
+html[data-platform] .order-info-strip .choice-cell.detail-choice:hover,
+html[data-platform] .order-info-strip .choice-cell.detail-choice:focus-visible {
+  border-color: rgba(var(--color-accent-rgb), 0.62);
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.13);
+}
+
+html[data-platform] .order-info-strip .choice-cell-values {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-platform] .order-info-save {
+  grid-column: 1 / -1;
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--color-positive);
+  font-size: 10px;
+}
+
+html[data-platform] .order-info-save span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+html[data-platform] .order-info-save span::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px color-mix(in srgb, currentColor 55%, transparent);
+  content: "";
+}
+
+html[data-platform] .detail-icon-action.detail-checkin-pill {
+  width: auto;
+  min-width: 126px;
+  height: var(--control-height);
+  padding: 0 13px;
+  border-radius: var(--radius-pill);
+  gap: 8px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.045));
+}
+
+html[data-platform] .detail-icon-action.detail-checkin-pill.is-active {
+  border-color: rgba(var(--color-accent-rgb), 0.54);
+  background: linear-gradient(145deg, rgba(var(--color-accent-rgb), 0.24), rgba(var(--color-accent-rgb), 0.1));
+  color: var(--color-accent);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+html[data-platform] .detail-checkin-label {
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-checkin-pill .detail-action-count {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.09);
+  color: inherit;
+  font-size: 10px;
+}
+
+html[data-platform] .campaign-day-summary .campaign-day-pnl-pill {
+  display: inline-flex;
+  min-width: 6rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, currentColor 11%, transparent);
+  line-height: 1.2;
+  text-align: right;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html[data-platform] .campaign-day-summary .campaign-day-pnl-pill.profit-text {
+  color: var(--color-positive);
+}
+
+html[data-platform] .campaign-day-summary .campaign-day-pnl-pill.loss-text {
+  color: var(--color-negative);
+}
+
+@media (max-width: 560px) {
+  html[data-platform] .order-info-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-platform] .order-info-save {
+    grid-column: auto;
+  }
+}
+
+/* Keep the three primary review decisions next to the order actions. The
+   multi-value mistake picker remains content-sized in the chart-side column. */
+html[data-platform] .order-detail-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+
+html[data-platform] .order-detail-heading {
+  min-width: 0;
+}
+
+html[data-platform] .detail-order-actions {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+html[data-platform] .detail-primary-review-fields {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+}
+
+html[data-platform] .detail-primary-review-fields .order-info-field,
+html[data-platform] .detail-primary-review-fields .campaign-tag-field {
+  display: grid;
+  flex: 0 1 126px;
+  min-width: 0;
+  align-content: end;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-platform] .detail-primary-review-fields .stop-field {
+  flex-basis: 94px;
+}
+
+html[data-platform] .detail-primary-review-fields .field-label-row,
+html[data-platform] .detail-primary-review-fields .field-label {
+  min-height: 14px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+html[data-platform] .detail-primary-review-fields .field-label-row span,
+html[data-platform] .detail-primary-review-fields .field-label small {
+  color: var(--color-muted);
+  font-size: 9px;
+}
+
+html[data-platform] .detail-primary-review-fields .order-info-field .numeric-cell-input {
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(8, 10, 14, 0.52);
+}
+
+html[data-platform] .detail-primary-review-fields .choice-cell.detail-choice {
+  width: 100%;
+  min-height: 34px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(8, 10, 14, 0.52) !important;
+}
+
+html[data-platform] .detail-primary-review-fields .choice-cell-values {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+html[data-platform] .detail-primary-review-fields .choice-value-pill {
+  max-width: 94px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-primary-review-fields .order-info-save {
+  display: inline-flex;
+  flex: 1 0 100%;
+  min-height: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--color-positive);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-primary-review-fields .order-info-save span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-platform] .detail-primary-review-fields .order-info-save span::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 9px color-mix(in srgb, currentColor 55%, transparent);
+  content: "";
+}
+
+html[data-platform] .detail-review-column .order-info-strip {
+  display: block;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 12px;
+}
+
+html[data-platform] .order-info-strip .order-info-main {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+html[data-platform] .order-info-strip .campaign-tag-field[data-tag-picker="mistake_tags"] {
+  display: grid;
+  flex: 0 1 auto;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-platform] .order-info-strip .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-cell.detail-choice {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  max-width: 100%;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--radius-inner);
+  background: transparent !important;
+}
+
+html[data-platform] .order-info-strip .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-cell-values {
+  display: flex;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 0%;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+html[data-platform] .order-info-strip .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-value-pill {
+  max-width: min(180px, 100%);
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-review-column > .detail-custom-fields {
+  width: 100%;
+  padding: 0 2px;
+}
+
+@media (max-width: 1080px) {
+  html[data-platform] .order-detail-title {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-platform] .detail-order-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  html[data-platform] .detail-primary-review-fields {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  html[data-platform] .detail-order-actions {
+    flex-wrap: wrap;
+  }
+
+  html[data-platform] .detail-primary-review-fields {
+    justify-content: flex-start;
+  }
+
+  html[data-platform] .detail-primary-review-fields .order-info-field,
+  html[data-platform] .detail-primary-review-fields .campaign-tag-field {
+    flex: 1 1 130px;
+  }
+
+  html[data-platform] .detail-primary-review-fields .stop-field {
+    flex: 0 1 100px;
   }
 }

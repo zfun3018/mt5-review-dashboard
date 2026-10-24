@@ -16,6 +16,7 @@ from app.domain.metric_registry import MetricRegistry
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 METRICS_README = PROJECT_ROOT / "docs" / "metrics" / "README.md"
 METRIC_CONTRACT = PROJECT_ROOT / "docs" / "metrics" / "metric-contract.md"
+MAX_DRAWDOWN_SPEC = PROJECT_ROOT / "docs" / "metrics" / "max-drawdown.md"
 ANALYSIS_ENGINE = PROJECT_ROOT / "docs" / "architecture" / "ANALYSIS-ENGINE.md"
 
 EXPECTED_METRICS = {
@@ -23,15 +24,18 @@ EXPECTED_METRICS = {
     "r_metrics",
     "periods",
     "equity_curve",
+    "max_drawdown",
     "calendar",
     "hour_heatmap",
     "sessions",
     "system_evaluation",
     "mode_evaluation",
-    "domestic_fixed_periods",
+    "fixed_periods",
     "contract_rankings",
     "review_coverage",
     "risk_summary",
+    "monthly_pnl",
+    "domestic_system_evaluation",
 }
 
 REQUIRED_COLUMNS = (
@@ -67,7 +71,7 @@ def _metric_rows(markdown: str) -> list[dict[str, str]]:
 
 class MetricDocumentationContractTest(unittest.TestCase):
     def test_metric_documents_exist(self):
-        for path in (METRICS_README, METRIC_CONTRACT, ANALYSIS_ENGINE):
+        for path in (METRICS_README, METRIC_CONTRACT, ANALYSIS_ENGINE, MAX_DRAWDOWN_SPEC):
             self.assertTrue(path.is_file(), f"missing analysis document: {path}")
 
     def test_metric_catalog_declares_required_columns(self):

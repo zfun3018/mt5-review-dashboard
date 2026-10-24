@@ -3,9 +3,12 @@ import {escapeHtml, formatPercent, formatRatio, profitClass} from "../shared/js/
 import {mountShell} from "../shared/js/shell.mjs";
 import {normalizePlatform, readPlatform} from "../shared/js/platform.mjs";
 import {buildAnalysisQuery, readDashboardState, resolveAnalysisWindow, writeDashboardState} from "./dashboard-state.mjs";
-import {chartMetricState, createDomesticFuturesCharts} from "./domestic-futures-charts.mjs";
+import {createDomesticFuturesCharts} from "./domestic-futures-charts.mjs";
 import {loadLayout} from "./domestic-futures-layout.mjs";
 import {createDashboardGrid} from "./dashboard-grid.mjs";
+import {mountDashboardLayoutEditorMode} from "./dashboard-layout-editor-mode.mjs";
+import {DOMESTIC_FUTURES_DASHBOARD_MODULES} from "./dashboard-module-registry.mjs";
+import {renderDashboardModules, setDashboardModulesError, setDashboardModulesLoading} from "./dashboard-module-runtime.mjs";
 
 const PERIODS = [
   ["today", "昨日", "北京时间"],
@@ -25,12 +28,7 @@ const FILTER_PRESETS = [
 
 export function getDomesticDashboardConfig() {
   return {
-    moduleIds: [
-      "period-overview", "net-performance", "risk-health", "monthly-pnl",
-      "daily-calendar", "contract-contribution", "contract-losses", "data-health",
-      "review-coverage", "system-evaluation", "mode-evaluation",
-      "r-metrics", "heatmap", "sessions",
-    ],
+    moduleIds: DOMESTIC_FUTURES_DASHBOARD_MODULES.map(({id}) => id),
     periodLabels: PERIODS.map(([, label]) => label),
     filterPresets: FILTER_PRESETS,
   };
@@ -85,15 +83,6 @@ export function calculateRiskAssessment(metrics = {}, risk = {}) {
   };
 }
 
-function compactMoney(value) {
-  const amount = Number(value || 0);
-  const sign = amount >= 0 ? "+" : "-";
-  const absolute = Math.abs(amount);
-  if (absolute >= 10000) return `${sign}¥${(absolute / 10000).toFixed(1)}万`;
-  if (absolute >= 1000) return `${sign}¥${(absolute / 1000).toFixed(1)}k`;
-  return money(amount);
-}
-
 function safe(value) {
   return escapeHtml(value ?? "");
 }
@@ -143,36 +132,25 @@ function renderRisk(view, payload) {
   const metrics = payload?.metrics || {};
   const risk = payload?.risk_summary || {};
   const assessment = calculateRiskAssessment(metrics, risk);
-  if (assessment.level === "insufficient") {
-    return renderEmpty(view, "domesticRiskHealth", "当前范围暂无已实现交易，无法评估风险压力");
-  }
-  const feePressure = Number(risk.fee_pressure || 0);
   const tone = assessment.level === "low" ? "good" : assessment.level === "warn" ? "warn" : "bad";
   const factorHtml = assessment.factors.filter((factor) => factor.key !== "sample").map((factor) => `<div><span>${safe(factor.label)}</span><strong class="${factor.points >= 2 ? "loss-text" : ""}">${safe(factor.detail)}</strong></div>`).join("");
   const sampleNote = assessment.factors.find((factor) => factor.key === "sample");
-  setHtml(view, "domesticRiskHealth", `<div class="domestic-risk-score"><div><span>风险压力评分</span><strong>${assessment.score} / 100</strong></div><em class="${tone}">${assessment.label}</em></div>
-    <div class="domestic-risk-list">${factorHtml || `<div><span>主要风险因子</span><strong>未发现明显压力</strong></div>`}</div>
-    <div class="domestic-risk-meter"><i style="width:${assessment.score}%"></i></div><small>仅基于已实现交易结果：最大回撤、手续费压力、盈亏比、亏损集中度和连续亏损；${sampleNote ? sampleNote.detail + "。" : ""}不代表保证金或实时净值风险。</small>`);
+  setText(view, "domesticRiskLabel", assessment.label);
+  const label = view.getElementById("domesticRiskLabel");
+  if (label) label.className = tone;
+  setHtml(view, "domesticRiskFactors", assessment.level === "insufficient"
+    ? `<div><span>当前范围</span><strong>暂无已实现交易</strong></div>`
+    : factorHtml || `<div><span>主要风险因子</span><strong>未发现明显压力</strong></div>`);
+  setText(view, "domesticRiskNote", assessment.level === "insufficient"
+    ? "当前范围暂无已实现交易，无法评估风险压力。"
+    : `仅基于已实现交易结果：最大回撤、手续费压力、盈亏比、亏损集中度和连续亏损；${sampleNote ? sampleNote.detail + "。" : ""}不代表保证金或实时净值风险。`);
+  return assessment;
 }
 
-function renderCalendar(view, payload) {
+function renderCalendarSummary(view, payload) {
   const calendar = payload?.calendar;
-  if (!calendar) return renderEmpty(view, "domesticCalendar");
-  const days = Object.values(calendar.days || {});
-  const first = (new Date(calendar.year, calendar.month - 1, 1).getDay() + 6) % 7;
-  const cells = Array.from({length: first}, () => `<span class="domestic-day empty"></span>`);
-  days.forEach((day) => {
-    const amount = Number(day.net_pnl || 0);
-    cells.push(`<span class="domestic-day ${amount > 0 ? "positive" : amount < 0 ? "negative" : "flat"}" title="${safe(day.label)} ${safe(money(amount))}"><b>${safe(day.label.slice(-2))}</b><small>${amount ? safe(compactMoney(amount)) : "-"}</small></span>`);
-  });
-  setHtml(view, "domesticCalendar", `<div class="domestic-calendar-summary"><strong class="${profitClass(calendar.month_net_pnl)}">${money(calendar.month_net_pnl)}</strong><span>${calendar.year}年${calendar.month}月 · ${calendar.month_order_count || 0} 笔 · 胜率 ${formatPercent(calendar.month_win_rate)}</span></div><div class="domestic-calendar-grid">${["一", "二", "三", "四", "五", "六", "日"].map((day) => `<span class="weekday">${day}</span>`).join("")}${cells.join("")}</div>`);
-}
-
-function renderContracts(view, payload) {
-  const rankings = payload?.contract_rankings || {};
-  const table = (rows, empty, losses = false) => rows?.length ? `<table class="domestic-table"><thead><tr><th>合约</th><th>笔数</th><th>${losses ? "净亏损" : "净盈亏"}</th></tr></thead><tbody>${rows.map((row) => `<tr><td><strong>${safe(row.contract_name || row.symbol)}</strong><small>${safe(row.product_name || row.symbol)}</small></td><td>${row.order_count || 0}</td><td class="${profitClass(row.net_pnl)}">${money(row.net_pnl)}</td></tr>`).join("")}</tbody></table>` : `<div class="domestic-empty">${empty}</div>`;
-  setHtml(view, "domesticContractContribution", table(rankings.contribution, "暂无合约贡献数据"));
-  setHtml(view, "domesticContractLosses", table(rankings.losses, "暂无亏损合约", true));
+  if (!calendar) return renderEmpty(view, "domesticCalendarSummary");
+  setHtml(view, "domesticCalendarSummary", `<div class="domestic-calendar-summary"><strong class="${profitClass(calendar.month_net_pnl)}">${money(calendar.month_net_pnl)}</strong><span>${calendar.year}年${calendar.month}月 · ${calendar.month_order_count || 0} 笔 · 胜率 ${formatPercent(calendar.month_win_rate)}</span></div>`);
 }
 
 function renderDataHealth(view, payload, importSummary, platform = "domestic_futures") {
@@ -221,30 +199,6 @@ function renderRMetrics(view, payload) {
   setHtml(view, "domesticRMetrics", `<div class="domestic-r-grid">${values.map(([label, value, tone]) => `<div><span>${label}</span><strong class="${tone}">${value}</strong></div>`).join("")}</div><small class="domestic-module-note">已完成 R 计算：${metrics.complete_count || 0} / ${metrics.sample_count || 0} 笔组合</small>`);
 }
 
-function heatColor(pnl, maxAbs) {
-  const value = Number(pnl || 0);
-  if (!value || !maxAbs) return "#f1f5f4";
-  const intensity = Math.min(1, Math.abs(value) / maxAbs);
-  return value > 0 ? `rgba(6,157,145,${0.12 + intensity * 0.68})` : `rgba(240,87,120,${0.12 + intensity * 0.68})`;
-}
-
-function renderHeatmap(view, payload) {
-  const state = chartMetricState(payload, "hour_heatmap");
-  if (state) return renderEmpty(view, "domesticHeatmap", state.label);
-  const heatmap = payload?.heatmap;
-  if (!heatmap) return renderEmpty(view, "domesticHeatmap");
-  const cells = (heatmap.days || []).map((day) => `<div class="domestic-heatmap-row"><strong>${safe(day.date.slice(5))}</strong><div class="domestic-heatmap-hours">${(day.hours || []).map((cell) => `<i style="background:${heatColor(cell.net_pnl, heatmap.max_abs_pnl)}" title="${safe(`${day.date} ${String(cell.hour).padStart(2, "0")}:00 ${money(cell.net_pnl)} ${cell.order_count || 0} 笔`)}">${cell.order_count ? `<b>${cell.order_count}</b>` : ""}</i>`).join("")}</div><span class="${profitClass(day.hours?.reduce((sum, cell) => sum + Number(cell.net_pnl || 0), 0))}">${money(day.hours?.reduce((sum, cell) => sum + Number(cell.net_pnl || 0), 0))}</span></div>`).join("");
-  setHtml(view, "domesticHeatmap", `<div class="domestic-heatmap-axis"><span></span><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div><div class="domestic-heatmap">${cells || `<div class="domestic-empty">当前范围暂无时段数据</div>`}</div>`);
-}
-
-function renderSessions(view, payload) {
-  const state = chartMetricState(payload, "sessions");
-  if (state) return renderEmpty(view, "domesticSessions", state.label);
-  const labels = {asia: "亚盘", europe: "欧盘", us: "美盘"};
-  const rows = Object.entries(payload?.sessions || {}).map(([key, item]) => `<div class="domestic-session-row"><div><strong>${labels[key] || safe(item.label)}</strong><small>${safe(item.window)} 北京时间</small></div><b class="${profitClass(item.net_pnl)}">${money(item.net_pnl)}</b><span>${item.order_count || 0} 笔 · 胜率 ${formatPercent(item.win_rate)}</span></div>`).join("");
-  setHtml(view, "domesticSessions", rows || `<div class="domestic-empty">当前范围暂无时段数据</div>`);
-}
-
 export function createDomesticFuturesDashboardController({api, view = globalThis.document, location = globalThis.location, history = globalThis.history, onRefresh = null, platform = readPlatform(location)} = {}) {
   platform = normalizePlatform(platform);
   const gate = new RequestGate();
@@ -253,22 +207,34 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
   let importSummary = null;
   let charts = null;
   let gridController = null;
+  let layoutEditorController = null;
+  let loadRevision = 0;
   const root = view.getElementById("domesticDashboard");
 
   async function load() {
+    const revision = ++loadRevision;
     state = readDashboardState(location.search);
     const windowState = resolveAnalysisWindow(state);
     const query = buildAnalysisQuery(state, windowState);
     const analysisQuery = `${query}&platform=${encodeURIComponent(platform)}`;
+    setDashboardModulesLoading(DOMESTIC_FUTURES_DASHBOARD_MODULES, {
+      findRoot: (selector) => root?.querySelector?.(selector),
+    });
     try {
       const analysis = gate.run("domestic-analysis", (signal) => api.requestJson(`/api/analysis?${analysisQuery}`, {signal}));
       const imports = platform === "domestic_futures"
         ? api.requestJson("/api/platforms/import-summary?platform=domestic_futures").catch(() => null)
         : Promise.resolve(null);
-      [payload, importSummary] = await Promise.all([analysis, imports]);
+      const [nextPayload, nextImportSummary] = await Promise.all([analysis, imports]);
+      if (revision !== loadRevision) return;
+      payload = nextPayload;
+      importSummary = nextImportSummary;
       renderAll();
     } catch (error) {
-      if (error?.name === "AbortError") return;
+      if (revision !== loadRevision || error?.name === "AbortError") return;
+      setDashboardModulesError(DOMESTIC_FUTURES_DASHBOARD_MODULES, {
+        findRoot: (selector) => root?.querySelector?.(selector),
+      });
       root?.removeAttribute("hidden");
       setText(view, "domesticDashboardStatus", error?.message || "读取账户分析数据失败");
     }
@@ -285,25 +251,40 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
         root: stage,
         layout: loadLayout(),
         selector: "[data-module]",
-        editable: false,
+        editable: new URLSearchParams(location.search).get("layout") === "edit",
         GridStack: globalThis.GridStack,
+        document: view,
+      });
+      layoutEditorController = mountDashboardLayoutEditorMode({
+        root: stage,
+        toolbar: view.getElementById("domesticLayoutEditor"),
+        gridController,
+        layout: loadLayout(),
+        platform: "domestic_futures",
+        location,
         document: view,
       });
     }
     charts ||= createDomesticFuturesCharts({view});
-    renderPeriodCards(view, payload);
-    charts.update(payload);
-    renderPerformanceSummary(view, payload);
-    renderRisk(view, payload);
-    renderCalendar(view, payload);
-    renderContracts(view, payload);
-    renderDataHealth(view, payload, importSummary, platform);
-    renderReviewCoverage(view, payload);
-    renderSystemEvaluation(view, payload);
-    renderModeEvaluation(view, payload);
+    const renderers = {
+      "period-overview": () => renderPeriodCards(view, payload),
+      "net-performance": () => { charts.updateModule("netPerformance", payload); renderPerformanceSummary(view, payload); },
+      "risk-health": () => charts.updateModule("riskGauge", renderRisk(view, payload)),
+      "monthly-pnl": () => charts.updateModule("monthlyPnl", payload),
+      "daily-calendar": () => { renderCalendarSummary(view, payload); charts.updateModule("calendar", payload); },
+      "contract-contribution": () => charts.updateModule("contractContribution", payload),
+      "contract-losses": () => charts.updateModule("contractLosses", payload),
+      "data-health": () => renderDataHealth(view, payload, importSummary, platform),
+      "review-coverage": () => renderReviewCoverage(view, payload),
+      "system-evaluation": () => renderSystemEvaluation(view, payload),
+      "mode-evaluation": () => renderModeEvaluation(view, payload),
+    };
+    renderDashboardModules(DOMESTIC_FUTURES_DASHBOARD_MODULES, {
+      findRoot: (selector) => root.querySelector?.(selector),
+      renderers,
+      metricMeta: payload?.metric_meta || {},
+    });
     renderRMetrics(view, payload);
-    renderHeatmap(view, payload);
-    renderSessions(view, payload);
     const rangeLabel = state.preset === "all"
       ? "全部时间"
       : (FILTER_PRESETS.find((item) => item.value === state.preset)?.label || "自定义");
@@ -350,7 +331,13 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
     bindFilters();
   }
 
-  function dispose() { gate.abortAll(); charts?.dispose(); gridController?.destroy?.(); }
+  function dispose() {
+    loadRevision += 1;
+    gate.abortAll();
+    charts?.dispose();
+    gridController?.destroy?.();
+    layoutEditorController?.dispose?.();
+  }
 
   return {init, load, dispose, getState: () => state};
 }

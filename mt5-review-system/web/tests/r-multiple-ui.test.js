@@ -103,7 +103,7 @@ test("dashboard exposes accessible shared metric explanation", () => {
   assert.match(app, /净胜率（剔除打平）/);
   assert.match(app, /有效胜率/);
   assert.match(app, /交易笔数/);
-  assert.match(app, /\["本年", periods\.year\]/);
+  assert.match(html, /六项指标各自比较四个周期，保留实际数值与独立刻度/);
   assert.match(app, /净盈亏比/);
   assert.match(app, /\["z_score", "Z 分数"/);
   assert.match(html, /净盈亏比/);

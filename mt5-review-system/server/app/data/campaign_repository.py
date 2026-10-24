@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Iterable
 
 from ..core.config import RuntimePaths
-from ..domain.analytics import to_beijing, trade_net_pnl
+from ..domain.analytics import DEFAULT_SESSIONS, to_beijing, trade_net_pnl
 from ..domain.campaigns import calculate_campaign_r, group_campaigns, reconstruct_positions
 from .catalog_repository import CatalogRepository
 from .database import connect, transaction
@@ -16,10 +16,8 @@ from .import_repository import import_sources_for_trade_ids
 from .trade_repository import Page, _beijing_date_bounds, _escape_like
 
 
-CAMPAIGN_MODEL_REVISION = "7"
+CAMPAIGN_MODEL_REVISION = "8"
 CAMPAIGN_ID_NAMESPACE = uuid.UUID("d72ca9de-dfff-4e64-b1cc-5a8a1837c71d")
-
-
 def _json_tags(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value if str(item).strip()]
@@ -389,6 +387,7 @@ class CampaignRepository:
                   ON positions.platform = deal_events.platform
                  AND positions.account = deal_events.account
                  AND positions.position_id = deal_events.position_id
+                 AND positions.symbol = deal_events.symbol
                 JOIN campaign_positions ON campaign_positions.position_id = positions.id
                 WHERE campaign_positions.campaign_id IN ({placeholders})
                 ORDER BY deal_events.time_msc, deal_events.deal_ticket
@@ -896,21 +895,22 @@ class CampaignRepository:
     def _sync_legacy_deal_events(self, conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM deal_events WHERE source_kind = 'legacy'")
         rows = [dict(row) for row in conn.execute("SELECT * FROM trades ORDER BY open_time_utc, id")]
-        grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
         for row in rows:
             platform = str(row.get("platform") or "mt5")
             account = str(row.get("account") or "MT5-LOCAL")
             position_id = str(row.get("position_id") or row["id"])
-            grouped.setdefault((platform, account, position_id), []).append(row)
+            symbol = str(row.get("symbol") or "")
+            grouped.setdefault((platform, account, symbol, position_id), []).append(row)
 
-        for (platform, account, position_id), source_rows in grouped.items():
+        for (platform, account, symbol, position_id), source_rows in grouped.items():
             has_native = conn.execute(
                 """
                 SELECT 1 FROM deal_events
-                WHERE platform = ? AND account = ? AND position_id = ? AND source_kind = 'mt5'
+                WHERE platform = ? AND account = ? AND symbol = ? AND position_id = ? AND source_kind = 'mt5'
                 LIMIT 1
                 """,
-                (platform, account, position_id),
+                (platform, account, symbol, position_id),
             ).fetchone()
             if has_native:
                 continue
@@ -935,7 +935,7 @@ class CampaignRepository:
                 ) VALUES (?, ?, ?, ?, ?, 'in', ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, '', 'legacy', ?, ?)
                 """,
                 (
-                    f"legacy-in:{platform}:{account}:{position_id}",
+                    f"legacy-in:{platform}:{account}:{position_id}:{symbol}",
                     platform,
                     account,
                     position_id,
@@ -966,7 +966,7 @@ class CampaignRepository:
                     ) VALUES (?, ?, ?, ?, ?, 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'legacy', ?, ?)
                     """,
                     (
-                        f"legacy-out:{platform}:{row['id']}",
+                        f"legacy-out:{platform}:{row['id']}:{symbol}",
                         platform,
                         account,
                         position_id,
@@ -1066,6 +1066,27 @@ class CampaignRepository:
             if end_utc:
                 clauses.append("julianday(campaigns.closed_at_utc) < julianday(?)")
                 parameters.append(end_utc)
+        close_hour = filters.get("close_hour")
+        beijing_hour = "CAST(strftime('%H', campaigns.closed_at_utc, '+8 hours') AS INTEGER)"
+        if close_hour is not None:
+            clauses.append(f"{beijing_hour} = ?")
+            parameters.append(int(close_hour))
+        session = str(filters.get("session") or "").strip()
+        if session:
+            if session not in DEFAULT_SESSIONS:
+                raise ValueError("session must be asia, europe or us")
+            beijing_minutes = (
+                "CAST(strftime('%H', campaigns.closed_at_utc, '+8 hours') AS INTEGER) * 60 "
+                "+ CAST(strftime('%M', campaigns.closed_at_utc, '+8 hours') AS INTEGER)"
+            )
+            definition = DEFAULT_SESSIONS[session]
+            start_minute = definition["start"].hour * 60 + definition["start"].minute
+            end_minute = definition["end"].hour * 60 + definition["end"].minute
+            operator = "AND" if start_minute < end_minute else "OR"
+            clauses.append(
+                f"({beijing_minutes} >= {start_minute} {operator} "
+                f"{beijing_minutes} < {end_minute})"
+            )
         if filters.get("r_missing_only") or filters.get("r_missing"):
             clauses.append(
                 "(campaigns.status != 'closed' OR EXISTS ("

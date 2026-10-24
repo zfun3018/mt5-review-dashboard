@@ -53,6 +53,7 @@ CAMPAIGNS = [
     {
         "id": "C-1",
         "status": "closed",
+        "symbol": "FG701",
         "closed_at_utc": "2026-08-18T02:00:00+00:00",
         "close_time_utc": "2026-08-18T02:00:00+00:00",
         "pnl": 6.0,
@@ -255,6 +256,8 @@ class DashboardServiceTest(unittest.TestCase):
                 "mode_evaluation",
                 "metric_meta",
                 "date_semantics",
+                "period_ranges",
+                "max_drawdown",
             },
         )
         self.assertNotIn("trades", payload)
@@ -264,9 +267,12 @@ class DashboardServiceTest(unittest.TestCase):
         self.assertEqual(payload["r_metrics"]["sample_count"], 1)
         self.assertEqual(payload["r_metrics"]["expectancy_r"], 1.5)
         self.assertEqual(payload["periods"]["today"]["order_count"], 1)
+        self.assertEqual(payload["period_ranges"]["today"], {"start": "2026-08-18", "end": "2026-08-18"})
+        self.assertEqual(payload["max_drawdown"]["amount"], 0.0)
         self.assertEqual(payload["equity"][-1]["cumulative_return"], 6.0)
         self.assertEqual(payload["calendar"]["year"], 2026)
         self.assertEqual(payload["calendar"]["month"], 8)
+        self.assertNotIn("product_pnl", payload["monthly_pnl"][0])
         self.assertEqual(len(payload["heatmap"]["days"]), 7)
         self.assertIn("asia", payload["sessions"])
         self.assertEqual(payload["system_evaluation"][0]["order_count"], 1)
@@ -324,6 +330,10 @@ class DashboardServiceTest(unittest.TestCase):
 
         self.assertIn("fixed_periods", payload)
         self.assertIn("monthly_pnl", payload)
+        self.assertEqual(payload["monthly_pnl"][0]["product_pnl"], [
+            {"product_name": "玻璃", "net_pnl": 6.0},
+        ])
+        self.assertEqual(payload["metric_meta"]["monthly_pnl"]["definition_version"], "2")
         self.assertIn("contract_rankings", payload)
         self.assertIn("risk_summary", payload)
         self.assertIn("review_coverage", payload)

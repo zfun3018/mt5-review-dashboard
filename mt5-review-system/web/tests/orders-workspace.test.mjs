@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   calculateCampaignPageSize,
-  calculateOrderListMaxHeight,
   createOrdersController,
   groupCampaignsByDay,
   mergePinnedCampaigns,
@@ -254,6 +253,10 @@ test("orders workspace uses a scroll status instead of page navigation controls"
   assert.match(ordersHtml, /orderLoadStatus/);
   assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
   assert.match(ordersStyle, /\.trades-panel \.table-wrap[\s\S]*overflow-y:\s*auto/);
+});
+
+test("sticky order table headers use an opaque surface while rows scroll underneath", () => {
+  assert.match(ordersStyle, /html\[data-platform\] \.orders-table thead th\s*\{[^}]*position:\s*sticky[^}]*z-index:\s*5[^}]*background:\s*#151a22/s);
 });
 
 test("featured campaigns are visibly marked in the main order list", async () => {
@@ -775,6 +778,49 @@ test("order actions use accessible Lucide icon buttons", () => {
   assert.match(orderDetailSource, /lucide\?\.createIcons/);
 });
 
+test("primary review fields sit before the featured action and the tag area only contains mistakes", () => {
+  const detailHeaderStart = orderDetailSource.indexOf('<header class="detail-title order-detail-title">');
+  const detailHeaderEnd = orderDetailSource.indexOf("</header>", detailHeaderStart);
+  const detailHeader = orderDetailSource.slice(detailHeaderStart, detailHeaderEnd);
+  const reviewFieldsStart = orderDetailSource.indexOf('<div class="detail-primary-review-fields"', detailHeaderStart);
+  const headingStart = orderDetailSource.indexOf('<div class="order-detail-heading">', detailHeaderStart);
+  const actionBarStart = orderDetailSource.indexOf('<div class="detail-order-actions"', detailHeaderStart);
+  const featuredAction = orderDetailSource.indexOf('<span class="detail-action-group" aria-label="订单状态">');
+  const mistakeAreaStart = orderDetailSource.indexOf('<section class="order-info-strip"');
+  const reviewEditorStart = orderDetailSource.indexOf('<section class="review-editor-panel">', mistakeAreaStart);
+  const mistakeArea = orderDetailSource.slice(mistakeAreaStart, reviewEditorStart);
+
+  assert.ok(headingStart < reviewFieldsStart && reviewFieldsStart < actionBarStart);
+  assert.match(detailHeader, /<div class="order-detail-heading">[\s\S]*?<div class="detail-primary-review-fields"[\s\S]*?<div class="detail-order-actions"/);
+  assert.match(ordersStyle, /html\[data-platform\] \.order-detail-title\s*\{[^}]*display:\s*grid[^}]*align-items:\s*center/s);
+  assert.ok(reviewFieldsStart < featuredAction);
+  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /campaignInitialStop/);
+  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /renderTagPicker\("trade_type_tags"/);
+  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /renderTagPicker\("strategy_tags"/);
+  assert.match(mistakeArea, /renderTagPicker\("mistake_tags"/);
+  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /id="saveState"/);
+  assert.doesNotMatch(mistakeArea, /campaignInitialStop|trade_type_tags|strategy_tags/);
+});
+
+test("mistake tags size to their content and wrap without stretching or clipping", () => {
+  assert.match(ordersStyle, /html\[data-platform\] \.detail-primary-review-fields\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s);
+  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-column \.order-info-strip\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*100%/s);
+  assert.match(ordersStyle, /html\[data-platform\] \.order-info-strip \.campaign-tag-field\[data-tag-picker="mistake_tags"\]\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*100%/s);
+  assert.match(ordersStyle, /html\[data-platform\] \.order-info-strip \.campaign-tag-field\[data-tag-picker="mistake_tags"\] \.choice-cell-values\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s);
+  assert.match(ordersStyle, /html\[data-platform\] \.order-info-strip \.campaign-tag-field\[data-tag-picker="mistake_tags"\] \.choice-cell\.detail-choice\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
+});
+
+test("check-in action is a labeled pill while preserving its accessible pressed state", () => {
+  assert.match(orderDetailSource, /id="checkinCampaign" class="app-icon-button detail-icon-action detail-checkin-pill/);
+  assert.match(orderDetailSource, /<span class="detail-checkin-label">\$\{campaign\.checkin_checked_in_today \? "已打卡" : "今日打卡"\}<\/span>/);
+  assert.match(ordersStyle, /html\[data-platform\] \.detail-icon-action\.detail-checkin-pill\s*\{[^}]*width:\s*auto[^}]*border-radius:\s*var\(--radius-pill\)/s);
+});
+
+test("daily order summaries use semantic profit and loss pills", () => {
+  assert.match(ordersSource, /class="\$\{profitClass\(groupPnl\)\} campaign-day-pnl-pill"/);
+  assert.match(ordersStyle, /html\[data-platform\] \.campaign-day-summary \.campaign-day-pnl-pill\s*\{[^}]*padding:[^}]*border-radius:\s*var\(--radius-pill\)/s);
+});
+
 test("orders workspace keeps shared light contrast and a full-width calendar grid", () => {
   assert.match(ordersStyle, /html\[data-platform="mt5"\][\s\S]*\.choice-value-pill/);
   assert.match(ordersStyle, /html\[data-platform="domestic_futures"\][\s\S]*\.choice-value-pill/);
@@ -811,11 +857,6 @@ test("the main-order list keeps the aligned panel height and scrolls continuousl
   assert.match(ordersSource, /applyListPanelHeight/);
   assert.match(ordersSource, /loadMore/);
   assert.doesNotMatch(ordersSource, /syncListCapacity|scheduleListCapacitySync/);
-});
-
-test("desktop order list height is capped by the visible viewport", () => {
-  assert.equal(calculateOrderListMaxHeight({ viewportHeight: 900, top: 188, bottomGap: 16 }), 696);
-  assert.equal(calculateOrderListMaxHeight({ viewportHeight: 620, top: 700, bottomGap: 16 }), 0);
 });
 
 test("execution ledger separates entry and exit direction and closes the final complete exit", () => {

@@ -58,20 +58,14 @@ test("domestic futures dashboard keeps one page title and uses compact adaptive 
   assert.doesNotMatch(styles, /min-height:\s*280px/);
 });
 
-test("domestic futures dashboard mock delegates layout editing to the standalone editor", () => {
-  const html = fs.readFileSync(path.join(webRoot, "dashboard/mock-domestic-futures.html"), "utf8");
-  const editor = fs.readFileSync(path.join(webRoot, "dashboard/mock-domestic-futures-layout.html"), "utf8");
-  const editorScript = fs.readFileSync(path.join(webRoot, "dashboard/domestic-futures-layout-editor.mjs"), "utf8");
+test("both dashboard workspaces link to the live in-page layout editor", () => {
+  const html = fs.readFileSync(path.join(webRoot, "dashboard/index.html"), "utf8");
+  const domesticController = fs.readFileSync(path.join(webRoot, "dashboard/domestic-futures-dashboard.mjs"), "utf8");
+  const editorMode = fs.readFileSync(path.join(webRoot, "dashboard/dashboard-layout-editor-mode.mjs"), "utf8");
 
-  assert.match(html, /mock-domestic-futures-layout\.html/);
-  assert.match(html, /domestic-futures-layout-view\.mjs/);
-  assert.doesNotMatch(html, /vendor\/gridstack(?:-all)?\.js/);
-  assert.doesNotMatch(html, /GridStack\.init/);
-  assert.match(editor, /vendor\/gridstack-all\.js/);
-  assert.match(editorScript, /grid\.on\("change dragstop resizestop"/);
-  assert.match(editorScript, /resizable: \{handles: "e, se, s, sw, w"/);
-  assert.match(editorScript, /alwaysShowResizeHandle: true/);
-  assert.match(editorScript, /data-editor-action="hide"/);
-  assert.match(editor, /titleInput/);
-  assert.match(editor, /subtitleInput/);
+  assert.match(html, /index\.html\?platform=domestic_futures&amp;layout=edit/);
+  assert.match(html, /index\.html\?platform=mt5&amp;layout=edit/);
+  assert.match(domesticController, /mountDashboardLayoutEditorMode/);
+  assert.match(domesticController, /editable: new URLSearchParams\(location\.search\)\.get\("layout"\) === "edit"/);
+  assert.match(editorMode, /保存后应用到仪表盘/);
 });

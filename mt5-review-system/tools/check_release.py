@@ -43,6 +43,14 @@ PLAYWRIGHT_BIN = PROJECT_ROOT / "node_modules" / ".bin" / (
 BENCHMARK_TOOL = PROJECT_ROOT / "tools" / "benchmark_synthetic.py"
 BENCHMARK_ARTIFACT = SERVER_DIR / "artifacts" / "benchmark-v0.6.0.json"
 ANALYSIS_BUDGET_P95_MS = 200.0
+ACTIVE_BROWSER_SPECS = (
+    "web/tests/browser/a-ui-visual-consistency.spec.mjs",
+    "web/tests/browser/a1-visual-demo.spec.mjs",
+    "web/tests/browser/dashboard-a-upgrade.spec.mjs",
+    "web/tests/browser/domestic-futures-dashboard.spec.mjs",
+    "web/tests/browser/order-review-workspace.spec.mjs",
+    "web/tests/browser/workspaces.spec.mjs",
+)
 
 
 @dataclass(frozen=True)
@@ -210,7 +218,10 @@ def _browser_gate() -> int:
             file=sys.stderr,
         )
         return 1
-    return _run([str(PLAYWRIGHT_BIN), "test"], cwd=PROJECT_ROOT)
+    return _run(
+        [str(PLAYWRIGHT_BIN), "test", *ACTIVE_BROWSER_SPECS],
+        cwd=PROJECT_ROOT,
+    )
 
 
 # --- Public API -------------------------------------------------------------

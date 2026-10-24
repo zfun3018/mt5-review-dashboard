@@ -188,6 +188,34 @@ class AnalysisReconciliationTest(TemporaryStorageCase):
         self.assertEqual(analysis["r_metrics"]["missing_count"], orders["total"])
         self.assertEqual(analysis["metric_meta"]["r_metrics"]["status"], "estimated")
 
+    def test_campaign_review_write_is_shared_by_orders_album_and_dashboard_api(self):
+        seeded = self._seed_campaigns()
+        campaign = next(item for item in seeded["campaigns"] if "C1-A" in item["source_trade_ids"])
+        campaign_id = campaign["id"]
+        review = {
+            "review_text": "等待结构确认后执行",
+            "trade_type_tags": ["reversal"],
+            "strategy_tags": ["breakout"],
+            "mistake_tags": ["过早入场"],
+        }
+
+        storage.update_campaign_review(campaign_id, review, platform="mt5")
+
+        order = next(item for item in storage.list_campaigns(platform="mt5")["campaigns"] if item["id"] == campaign_id)
+        detail = storage.get_campaign(campaign_id, platform="mt5")
+        album = storage.query_review_album(platform="mt5", tags=["trade_type:reversal"])
+        album_trades = [item for item in album["trades"] if item["campaign_id"] == campaign_id]
+        analysis = storage.get_analysis(start_date="2026-10-01", end_date="2026-10-02", year=2026, month=10, platform="mt5")
+
+        self.assertEqual(order["id"], campaign_id)
+        self.assertEqual(detail["id"], campaign_id)
+        self.assertEqual(order["review_text"], review["review_text"])
+        self.assertEqual(detail["trade_type_tags"], review["trade_type_tags"])
+        self.assertEqual(len(album_trades), 2)
+        self.assertTrue(all(item["review_text"] == review["review_text"] for item in album_trades))
+        self.assertTrue(all(item["trade_type_tags"] == review["trade_type_tags"] for item in album_trades))
+        self.assertIn("reversal", {row["key"] for row in analysis["mode_evaluation"]["trade_type"]})
+
     def test_campaign_tags_reconcile_to_album_without_double_counting_multi_tags(self):
         orders = self._seed_campaigns()
         merged = next(item for item in orders["campaigns"] if item["position_count"] == 2)

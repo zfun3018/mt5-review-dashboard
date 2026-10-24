@@ -11,14 +11,61 @@ html {
   font-family: var(--font-family-ui);
   font-size: var(--font-size-body);
   letter-spacing: 0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
   background: var(--color-bg);
+  background-attachment: fixed;
+}
+
+body::before {
+  position: fixed;
+  z-index: -1;
+  inset: -16%;
+  background: var(--color-bg-atmosphere);
+  filter: blur(30px) saturate(145%);
+  content: "";
+  pointer-events: none;
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+* {
+  scrollbar-color: rgba(164, 179, 197, 0.42) rgba(255, 255, 255, 0.035);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: rgba(164, 179, 197, 0.42);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(196, 216, 237, 0.62);
+  background-clip: padding-box;
 }
 
 body.navigation-open {
@@ -61,8 +108,8 @@ p {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(121, 200, 213, 0.26), 0 0 24px rgba(121, 200, 213, 0.16);
 }
 
 [hidden] {

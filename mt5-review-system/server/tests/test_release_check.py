@@ -83,6 +83,13 @@ class ReleaseCheckGateListTest(unittest.TestCase):
                 f"Gate {gate.name} cwd does not exist: {gate.cwd}",
             )
 
+    def test_release_browser_gate_covers_visual_and_core_workflows(self):
+        specs = check_release.ACTIVE_BROWSER_SPECS
+        self.assertIn("web/tests/browser/a-ui-visual-consistency.spec.mjs", specs)
+        self.assertIn("web/tests/browser/dashboard-a-upgrade.spec.mjs", specs)
+        self.assertIn("web/tests/browser/order-review-workspace.spec.mjs", specs)
+        self.assertEqual(len(specs), len(set(specs)))
+
 
 class ReleaseCheckExecutionTest(unittest.TestCase):
     def test_run_all_returns_zero_when_every_gate_passes(self):

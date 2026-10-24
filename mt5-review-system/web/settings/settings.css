@@ -34,9 +34,11 @@
 }
 
 .settings-tab.is-active {
-  border-color: var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
+  border-color: rgba(201, 250, 252, 0.65);
+  background: linear-gradient(145deg, #b0e8ed, #69bdca);
+  box-shadow: 0 5px 16px rgba(66, 164, 180, 0.29), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  color: #0d1518;
+  font-weight: 720;
 }
 
 .settings-panel {

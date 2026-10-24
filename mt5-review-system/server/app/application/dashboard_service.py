@@ -11,6 +11,7 @@ from ..domain.analytics import (
     to_beijing,
 )
 from ..domain.analysis_context import AnalysisContext
+from ..domain.dashboard import campaign_period_date_ranges
 from ..domain.metrics import build_metric_registry
 from ..domain.metric_contracts import MetricDefinition, MetricResult
 from ..domain.metric_registry import MetricRegistry
@@ -148,6 +149,10 @@ class DashboardService:
                 for key, result in results.items()
             },
             "date_semantics": _date_semantics(context.platform),
+            "period_ranges": campaign_period_date_ranges(
+                context.settings.get("fixed_period_anchor_utc")
+                or datetime.now(timezone.utc)
+            ),
         }
         for key in ("heatmap", "sessions"):
             result = results["hour_heatmap" if key == "heatmap" else key]
@@ -163,6 +168,7 @@ class DashboardService:
             result = results[key]
             if result.status != "not_applicable":
                 payload[key] = result.value
+        payload["max_drawdown"] = results["max_drawdown"].value
         return payload
 
 
