@@ -60,6 +60,20 @@ class FakeElement {
     return this.classList.toString();
   }
 
+  get parentNode() {
+    return this.parentElement;
+  }
+
+  get childNodes() {
+    return this.children;
+  }
+
+  get nextSibling() {
+    if (!this.parentElement) return null;
+    const siblings = this.parentElement.children;
+    return siblings[siblings.indexOf(this) + 1] || null;
+  }
+
   setAttribute(name, value) {
     this.attributes.set(name, String(value));
   }
@@ -78,9 +92,19 @@ class FakeElement {
 
   append(...children) {
     children.forEach((child) => {
+      child.remove();
       child.parentElement = this;
       this.children.push(child);
     });
+  }
+
+  insertBefore(child, anchor) {
+    child.remove();
+    const index = anchor ? this.children.indexOf(anchor) : -1;
+    if (index < 0) this.children.push(child);
+    else this.children.splice(index, 0, child);
+    child.parentElement = this;
+    return child;
   }
 
   appendChild(child) {
@@ -343,13 +367,15 @@ test("shell renders current route, platform, refresh/import action, and collapse
   try {
     const {mountShell} = await import(`${moduleUrl("shared/js/shell.mjs")}?shared-controls-test`);
     let refreshes = 0;
+    let resolveRefresh;
+    const refreshPending = new Promise((resolve) => { resolveRefresh = resolve; });
     const filterParent = document.createElement("div");
     const beforeFilter = document.createElement("span");
     const filter = document.createElement("button");
     const afterFilter = document.createElement("span");
     filterParent.append(beforeFilter, filter, afterFilter);
     root.append(filterParent);
-    const cleanup = mountShell({activeRoute: "/orders/", title: "订单复盘", toolbarFilters: [filter], onRefresh: async () => { refreshes += 1; }});
+    const cleanup = mountShell({activeRoute: "/orders/", title: "订单复盘", toolbarFilters: [filter], onRefresh: () => { refreshes += 1; return refreshPending; }});
     assert.equal(root.querySelector('[aria-current="page"]').getAttribute("href"), "/orders/");
     const actions = root.querySelector('[data-ui="page-actions"]');
     assert.ok(actions.children.some((node) => node.classList.contains("app-platform-button")));
@@ -357,8 +383,13 @@ test("shell renders current route, platform, refresh/import action, and collapse
     assert.ok(refresh);
     assert.equal(refresh.parentElement.getAttribute("data-ui"), "page-actions");
     refresh.dispatchEvent({type: "click"});
+    assert.equal(refresh.disabled, true);
+    assert.equal(refresh.getAttribute("aria-busy"), "true");
+    resolveRefresh();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(refreshes, 1);
+    assert.equal(refresh.disabled, false);
+    assert.equal(refresh.hasAttribute("aria-busy"), false);
     assert.ok(root.querySelector('[aria-label="折叠导航"]'));
     assert.ok(actions);
     cleanup();
@@ -367,6 +398,11 @@ test("shell renders current route, platform, refresh/import action, and collapse
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
   }
+});
+
+test("shell uses native DOM operations for toolbar filter restoration", () => {
+  assert.doesNotMatch(shellSource, /children\.(?:indexOf|splice)|parentElement\s*=/);
+  assert.match(shellSource, /parent\.insertBefore\(node,/);
 });
 
 test("shell keeps mobile drawer keyboard and ARIA state synchronized across viewport changes", async () => {

@@ -176,7 +176,8 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   const filterPlacements = filterNodes.map((node) => ({
     node,
     parent: node.parentElement,
-    index: node.parentElement?.children.indexOf(node) ?? -1,
+    nextSibling: node.nextSibling,
+    index: node.parentElement ? Array.from(node.parentElement.childNodes).indexOf(node) : -1,
   }));
   root.replaceChildren();
   root.classList.add("app-shell");
@@ -303,12 +304,6 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
       className: "app-page-bar__filters",
       attributes: {"aria-label": "页面筛选"},
     });
-    for (const node of filterNodes) {
-      const parent = node.parentElement;
-      const index = parent?.children.indexOf(node) ?? -1;
-      if (parent && index >= 0) parent.children.splice(index, 1);
-      node.parentElement = null;
-    }
     filters.append(...filterNodes);
     toolbarTitle.append(filters);
   }
@@ -406,12 +401,9 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     root.removeAttribute("data-navigation-collapsed");
     root.removeAttribute("data-navigation-open");
     root.replaceChildren(...originalNodes);
-    for (const {node, parent, index} of filterPlacements) {
+    for (const {node, parent, nextSibling} of [...filterPlacements].sort((a, b) => b.index - a.index)) {
       if (!parent) continue;
-      node.parentElement?.children.splice(node.parentElement.children.indexOf(node), 1);
-      const insertionIndex = Math.max(0, Math.min(index, parent.children.length));
-      parent.children.splice(insertionIndex, 0, node);
-      node.parentElement = parent;
+      parent.insertBefore(node, nextSibling?.parentNode === parent ? nextSibling : null);
     }
     if (mountedShell?.root === root) mountedShell = null;
   };
