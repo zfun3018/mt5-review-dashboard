@@ -173,6 +173,11 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   if (!root) throw new Error("Missing [data-app-shell] mount point");
   const originalNodes = [...root.children];
   const filterNodes = (Array.isArray(toolbarFilters) ? toolbarFilters : [toolbarFilters]).filter(Boolean);
+  const filterPlacements = filterNodes.map((node) => ({
+    node,
+    parent: node.parentElement,
+    index: node.parentElement?.children.indexOf(node) ?? -1,
+  }));
   root.replaceChildren();
   root.classList.add("app-shell");
   let activePlatform = readPlatform(location);
@@ -240,7 +245,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
 
   const footer = createElement("div", {className: "app-navigation__footer"});
   const refreshButton = createElement("button", {
-    className: "app-navigation__refresh app-navigation__link",
+    className: "app-navigation__refresh app-navigation__link app-page-bar__refresh",
     attributes: {type: "button", title: actionLabel, "aria-label": actionLabel},
   });
   refreshButton.append(icon(actionIcon), createElement("span", {className: "app-navigation__label", text: actionLabel}));
@@ -253,7 +258,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   });
   collapseButton.setAttribute("aria-controls", "appNavigation");
   collapseButton.setAttribute("aria-expanded", "true");
-  footer.append(refreshButton, environment, collapseButton);
+  footer.append(environment, collapseButton);
   navigation.append(brand, links, footer);
 
   const backdrop = iconButton({
@@ -298,11 +303,18 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
       className: "app-page-bar__filters",
       attributes: {"aria-label": "页面筛选"},
     });
+    for (const node of filterNodes) {
+      const parent = node.parentElement;
+      const index = parent?.children.indexOf(node) ?? -1;
+      if (parent && index >= 0) parent.children.splice(index, 1);
+      node.parentElement = null;
+    }
     filters.append(...filterNodes);
     toolbarTitle.append(filters);
   }
   const actionArea = createElement("div", {className: "app-page-bar__actions", attributes: {"data-ui": "page-actions"}});
   appendActions(actionArea, actions);
+  actionArea.append(refreshButton);
   const platformButton = iconButton({
     label: platformButtonLabel(activePlatform),
     iconName: "layers-3",
@@ -394,6 +406,13 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     root.removeAttribute("data-navigation-collapsed");
     root.removeAttribute("data-navigation-open");
     root.replaceChildren(...originalNodes);
+    for (const {node, parent, index} of filterPlacements) {
+      if (!parent) continue;
+      node.parentElement?.children.splice(node.parentElement.children.indexOf(node), 1);
+      const insertionIndex = Math.max(0, Math.min(index, parent.children.length));
+      parent.children.splice(insertionIndex, 0, node);
+      node.parentElement = parent;
+    }
     if (mountedShell?.root === root) mountedShell = null;
   };
   mountedShell = {root, navigation, menuButton, collapseButton, backdrop, refreshButton, platformButton, shareButton, cleanup};

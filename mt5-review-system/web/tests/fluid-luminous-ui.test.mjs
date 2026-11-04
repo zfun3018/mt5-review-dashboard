@@ -68,5 +68,11 @@ test("shared components expose glass, menu, tag, state, and motion primitives", 
   assert.match(components, /@supports\s+not\s*\(backdrop-filter:\s*blur\(1px\)\)/);
   assert.match(components, /--glass-(?:base|clear|fluid)-fallback/);
   assert.match(components, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(components, /@supports\s+not[\s\S]*\.glass-surface[\s\S]*var\(--glass-base-fallback\)/);
+  assert.match(components, /\.glass-menu__option:focus-visible/);
+  assert.match(components, /\.glass-menu__option(?:\[aria-disabled="true"\]|:disabled)/);
+  assert.match(components, /\.glow-pill(?:\[data-selected="true"\]|\.is-selected)/);
+  assert.match(components, /\.glow-pill(?:\[aria-disabled="true"\]|\.is-disabled|:disabled)/);
+  assert.match(components, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.floating-context-card\s*\{\s*animation:\s*none/);
   assert.match(shell, /app-page-bar__actions/);
 });

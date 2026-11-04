@@ -309,9 +309,7 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
     assert.equal(tab.defaultPrevented, true);
     assert.equal(document.activeElement, focusable[0]);
 
-    collapseButton.hiddenFromLayout = true;
-    const refreshButton = navigation.querySelector('[aria-label="刷新数据"]');
-    refreshButton.focus();
+    focusable.at(-1).focus();
     const mobileTab = document.dispatch("keydown", {key: "Tab", shiftKey: false});
     assert.equal(mobileTab.defaultPrevented, true);
     assert.equal(document.activeElement, links[0]);
@@ -344,14 +342,27 @@ test("shell renders current route, platform, refresh/import action, and collapse
   };
   try {
     const {mountShell} = await import(`${moduleUrl("shared/js/shell.mjs")}?shared-controls-test`);
-    const cleanup = mountShell({activeRoute: "/orders/", title: "订单复盘"});
+    let refreshes = 0;
+    const filterParent = document.createElement("div");
+    const beforeFilter = document.createElement("span");
+    const filter = document.createElement("button");
+    const afterFilter = document.createElement("span");
+    filterParent.append(beforeFilter, filter, afterFilter);
+    root.append(filterParent);
+    const cleanup = mountShell({activeRoute: "/orders/", title: "订单复盘", toolbarFilters: [filter], onRefresh: async () => { refreshes += 1; }});
     assert.equal(root.querySelector('[aria-current="page"]').getAttribute("href"), "/orders/");
     const actions = root.querySelector('[data-ui="page-actions"]');
     assert.ok(actions.children.some((node) => node.classList.contains("app-platform-button")));
-    assert.ok(root.querySelector('[aria-label="刷新数据"]'));
+    const refresh = root.querySelector('[aria-label="刷新数据"]');
+    assert.ok(refresh);
+    assert.equal(refresh.parentElement.getAttribute("data-ui"), "page-actions");
+    refresh.dispatchEvent({type: "click"});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(refreshes, 1);
     assert.ok(root.querySelector('[aria-label="折叠导航"]'));
     assert.ok(actions);
     cleanup();
+    assert.deepEqual(filterParent.children, [beforeFilter, filter, afterFilter]);
   } finally {
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
