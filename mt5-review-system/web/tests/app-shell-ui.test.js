@@ -292,7 +292,7 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
     assert.equal(iconRefreshes, 1);
     assert.ok(root.querySelector('[data-ui="window-controls"]'));
     assert.ok(root.querySelector('[data-ui="navigation-section"]'));
-    assert.ok(root.querySelector('[data-ui="toolbar-context"]'));
+    assert.equal(root.querySelector('[data-ui="toolbar-context"]'), null);
 
     collapseButton.dispatchEvent({type: "click"});
     assert.equal(root.getAttribute("data-navigation-collapsed"), "true");
@@ -324,6 +324,34 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
     cleanup();
     assert.equal(root.children.length, 0);
     assert.equal(document.listeners.get("keydown").size, 0);
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.window = originalWindow;
+  }
+});
+
+test("shell renders current route, platform, refresh/import action, and collapse control", async () => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const document = new FakeDocument();
+  const root = document.createElement("div");
+  root.setAttribute("data-app-shell", "");
+  document.body.append(root);
+  globalThis.document = document;
+  globalThis.window = {
+    lucide: {createIcons() {}},
+    matchMedia: () => ({matches: false, addEventListener() {}, removeEventListener() {}}),
+  };
+  try {
+    const {mountShell} = await import(`${moduleUrl("shared/js/shell.mjs")}?shared-controls-test`);
+    const cleanup = mountShell({activeRoute: "/orders/", title: "订单复盘"});
+    assert.equal(root.querySelector('[aria-current="page"]').getAttribute("href"), "/orders/");
+    const actions = root.querySelector('[data-ui="page-actions"]');
+    assert.ok(actions.children.some((node) => node.classList.contains("app-platform-button")));
+    assert.ok(root.querySelector('[aria-label="刷新数据"]'));
+    assert.ok(root.querySelector('[aria-label="折叠导航"]'));
+    assert.ok(actions);
+    cleanup();
   } finally {
     globalThis.document = originalDocument;
     globalThis.window = originalWindow;
@@ -504,7 +532,7 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   const allStyles = [tokens, base, shell, components].join("\n");
 
   assert.match(tokens, /--sidebar-width:\s*224px/);
-  assert.match(tokens, /--sidebar-collapsed-width:\s*64px/);
+  assert.match(tokens, /--sidebar-collapsed-width:\s*56px/);
   assert.match(tokens, /--font-size-xs:\s*12px/);
   assert.match(tokens, /--font-size-display:\s*28px/);
   assert.match(tokens, /--font-size-body:\s*13px/);
@@ -525,7 +553,7 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.doesNotMatch(shellSource, /THEME_OPTIONS|THEME_STORAGE_KEY|app-theme-button/);
   assert.match(shell, /grid-template-columns:\s*var\(--sidebar-width\)\s+minmax\(0,\s*1fr\)/);
   assert.doesNotMatch(domesticWorkspace, /color-scheme:\s*light|#edf3f5|#fbfcfc/);
-  assert.match(domesticWorkspace, /\.app-page-bar,[\s\S]*?min-height:\s*72px/s);
+  assert.match(domesticWorkspace, /\.app-page-bar,[\s\S]*?min-height:\s*56px/s);
   assert.match(shell, /\.app-shell::before\s*\{[^}]*box-shadow:\s*20px 0 58px/s);
   assert.match(domesticWorkspace, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
   assert.doesNotMatch(domesticWorkspace, /\.app-navigation\s*\{[^}]*backdrop-filter:/s);
@@ -534,6 +562,10 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.match(dashboard, /\.panel\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
   assert.match(shell, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
   assert.match(shell, /\.app-page-bar\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-blur\)\)/s);
+  assert.match(shell, /\.app-page-bar\s*\{[^}]*min-height:\s*56px/s);
+  assert.match(shell, /\.app-page-bar__actions\s*>\s*\.app-icon-button\s*\{[^}]*width:\s*30px[^}]*height:\s*30px/s);
+  assert.match(shell, /\.app-shell\[data-navigation-collapsed="true"\]\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-collapsed-width\)/s);
+  assert.match(shell, /\.app-shell\[data-navigation-collapsed="true"\] \.app-navigation__link\s*\{[^}]*width:\s*36px[^}]*border-radius:\s*var\(--radius-circle\)/s);
   assert.match(shell, /@media\s*\(max-width:\s*720px\)/);
   assert.match(components, /\.app-icon-button\s*\{[^}]*width:\s*var\(--control-height\)/s);
   assert.doesNotMatch(components, /\.app-icon-button\s*\{\s*width:\s*44px/);
@@ -552,7 +584,7 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   );
   assert.match(
     shell,
-    /\.app-page-bar__actions\s*>\s*button,[\s\S]*?\.app-page-bar__menu\s*\{[^}]*min-height:\s*var\(--control-height\)/,
+    /\.app-page-bar__actions\s*>\s*\.app-icon-button,[\s\S]*?\.app-page-bar__menu\s*\{[^}]*min-height:\s*30px/,
   );
   assert.match(
     shell,

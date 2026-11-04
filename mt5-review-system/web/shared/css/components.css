@@ -1,3 +1,136 @@
+.glass-surface,
+.glass-surface--clear,
+.glass-surface--fluid,
+.modal-surface,
+.floating-context-card,
+.glass-menu {
+  position: relative;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--glass-base);
+  box-shadow: var(--shadow-raised);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+.glass-surface::before,
+.glass-surface--clear::before,
+.glass-surface--fluid::before,
+.modal-surface::before,
+.floating-context-card::before,
+.glass-menu::before {
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 1%, var(--glass-highlight) 18%, rgba(255, 255, 255, 0.06) 76%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.glass-surface--clear {
+  background: var(--glass-clear);
+}
+
+.glass-surface--fluid {
+  background: var(--glass-fluid);
+  box-shadow: var(--shadow-float);
+}
+
+.floating-context-card {
+  animation: fluid-float var(--motion-duration-expand) ease-out both;
+  padding: var(--space-4);
+}
+
+.glow-pill {
+  --pill-color: var(--color-accent);
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--pill-color) 58%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--pill-color) 16%, transparent);
+  color: var(--color-text);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--pill-color) 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+
+.glow-pill[data-selected="true"],
+.glow-pill.is-selected {
+  border-color: var(--pill-color);
+  background: color-mix(in srgb, var(--pill-color) 28%, transparent);
+}
+
+.glow-pill[aria-disabled="true"],
+.glow-pill.is-disabled,
+.glow-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.glow-pill__remove {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.glass-menu {
+  z-index: 60;
+  min-width: 160px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: var(--space-2);
+  background: var(--glass-clear);
+  box-shadow: var(--shadow-float);
+}
+
+.glass-menu__option {
+  display: flex;
+  width: 100%;
+  min-height: var(--control-height);
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.glass-menu__option:hover,
+.glass-menu__option[data-active="true"],
+.glass-menu__option[aria-selected="true"] {
+  border-color: rgba(var(--color-accent-rgb), 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.glass-menu__option:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring-shadow);
+}
+
+.glass-menu__option[aria-disabled="true"],
+.glass-menu__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.glass-menu__option[data-error="true"],
+.glass-menu__option.is-error {
+  color: var(--color-negative);
+}
+
 .app-icon-button,
 .button,
 .button-primary,
@@ -307,4 +440,28 @@ th {
     max-height: calc(100vh - 24px);
     padding: var(--space-4);
   }
+}
+
+@keyframes fluid-float {
+  from { opacity: 0; transform: translateY(var(--motion-distance-float)); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-surface,
+  .panel,
+  .filter-bar,
+  .floating-context-card { background: var(--glass-base-fallback); }
+
+  .glass-surface--clear,
+  .glass-menu,
+  .popover,
+  .menu { background: var(--glass-clear-fallback); }
+
+  .glass-surface--fluid,
+  .modal-surface { background: var(--glass-fluid-fallback); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-context-card { animation: none; transform: none; }
 }

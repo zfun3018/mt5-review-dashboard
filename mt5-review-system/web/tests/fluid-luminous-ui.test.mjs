@@ -47,3 +47,26 @@ test("base styles provide reduced-motion fallbacks", async () => {
   assert.match(base, /\.app-shell::before[\s\S]*?animation:\s*none\s*!important/);
   assert.match(base, /body::before[\s\S]*?animation:\s*none\s*!important/);
 });
+
+test("shared components expose glass, menu, tag, state, and motion primitives", async () => {
+  const components = await readFile(join(cssDir, "components.css"), "utf8");
+  const shell = await readFile(join(cssDir, "shell.css"), "utf8");
+  for (const className of [
+    ".glass-surface",
+    ".glass-surface--clear",
+    ".glass-surface--fluid",
+    ".glow-pill",
+    ".glass-menu",
+    ".glass-menu__option",
+    ".floating-context-card",
+    ".region-state",
+    ".modal-surface",
+  ]) {
+    assert.match(components, new RegExp(`${className.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}(?:\\s*,|\\s*\\{)`));
+  }
+  assert.match(components, /:focus-visible/);
+  assert.match(components, /@supports\s+not\s*\(backdrop-filter:\s*blur\(1px\)\)/);
+  assert.match(components, /--glass-(?:base|clear|fluid)-fallback/);
+  assert.match(components, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(shell, /app-page-bar__actions/);
+});

@@ -167,11 +167,12 @@ function handleNavigationKeys(event) {
   }
 }
 
-export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null, refreshLabel = null, refreshIcon = null, refreshErrorMessage = null, share = false, location = globalThis.location, navigate = (url) => { globalThis.location.href = url; }} = {}) {
+export function mountShell({activeRoute = "/dashboard/", title = "", actions = [], onRefresh = null, refreshLabel = null, refreshIcon = null, refreshErrorMessage = null, share = false, toolbarSearch = null, toolbarFilters = [], location = globalThis.location, navigate = (url) => { globalThis.location.href = url; }} = {}) {
   mountedShell?.cleanup();
   const root = document.querySelector("[data-app-shell]");
   if (!root) throw new Error("Missing [data-app-shell] mount point");
   const originalNodes = [...root.children];
+  const filterNodes = (Array.isArray(toolbarFilters) ? toolbarFilters : [toolbarFilters]).filter(Boolean);
   root.replaceChildren();
   root.classList.add("app-shell");
   let activePlatform = readPlatform(location);
@@ -264,7 +265,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   backdrop.setAttribute("tabindex", "-1");
 
   const main = createElement("div", {className: "app-shell__main"});
-  const pageBar = createElement("header", {className: "app-page-bar"});
+  const pageBar = createElement("header", {className: "app-page-bar", attributes: {"data-ui": "page-bar"}});
   const menuButton = iconButton({
     label: "打开导航",
     iconName: "menu",
@@ -277,15 +278,30 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     attributes: {"aria-label": title},
   });
   const toolbarLeading = createElement("div", {className: "app-page-bar__leading"});
-  const toolbarContext = createElement("span", {
-    className: "app-page-bar__context",
-    text: isDomesticFutures ? "国内期货" : `${platformLabel(activePlatform)} 复盘工作台`,
-    attributes: {"data-ui": "toolbar-context"},
-  });
-  toolbarLeading.append(menuButton, toolbarContext);
+  toolbarLeading.append(menuButton);
   const toolbarTitle = createElement("div", {className: "app-page-bar__title"});
   toolbarTitle.append(heading);
-  const actionArea = createElement("div", {className: "app-page-bar__actions"});
+  if (toolbarSearch) {
+    const search = createElement("input", {
+      className: "app-page-bar__search",
+      attributes: {type: "search", placeholder: toolbarSearch.placeholder || "搜索订单", "aria-label": toolbarSearch.label || "搜索订单", "data-shell-search": "true"},
+    });
+    search.value = toolbarSearch.value || "";
+    if (toolbarSearch.onInput) search.addEventListener("input", toolbarSearch.onInput);
+    if (toolbarSearch.onSubmit) search.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") toolbarSearch.onSubmit(search.value);
+    });
+    toolbarTitle.append(search);
+  }
+  if (filterNodes.length) {
+    const filters = createElement("div", {
+      className: "app-page-bar__filters",
+      attributes: {"aria-label": "页面筛选"},
+    });
+    filters.append(...filterNodes);
+    toolbarTitle.append(filters);
+  }
+  const actionArea = createElement("div", {className: "app-page-bar__actions", attributes: {"data-ui": "page-actions"}});
   appendActions(actionArea, actions);
   const platformButton = iconButton({
     label: platformButtonLabel(activePlatform),
@@ -302,7 +318,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   }
   pageBar.append(toolbarLeading, toolbarTitle, actionArea);
   const page = createElement("main", {className: "app-page", attributes: {id: "mainContent"}});
-  page.append(...originalNodes);
+  page.append(...originalNodes.filter((node) => !filterNodes.includes(node)));
   main.append(pageBar, page);
   root.append(navigation, backdrop, main);
 
