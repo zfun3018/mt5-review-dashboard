@@ -30,9 +30,20 @@ test("shared Fluid Luminous tokens expose the visual contract", async () => {
   for (const token of requiredTokens) {
     assert.match(tokens, new RegExp(`${token.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*:\\s*[^;]+;`), `missing concrete token ${token}`);
   }
+
+  assert.match(tokens, /--glass-base-fallback:\s*#171d26;/);
+  assert.match(tokens, /--glass-clear-fallback:\s*#202832;/);
+  assert.match(tokens, /--glass-fluid-fallback:\s*#26333f;/);
+  assert.match(tokens, /--motion-duration-expand:\s*220ms;/);
+  assert.match(tokens, /--motion-duration-collapse:\s*160ms;/);
+  assert.match(tokens, /--motion-distance-float:\s*4px;/);
 });
 
 test("base styles provide reduced-motion fallbacks", async () => {
   const base = await readFile(join(cssDir, "base.css"), "utf8");
   assert.match(base, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(base, /\[data-fluid-motion\][\s\S]*?animation:\s*none\s*!important[\s\S]*?transform:\s*none\s*!important/);
+  assert.match(base, /\.floating-context-card[\s\S]*?animation:\s*none\s*!important/);
+  assert.match(base, /\.app-shell::before[\s\S]*?animation:\s*none\s*!important/);
+  assert.match(base, /body::before[\s\S]*?animation:\s*none\s*!important/);
 });
