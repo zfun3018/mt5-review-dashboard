@@ -101,7 +101,7 @@ class CampaignStorageTest(TemporaryStorageCase):
                 table: conn.execute(f"SELECT COUNT(*) AS value FROM {table}").fetchone()["value"]
                 for table in ("deal_events", "positions", "trade_campaigns", "campaign_positions")
             }
-        self.assertEqual(version, "4")
+        self.assertEqual(version, "5")
         self.assertEqual(counts["positions"], 2)
         self.assertEqual(counts["campaign_positions"], 2)
 

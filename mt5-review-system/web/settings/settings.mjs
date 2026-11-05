@@ -124,7 +124,7 @@ export function createSettingsController({
     const platform = readPlatform(location);
     const [classifications, customFields, analysisSettings, status, backups, accounts] = await Promise.all([
       api.requestJson("/api/classification-options"),
-      api.requestJson("/api/custom-fields"),
+      api.requestJson("/api/custom-fields?platform=all"),
       api.requestJson("/api/analysis-settings"),
       api.requestJson("/api/status"),
       api.requestJson("/api/backups"),
@@ -152,7 +152,7 @@ export function createSettingsController({
   }
 
   async function refreshCustomFields() {
-    const payload = await api.requestJson("/api/custom-fields");
+    const payload = await api.requestJson("/api/custom-fields?platform=all");
     state.customFields = payload?.custom_fields || [];
     customFieldModule.render();
   }
@@ -744,6 +744,7 @@ export function createSettingsController({
     updateCustomField: customFieldModule.update,
     deleteCustomField: customFieldModule.remove,
     restoreCustomField: customFieldModule.restore,
+    purgeCustomField: customFieldModule.purge,
     switchTab,
     dispose,
     getState: () => state,

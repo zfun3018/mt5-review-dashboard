@@ -251,9 +251,10 @@ test("a stale list response cannot overwrite the latest list selection", async (
 });
 
 test("orders workspace uses a scroll status instead of page navigation controls", () => {
-  assert.match(ordersHtml, /orderLoadStatus/);
+  assert.match(ordersHtml, /class="order-card-list"/);
+  assert.doesNotMatch(ordersHtml, /orderLoadStatus|orderTotal/);
   assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
-  assert.match(ordersStyle, /\.trades-panel \.table-wrap[\s\S]*overflow-y:\s*auto/);
+  assert.match(ordersStyle, /\.order-card-list\s*\{[\s\S]*overflow-y:\s*auto/);
 });
 
 test("order list omits the redundant table header", async () => {
@@ -366,8 +367,8 @@ test("order list stays in the compact one-field format without changing the sele
   const head = view.getElementById("orderHead").innerHTML;
   const rows = view.getElementById("orderRows").innerHTML;
   assert.doesNotMatch(head, /<th>订单<\/th>/);
-  assert.match(rows, /campaign-day-row/);
-  assert.match(rows, /campaign-list-index/);
+  assert.match(rows, /campaign-day-card/);
+  assert.doesNotMatch(rows, /campaign-list-index|data-day-sequence/);
   assert.match(rows, /campaign-list-contract/);
   assert.match(rows, /campaign-list-opened/);
   assert.doesNotMatch(rows, /campaign-list-opened[^<]*\d{1,2}月\d{1,2}日/);
@@ -379,7 +380,7 @@ test("order list stays in the compact one-field format without changing the sele
   assert.doesNotMatch(ordersHtml, /<p class="eyebrow">ORDERS<\/p>|<h2>订单复盘<\/h2>/);
   assert.doesNotMatch(ordersHtml, /toggleOrderList/);
   assert.doesNotMatch(ordersSource, /toggleOrderList|orderListCollapsed|is-order-list-collapsed/);
-  assert.match(ordersStyle, /\.orders-layout\s*\{[^}]*grid-template-columns:\s*minmax\(190px, 220px\)/s);
+  assert.match(ordersStyle, /\.orders-layout\s*\{[^}]*grid-template-columns:\s*minmax\(360px, 400px\)/s);
 });
 
 test("domestic futures order groups use the exchange trade date for night orders", () => {
@@ -593,8 +594,8 @@ test("?trade= resolves the owning campaign", async () => {
   await controller.loadList();
 
   const html = view.getElementById("orderRows").innerHTML;
-  const activeRow = html.match(/<tr class="([^"]*)" data-campaign-id="C-1"/);
-  const inactiveRow = html.match(/<tr class="([^"]*)" data-campaign-id="C-2"/);
+  const activeRow = html.match(/<div class="([^"]*campaign-card-order[^"]*)" data-campaign-id="C-1"/);
+  const inactiveRow = html.match(/<div class="([^"]*campaign-card-order[^"]*)" data-campaign-id="C-2"/);
   assert.match(activeRow[1], /active/);
   assert.doesNotMatch(inactiveRow[1], /active/);
 });
@@ -628,7 +629,7 @@ test("order review markup exposes shared glass and luminous visual hooks", async
   const selected = campaign("C-VISUAL", {
     trade_type_tags: ["scene_follow"],
     strategy_tags: ["strategy_breakout"],
-    mistake_tags: ["late_exit"],
+    custom_fields: { "11": ["late_exit"] },
   });
   const { view, controller } = controllerWith(
     { search: "" },
@@ -637,8 +638,8 @@ test("order review markup exposes shared glass and luminous visual hooks", async
         { id: "scene_follow", dimension: "trade_type", label: "跟随", color: "#48c9aa", active: true },
         { id: "strategy_breakout", dimension: "strategy", label: "突破", color: "#e6ae65", active: true },
       ] },
-      "/api/custom-fields?active_only=1": { custom_fields: [
-        { id: "mistakes", name: "犯错", field_type: "multi", options: [{ id: "late_exit", label: "晚平", color: "#ef8290" }] },
+      "/api/custom-fields?active_only=1&platform=mt5": { custom_fields: [
+        { id: 11, name: "犯错", field_type: "multi", platforms: ["mt5"], options: [{ id: "late_exit", label: "晚平", color: "#ef8290" }] },
       ] },
       "/api/analysis-settings": { scratch_threshold_r: 0.15 },
     },
@@ -668,7 +669,7 @@ test("?campaign= keeps the requested campaign selected", async () => {
 
   assert.equal(controller.getState().campaign, "C-2");
   const html = view.getElementById("orderRows").innerHTML;
-  assert.match(html.match(/<tr class="([^"]*)" data-campaign-id="C-2"/)[1], /active/);
+   assert.match(html.match(/<div class="([^"]*campaign-card-order[^"]*)" data-campaign-id="C-2"/)[1], /active/);
 });
 
 test("refreshing the list onto another campaign also loads that campaign detail", async () => {
@@ -695,7 +696,7 @@ test("refreshing the list onto another campaign also loads that campaign detail"
   await controller.load();
   await controller.loadList();
 
-  assert.match(view.getElementById("orderRows").innerHTML, /class="campaign-row active[^"]*" data-campaign-id="C-2"/);
+  assert.match(view.getElementById("orderRows").innerHTML, /class="campaign-row campaign-card-order active" data-campaign-id="C-2"/);
   assert.match(view.getElementById("orderDetail").innerHTML, /第二笔/);
   assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /正在加载主订单详情/);
 });
@@ -840,7 +841,7 @@ test("combined campaign summary renders and saves campaign classification", asyn
 
 test("order table keeps scene and strategy out of the main-order index", () => {
   const renderSource = ordersSource.slice(ordersSource.indexOf("function renderCampaignPositionRow"), ordersSource.indexOf("function bindRowInteractions"));
-  assert.match(renderSource, /"orderHead",\s*""/);
+  assert.match(renderSource, /setHtml\("orderRows", cards/);
   assert.doesNotMatch(renderSource, /<th>交易场景<\/th>|<th>交易策略<\/th>/);
 });
 
@@ -862,16 +863,12 @@ test("main-order rows group by Beijing date and restart their sequence per day",
   globalThis.RMultipleUI = previousRMultiple;
 
   let html = view.getElementById("orderRows").innerHTML;
-  assert.equal((html.match(/campaign-day-row/g) || []).length, 2);
+  assert.equal((html.match(/campaign-day-card/g) || []).length, 2);
   assert.match(html, /10月8日/);
   assert.match(html, /aria-label="星期四"/);
   assert.match(html, /10月7日/);
   assert.match(html, /aria-label="星期三"/);
-  assert.match(html, /aria-expanded="true"/);
-
-  assert.match(html, /data-day-sequence="1"/);
-  assert.match(html, /data-day-sequence="2"/);
-  assert.equal((html.match(/data-day-sequence="1"/g) || []).length, 2);
+  assert.doesNotMatch(html, /aria-expanded|data-day-sequence|campaign-day-toggle/);
   assert.match(html, /campaign-list-pnl profit-text/);
   assert.doesNotMatch(html, /campaign-r-cell|<th>R 值/);
   assert.match(html, /2笔/);
@@ -892,14 +889,14 @@ test("campaign rows are numbered from the earliest Beijing opening time", async 
 
   const html = view.getElementById("orderRows").innerHTML;
   assert.ok(html.indexOf('data-campaign-id="C-EARLY"') < html.indexOf('data-campaign-id="C-LATE"'));
-  assert.match(html, /data-campaign-id="C-EARLY"[^>]*data-day-sequence="1"/);
-  assert.match(html, /data-campaign-id="C-LATE"[^>]*data-day-sequence="2"/);
+  assert.match(html, /data-campaign-id="C-EARLY"/);
+  assert.match(html, /data-campaign-id="C-LATE"/);
 });
 
 test("selected order rows use a stronger background than scratch rows", () => {
-  assert.match(ordersStyle, /html\[data-platform="mt5"\] \.orders-table tbody tr\.active,\s*html\[data-platform="mt5"\] \.campaign-detail-row\.active\s*\{[\s\S]*background:\s*#dff5f1 !important;[\s\S]*#069d91/);
-  assert.match(ordersStyle, /\.campaign-row\.scratch\s*\{[\s\S]*background:\s*rgba\(130, 148, 168, 0\.12\) !important;/);
-  assert.match(ordersStyle, /html\[data-platform="mt5"\] \.campaign-row\.scratch\.active\s*\{[\s\S]*background:\s*#fff0d9 !important;[\s\S]*#f49b22/);
+  assert.match(ordersStyle, /\.campaign-card-order\.active\s*\{[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(ordersStyle, /\.campaign-card-order\.active \.campaign-list-order\s*\{[\s\S]*border-radius:\s*var\(--radius-pill\)[\s\S]*box-shadow:/);
+  assert.match(ordersStyle, /\.campaign-card-order\.scratch\s*\{[\s\S]*background:/);
 });
 
 test("order actions use accessible Lucide icon buttons", () => {
@@ -919,16 +916,16 @@ test("all primary review controls share one framed row below the screenshot", ()
   const headingStart = orderDetailSource.indexOf('<div class="order-detail-heading">', detailHeaderStart);
   const actionBarStart = orderDetailSource.indexOf('<div class="detail-order-actions"', detailHeaderStart);
   const featuredAction = orderDetailSource.indexOf('<span class="detail-action-group" aria-label="订单状态">');
-  const mistakeAreaStart = orderDetailSource.indexOf('renderTagPicker("mistake_tags"');
+  const customFieldAreaStart = orderDetailSource.indexOf('customFieldGroups.map');
   const executionStart = orderDetailSource.indexOf('<section class="execution-section');
   const detailBody = orderDetailSource.slice(orderDetailSource.indexOf('<div class="detail-hero-grid">'), executionStart);
 
   assert.ok(headingStart < actionBarStart);
-  assert.ok(reviewFieldsStart < mistakeAreaStart);
-  assert.ok(executionStart > mistakeAreaStart);
+  assert.ok(reviewFieldsStart < customFieldAreaStart);
+  assert.ok(executionStart > customFieldAreaStart);
   assert.match(detailBody, /renderScreenshotEditor\(campaign\)[\s\S]*review-editor-panel/);
   assert.match(ordersStyle, /html\[data-platform\] \.order-detail-title\s*\{[^}]*display:\s*grid[^}]*align-items:\s*center/s);
-  assert.match(detailBody, /<section class="detail-review-meta[^"]*"[^>]*>[\s\S]*campaignInitialStop[\s\S]*renderTagPicker\("trade_type_tags"[\s\S]*renderTagPicker\("strategy_tags"[\s\S]*renderTagPicker\("mistake_tags"[\s\S]*<\/section>/);
+  assert.match(detailBody, /<section class="detail-review-meta[^"]*"[^>]*>[\s\S]*campaignInitialStop[\s\S]*renderTagPicker\("trade_type_tags"[\s\S]*renderTagPicker\("strategy_tags"[\s\S]*customFieldGroups\.map[\s\S]*<\/section>/);
   assert.doesNotMatch(detailBody, /class="order-info-strip"/);
   assert.match(detailBody, /id="saveState"/);
   assert.doesNotMatch(detailHeader, /主订单/);
@@ -956,11 +953,11 @@ test("initial stop and single classification controls use content-sized compact 
   assert.doesNotMatch(orderDetailSource, /<div class="order-info-save"><span id="saveState"/);
 });
 
-test("mistake picker uses a labeled plus control inside the primary review row", () => {
-  assert.match(orderDetailSource, /renderTagPicker\("mistake_tags", "犯错标签"/);
-  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-meta \.campaign-tag-field\[data-tag-picker="mistake_tags"\]\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*row/s);
-  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-meta \.campaign-tag-field\[data-tag-picker="mistake_tags"\] \.choice-cell\.detail-choice\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s);
-  assert.match(orderDetailSource, /group === "mistake_tags"/);
+test("custom field pickers use a shared labeled multi-select control", () => {
+  assert.match(orderDetailSource, /customFieldGroup\(field\.id\)/);
+  assert.match(orderDetailSource, /renderTagPicker\(group, field\.name, options, selected\)/);
+  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-meta \.campaign-tag-field\[data-tag-picker\^="custom_field_"\]\s*\{/);
+  assert.match(orderDetailSource, /custom_fields/);
   assert.match(ordersStyle, /\.detail-review-meta\s*\{[^}]*border:\s*1px solid var\(--color-border\)[^}]*border-radius:\s*var\(--radius-panel\)/s);
 });
 
@@ -984,26 +981,25 @@ test("daily summaries show one-line dates with accessible weekday icons and plai
   assert.match(html, /campaign-day-pnl[^>]*profit-text[^>]*>12\.50<\/strong>/);
   assert.doesNotMatch(html, /campaign-day-pnl-pill/);
   assert.match(ordersStyle, /\.campaign-day-date\s*\{[^}]*white-space:\s*nowrap/s);
-  assert.match(ordersStyle, /\.campaign-day-row td\s*\{[^}]*background:\s*#26323e !important/s);
-  assert.match(ordersStyle, /html\[data-platform\] \.campaign-day-date\s*\{[^}]*color:\s*#f4f6f8 !important/s);
+  assert.match(ordersStyle, /\.campaign-day-card\s*\{[\s\S]*background:\s*var\(--glass-clear\)/s);
+  assert.match(ordersStyle, /\.campaign-day-date\s*\{[^}]*white-space:\s*nowrap/s);
 });
 
 test("orders workspace keeps shared light contrast and a full-width calendar grid", () => {
   assert.match(ordersStyle, /html\[data-platform="mt5"\][\s\S]*\.choice-value-pill/);
   assert.match(ordersStyle, /html\[data-platform="domestic_futures"\][\s\S]*\.choice-value-pill/);
-  assert.match(ordersStyle, /html\[data-platform="mt5"\][\s\S]*\.campaign-day-row td/);
-  assert.match(ordersStyle, /html\[data-platform="domestic_futures"\][\s\S]*\.campaign-day-row td/);
+  assert.match(ordersStyle, /\.campaign-day-card\s*\{/);
   assert.match(ordersStyle, /\.checkin-calendar\s*\{[^}]*display:\s*block/);
   assert.match(ordersStyle, /\.checkin-calendar-weekdays span\s*\{[^}]*white-space:\s*nowrap/);
 });
 
 test("order list aligns amounts and keeps the three columns balanced", () => {
-  assert.match(ordersStyle, /\.orders-table th:nth-child\(2\),\s*\.orders-table td:nth-child\(2\)\s*\{[\s\S]*?width:\s*4\.3rem[\s\S]*?text-align:\s*center/s);
-  assert.match(ordersStyle, /\.orders-table th:nth-child\(3\),\s*\.orders-table td:nth-child\(3\)\s*\{[\s\S]*?width:\s*6rem[\s\S]*?text-align:\s*right/s);
+  assert.match(ordersStyle, /\.campaign-list-order\s*\{[\s\S]*display:\s*flex/);
+  assert.match(ordersStyle, /\.campaign-list-opened\s*\{[\s\S]*flex:\s*0 0 3\.05rem/);
   assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s);
   assert.doesNotMatch(ordersStyle, /campaign-day-pnl-pill/);
-  assert.match(ordersStyle, /\.campaign-list-pnl\s*\{[^}]*text-align:\s*right[^}]*justify-self:\s*end|\.campaign-list-pnl\s*\{[^}]*justify-self:\s*end[^}]*text-align:\s*right/s);
-  assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[^}]*text-align:\s*right[^}]*justify-self:\s*end|\.campaign-day-pnl\s*\{[^}]*justify-self:\s*end[^}]*text-align:\s*right/s);
+  assert.match(ordersStyle, /\.campaign-list-pnl\s*\{[\s\S]*margin-left:\s*auto/);
+  assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[\s\S]*justify-self:\s*end/);
 });
 
 test("order workspace uses tighter module gaps and stronger group-row contrast", () => {
@@ -1011,7 +1007,7 @@ test("order workspace uses tighter module gaps and stronger group-row contrast",
   assert.match(finalLayer, /\.orders-layout\s*\{[^}]*gap:\s*10px/s);
   assert.match(finalLayer, /\.detail-body\.order-detail-workspace\s*\{[^}]*gap:\s*8px[^}]*padding:\s*10px/s);
   assert.match(finalLayer, /\.detail-hero-grid,\s*\.detail-review-column\s*\{[^}]*gap:\s*8px/s);
-  assert.match(finalLayer, /\.campaign-day-row td\s*\{[^}]*background:/s);
+  assert.match(finalLayer, /\.campaign-day-card\s*\{[\s\S]*background:/s);
 });
 
 test("scratch campaigns carry the legacy state styling and a compact PnL emphasis", async () => {
@@ -1029,7 +1025,7 @@ test("scratch campaigns carry the legacy state styling and a compact PnL emphasi
 });
 
 test("the main-order list keeps the aligned panel height and scrolls continuously", () => {
-  assert.match(ordersStyle, /\.trades-panel \.table-wrap[\s\S]*overflow-y:\s*auto/);
+  assert.match(ordersStyle, /\.order-card-list\s*\{[\s\S]*overflow-y:\s*auto/);
   assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
   assert.match(ordersSource, /applyListPanelHeight/);
   assert.match(ordersSource, /loadMore/);

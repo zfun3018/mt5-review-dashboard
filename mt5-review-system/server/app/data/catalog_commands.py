@@ -18,6 +18,19 @@ from ..platforms import normalize_platform
 
 
 CLASSIFICATION_DIMENSIONS = {"trade_type", "strategy"}
+SUPPORTED_PLATFORMS = ("mt5", "domestic_futures")
+
+
+def _normalize_platforms(value: Any) -> list[str]:
+    if value is None:
+        return list(SUPPORTED_PLATFORMS)
+    raw = value if isinstance(value, list) else []
+    result = []
+    for item in raw:
+        platform = normalize_platform(str(item))
+        if platform not in result:
+            result.append(platform)
+    return result
 
 
 def _serialize_classification_option(row: sqlite3.Row) -> dict[str, Any]:
@@ -242,6 +255,11 @@ def _serialize_custom_field(
     field["field_type"] = field.get("field_type") or "text"
     field["options"] = options_by_field.get(int(field["id"]), [])
     field["active"] = bool(field.get("active", 1))
+    try:
+        platforms = json.loads(field.get("platforms") or "[]")
+    except json.JSONDecodeError:
+        platforms = []
+    field["platforms"] = _normalize_platforms(platforms)
     return field
 
 
@@ -254,7 +272,7 @@ def _custom_options_for_field_ids(
     placeholders = ",".join("?" for _ in field_ids)
     rows = conn.execute(
         f"""
-        SELECT id, field_id, label, color, sort_order
+        SELECT id, field_id, label, color, sort_order, active
         FROM custom_field_options
         WHERE field_id IN ({placeholders})
         ORDER BY sort_order, id
@@ -263,7 +281,9 @@ def _custom_options_for_field_ids(
     ).fetchall()
     options: dict[int, list[dict[str, Any]]] = {int(field_id): [] for field_id in field_ids}
     for row in rows:
-        options.setdefault(int(row["field_id"]), []).append(dict(row))
+            option = dict(row)
+            option["active"] = bool(option.get("active", 1))
+            options.setdefault(int(row["field_id"]), []).append(option)
     return options
 
 
@@ -274,7 +294,10 @@ def _replace_custom_options(
     field_type: str,
 ) -> None:
     if field_type == "text":
-        conn.execute("DELETE FROM custom_field_options WHERE field_id = ?", (field_id,))
+        conn.execute(
+            "UPDATE custom_field_options SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE field_id = ?",
+            (field_id,),
+        )
         return
     options = raw_options if isinstance(raw_options, list) else []
     kept_ids = []
@@ -295,13 +318,29 @@ def _replace_custom_options(
                 conn.execute(
                     """
                     UPDATE custom_field_options
-                    SET label = ?, color = ?, sort_order = ?, updated_at = CURRENT_TIMESTAMP
+                    SET label = ?, color = ?, sort_order = ?, active = 1, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ? AND field_id = ?
                     """,
                     (label, color, index, int(option_id), field_id),
                 )
                 kept_ids.append(int(option_id))
                 continue
+        existing = conn.execute(
+            "SELECT id FROM custom_field_options WHERE field_id = ? AND label = ? ORDER BY active DESC, id LIMIT 1",
+            (field_id, label),
+        ).fetchone()
+        if existing:
+            existing_id = int(existing["id"])
+            conn.execute(
+                """
+                UPDATE custom_field_options
+                SET color = ?, sort_order = ?, active = 1, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND field_id = ?
+                """,
+                (color, index, existing_id, field_id),
+            )
+            kept_ids.append(existing_id)
+            continue
         cursor = conn.execute(
             """
             INSERT INTO custom_field_options (field_id, label, color, sort_order)
@@ -313,19 +352,43 @@ def _replace_custom_options(
     if kept_ids:
         placeholders = ",".join("?" for _ in kept_ids)
         conn.execute(
-            f"DELETE FROM custom_field_options WHERE field_id = ? AND id NOT IN ({placeholders})",
+            f"UPDATE custom_field_options SET active = 0, updated_at = CURRENT_TIMESTAMP "
+            f"WHERE field_id = ? AND id NOT IN ({placeholders})",
             [field_id, *kept_ids],
         )
     else:
-        conn.execute("DELETE FROM custom_field_options WHERE field_id = ?", (field_id,))
+        conn.execute(
+            "UPDATE custom_field_options SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE field_id = ?",
+            (field_id,),
+        )
 
 
-def _option_ids_for_field(conn: sqlite3.Connection, field_id: int) -> set[str]:
+def _stored_option_ids(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            parsed = value
+    else:
+        parsed = value
+    values = parsed if isinstance(parsed, list) else [parsed]
+    return {str(item).strip() for item in values if str(item).strip()}
+
+
+def _option_ids_for_field(
+    conn: sqlite3.Connection,
+    field_id: int,
+    existing_value: Any = None,
+) -> set[str]:
     rows = conn.execute(
-        "SELECT id FROM custom_field_options WHERE field_id = ?",
+        "SELECT id FROM custom_field_options WHERE field_id = ? AND active = 1",
         (field_id,),
     ).fetchall()
-    return {str(row["id"]) for row in rows}
+    allowed = {str(row["id"]) for row in rows}
+    allowed.update(_stored_option_ids(existing_value))
+    return allowed
 
 
 def _normalize_field_type(value: Any) -> str:
@@ -367,19 +430,20 @@ def create_custom_field(payload: dict[str, Any]) -> dict[str, Any]:
     name = str(payload.get("name", "")).strip()
     if not name:
         raise ValueError("Field name is required")
-    field_type = _normalize_field_type(payload.get("field_type", "text"))
+    field_type = _normalize_field_type(payload.get("field_type", "multi"))
+    platforms = _normalize_platforms(payload.get("platforms"))
     with db() as conn:
         max_order = conn.execute(
             "SELECT COALESCE(MAX(sort_order), 0) AS value FROM custom_fields"
         ).fetchone()["value"]
         cursor = conn.execute(
-            "INSERT INTO custom_fields (name, field_type, sort_order) VALUES (?, ?, ?)",
-            (name, field_type, int(max_order) + 1),
+            "INSERT INTO custom_fields (name, field_type, sort_order, platforms) VALUES (?, ?, ?, ?)",
+            (name, field_type, int(max_order) + 1, json.dumps(platforms, ensure_ascii=False)),
         )
         field_id = cursor.lastrowid
         _replace_custom_options(conn, int(field_id), payload.get("options", []), field_type)
         row = conn.execute(
-            "SELECT id, name, field_type, sort_order FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active, platforms FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         options = _custom_options_for_field_ids(conn, [int(field_id)])
@@ -392,7 +456,7 @@ def update_custom_field(field_id: int, payload: dict[str, Any]) -> dict[str, Any
         raise ValueError("Field name is required")
     with db() as conn:
         current = conn.execute(
-            "SELECT id, name, field_type, sort_order, active FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active, platforms FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         if not current:
@@ -400,6 +464,7 @@ def update_custom_field(field_id: int, payload: dict[str, Any]) -> dict[str, Any
         current_options = _custom_options_for_field_ids(conn, [field_id]).get(field_id, [])
         field_type = _normalize_field_type(payload.get("field_type", current["field_type"] or "text"))
         options = payload["options"] if "options" in payload else current_options
+        platforms = _normalize_platforms(payload.get("platforms", json.loads(current["platforms"] or "[]")))
         if "active" in payload:
             active_value = 1 if bool(payload.get("active")) else 0
         else:
@@ -407,14 +472,14 @@ def update_custom_field(field_id: int, payload: dict[str, Any]) -> dict[str, Any
         conn.execute(
             """
             UPDATE custom_fields
-            SET name = ?, field_type = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+            SET name = ?, field_type = ?, active = ?, platforms = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (name, field_type, active_value, field_id),
+            (name, field_type, active_value, json.dumps(platforms, ensure_ascii=False), field_id),
         )
         _replace_custom_options(conn, field_id, options, field_type)
         row = conn.execute(
-            "SELECT id, name, field_type, sort_order, active FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active, platforms FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         updated_options = _custom_options_for_field_ids(conn, [field_id])
@@ -436,15 +501,81 @@ def delete_custom_field(field_id: int) -> None:
 def purge_custom_field(field_id: int) -> None:
     """Permanently remove a custom field and its values/options."""
     with db() as conn:
-        cursor = conn.execute("DELETE FROM custom_fields WHERE id = ?", (field_id,))
-        if cursor.rowcount == 0:
+        current = conn.execute(
+            "SELECT active FROM custom_fields WHERE id = ?",
+            (field_id,),
+        ).fetchone()
+        if not current:
             raise KeyError(field_id)
+        if current["active"]:
+            raise ValueError("停用字段后才能永久删除")
+        conn.execute("DELETE FROM custom_fields WHERE id = ?", (field_id,))
+
+
+def _remove_stored_option_id(raw_value: Any, field_type: str, option_id: int) -> str:
+    target = str(option_id)
+    raw = "" if raw_value is None else str(raw_value)
+    if field_type == "multi":
+        try:
+            parsed = json.loads(raw or "[]")
+        except json.JSONDecodeError:
+            return raw
+        if not isinstance(parsed, list):
+            return raw
+        filtered = [item for item in parsed if str(item) != target]
+        if len(filtered) == len(parsed):
+            return raw
+        return json.dumps(filtered, ensure_ascii=False)
+    if field_type == "single" and raw.strip() == target:
+        return ""
+    return raw
+
+
+def purge_custom_field_option(field_id: int, option_id: int) -> None:
+    """Permanently remove an inactive option and erase it from saved values."""
+    with db() as conn:
+        option = conn.execute(
+            "SELECT custom_field_options.id, custom_field_options.field_id, "
+            "custom_fields.field_type, custom_field_options.active "
+            "FROM custom_field_options "
+            "JOIN custom_fields ON custom_fields.id = custom_field_options.field_id "
+            "WHERE custom_field_options.id = ? AND custom_field_options.field_id = ?",
+            (option_id, field_id),
+        ).fetchone()
+        if not option:
+            raise KeyError(option_id)
+        if option["active"]:
+            raise ValueError("停用选项后才能永久删除")
+
+        for table, owner_column in (
+            ("trade_custom_values", "trade_id"),
+            ("campaign_custom_values", "campaign_id"),
+        ):
+            rows = conn.execute(
+                f"SELECT {owner_column}, value FROM {table} WHERE field_id = ?",
+                (field_id,),
+            ).fetchall()
+            for row in rows:
+                updated_value = _remove_stored_option_id(
+                    row["value"], option["field_type"], option_id
+                )
+                if updated_value != row["value"]:
+                    conn.execute(
+                        f"UPDATE {table} SET value = ?, updated_at = CURRENT_TIMESTAMP "
+                        f"WHERE {owner_column} = ? AND field_id = ?",
+                        (updated_value, row[owner_column], field_id),
+                    )
+
+        conn.execute(
+            "DELETE FROM custom_field_options WHERE id = ? AND field_id = ?",
+            (option_id, field_id),
+        )
 
 
 def restore_custom_field(field_id: int) -> dict[str, Any]:
     with db() as conn:
         current = conn.execute(
-            "SELECT id, name, field_type, sort_order FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active, platforms FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         if not current:
@@ -454,7 +585,7 @@ def restore_custom_field(field_id: int) -> dict[str, Any]:
             (field_id,),
         )
         row = conn.execute(
-            "SELECT id, name, field_type, sort_order, active FROM custom_fields WHERE id = ?",
+            "SELECT id, name, field_type, sort_order, active, platforms FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
         options = _custom_options_for_field_ids(conn, [field_id])
@@ -478,12 +609,42 @@ def update_trade_custom_value(
         if not trade:
             raise KeyError(trade_id)
         field = conn.execute(
-            "SELECT id, field_type FROM custom_fields WHERE id = ?",
+            "SELECT id, field_type, active, platforms FROM custom_fields WHERE id = ?",
             (field_id,),
         ).fetchone()
-        if not field:
+        if not field or not field["active"]:
             raise KeyError(field_id)
-        allowed = _option_ids_for_field(conn, field_id)
+        try:
+            platforms = json.loads(field["platforms"] or "[]")
+        except json.JSONDecodeError:
+            platforms = []
+        if normalized_platform not in platforms:
+            raise ValueError("Custom field is not enabled for this platform")
+        existing_value = conn.execute(
+            "SELECT value FROM trade_custom_values WHERE trade_id = ? AND field_id = ?",
+            (trade_id, field_id),
+        ).fetchone()
+        allowed = _option_ids_for_field(
+            conn,
+            field_id,
+            existing_value["value"] if existing_value else None,
+        )
+        if field["field_type"] == "multi" and not allowed and payload.get("value"):
+            raw_values = payload.get("value")
+            selected = raw_values if isinstance(raw_values, list) else [raw_values]
+            for item in selected:
+                label = str(item or "").strip()
+                if not label:
+                    continue
+                cursor = conn.execute(
+                    "INSERT INTO custom_field_options (field_id, label, color, sort_order) VALUES (?, ?, '#2bd4ff', ?)",
+                    (field_id, label, len(allowed) + 1),
+                )
+                allowed.add(str(cursor.lastrowid))
+                if isinstance(raw_values, list):
+                    payload = {**payload, "value": [str(cursor.lastrowid) if str(value) == label else value for value in raw_values]}
+                else:
+                    payload = {**payload, "value": str(cursor.lastrowid)}
         value, stored = _normalize_custom_value(payload.get("value", ""), field["field_type"], allowed)
         conn.execute(
             """

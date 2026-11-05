@@ -55,7 +55,8 @@ class CustomFieldsTest(unittest.TestCase):
         field = storage.create_custom_field({"name": "错误类型"})
 
         self.assertEqual(field["name"], "错误类型")
-        self.assertEqual(storage.list_custom_fields()[0]["name"], "错误类型")
+        listed = next(item for item in storage.list_custom_fields() if item["id"] == field["id"])
+        self.assertEqual(listed["name"], "错误类型")
 
         updated = storage.update_custom_field(field["id"], {"name": "执行问题"})
 
@@ -63,28 +64,152 @@ class CustomFieldsTest(unittest.TestCase):
 
         storage.delete_custom_field(field["id"])
 
-        self.assertEqual(storage.list_custom_fields(active_only=True), [])
-        self.assertFalse(storage.list_custom_fields()[0]["active"])
+        self.assertFalse(any(item["id"] == field["id"] for item in storage.list_custom_fields(active_only=True)))
+        deleted = next(item for item in storage.list_custom_fields() if item["id"] == field["id"])
+        self.assertFalse(deleted["active"])
+
+    def test_custom_fields_default_to_both_platforms_and_can_be_scoped(self):
+        field = storage.create_custom_field(
+            {
+                "name": "执行问题",
+                "options": [{"label": "追单"}],
+            }
+        )
+
+        self.assertEqual(set(field["platforms"]), {"mt5", "domestic_futures"})
+        self.assertTrue(
+            any(item["id"] == field["id"] for item in storage.list_custom_fields(active_only=True, platform="mt5"))
+        )
+        self.assertTrue(
+            any(
+                item["id"] == field["id"]
+                for item in storage.list_custom_fields(active_only=True, platform="domestic_futures")
+            )
+        )
+
+        updated = storage.update_custom_field(
+            field["id"],
+            {
+                "name": "执行问题",
+                "options": [{"label": "追单"}],
+                "platforms": ["mt5"],
+            },
+        )
+
+        self.assertEqual(updated["platforms"], ["mt5"])
+        self.assertFalse(
+            any(
+                item["id"] == field["id"]
+                for item in storage.list_custom_fields(active_only=True, platform="domestic_futures")
+            )
+        )
+
+    def test_campaign_custom_fields_are_saved_and_returned(self):
+        field = storage.create_custom_field(
+            {
+                "name": "执行问题",
+                "options": [{"label": "追单"}],
+            }
+        )
+        campaign = storage.list_campaigns(platform="mt5")["campaigns"][0]
+        option_id = str(field["options"][0]["id"])
+
+        updated = storage.update_campaign_review(
+            campaign["id"],
+            {
+                "custom_fields": {str(field["id"]): [option_id]},
+            },
+            platform="mt5",
+        )
+
+        self.assertEqual(updated["custom_fields"][str(field["id"])], [option_id])
+        reread = storage.get_campaign(campaign["id"], platform="mt5")
+        self.assertEqual(reread["custom_fields"][str(field["id"])], [option_id])
+
+    def test_legacy_mistake_tags_are_migrated_to_default_custom_field(self):
+        campaign = storage.list_campaigns(platform="mt5")["campaigns"][0]
+        storage.update_campaign_review(
+            campaign["id"],
+            {"mistake_tags": ["逆势交易"]},
+            platform="mt5",
+        )
+
+        storage.init_db(seed=False)
+
+        field = next(item for item in storage.list_custom_fields() if item["name"] == "犯错")
+        option = next(item for item in field["options"] if item["label"] == "逆势交易")
+        reread = storage.get_campaign(campaign["id"], platform="mt5")
+
+        self.assertEqual(reread["custom_fields"][str(field["id"])], [str(option["id"])])
 
     def test_trade_custom_field_values_are_returned_with_trades(self):
-        field = storage.create_custom_field({"name": "错误类型"})
+        field = storage.create_custom_field(
+            {"name": "错误类型", "options": [{"label": "追单"}]}
+        )
 
-        storage.update_trade_custom_value("T-1", field["id"], {"value": "追单"})
+        storage.update_trade_custom_value(
+            "T-1", field["id"], {"value": [str(field["options"][0]["id"])]}
+        )
 
         trade = storage.get_trade("T-1")
 
-        self.assertEqual(trade["custom_fields"][str(field["id"])], "追单")
+        self.assertEqual(
+            trade["custom_fields"][str(field["id"])], [str(field["options"][0]["id"])]
+        )
 
     def test_custom_field_can_be_purged_explicitly(self):
         field = storage.create_custom_field({"name": "临时字段"})
+        with self.assertRaises(ValueError):
+            storage.purge_custom_field(field["id"])
+        storage.delete_custom_field(field["id"])
         storage.purge_custom_field(field["id"])
-        self.assertEqual(storage.list_custom_fields(), [])
+        self.assertFalse(any(item["id"] == field["id"] for item in storage.list_custom_fields()))
+        self.assertTrue(any(item["name"] == "犯错" for item in storage.list_custom_fields()))
+
+    def test_custom_field_option_can_only_be_purged_after_deactivation(self):
+        field = storage.create_custom_field(
+            {"name": "临时标签", "options": [{"label": "保留"}, {"label": "删除"}]}
+        )
+        keep_id = str(field["options"][0]["id"])
+        delete_id = str(field["options"][1]["id"])
+        campaign = storage.list_campaigns(platform="mt5")["campaigns"][0]
+        storage.update_trade_custom_value(
+            "T-1", field["id"], {"value": [keep_id, delete_id]}
+        )
+        storage.update_campaign_review(
+            campaign["id"],
+            {"custom_fields": {str(field["id"]): [keep_id, delete_id]}},
+            platform="mt5",
+        )
+
+        with self.assertRaises(ValueError):
+            storage.purge_custom_field_option(field["id"], int(delete_id))
+
+        storage.update_custom_field(
+            field["id"],
+            {
+                "name": field["name"],
+                "options": [
+                    {
+                        "id": int(keep_id),
+                        "label": "保留",
+                        "color": "#2bd4ff",
+                    }
+                ],
+            },
+        )
+        storage.purge_custom_field_option(field["id"], int(delete_id))
+
+        current = next(item for item in storage.list_custom_fields() if item["id"] == field["id"])
+        self.assertEqual([str(option["id"]) for option in current["options"]], [keep_id])
+        self.assertEqual(storage.get_trade("T-1")["custom_fields"][str(field["id"])], [keep_id])
+        reread = storage.get_campaign(campaign["id"], platform="mt5")
+        self.assertEqual(reread["custom_fields"][str(field["id"])], [keep_id])
 
     def test_select_fields_include_clickable_options(self):
         field = storage.create_custom_field(
             {
                 "name": "错误类型",
-                "field_type": "single",
                 "options": [
                     {"label": "追单", "color": "#ff5c7a"},
                     {"label": "逆势", "color": "#f97316"},
@@ -92,14 +217,13 @@ class CustomFieldsTest(unittest.TestCase):
             }
         )
 
-        self.assertEqual(field["field_type"], "single")
+        self.assertEqual(field["field_type"], "multi")
         self.assertEqual([option["label"] for option in field["options"]], ["追单", "逆势"])
 
         updated = storage.update_custom_field(
             field["id"],
             {
                 "name": "问题类型",
-                "field_type": "multi",
                 "options": [
                     {"label": "追单", "color": "#ff5c7a"},
                     {"label": "没等确认", "color": "#2bd4ff"},
@@ -109,7 +233,12 @@ class CustomFieldsTest(unittest.TestCase):
 
         self.assertEqual(updated["name"], "问题类型")
         self.assertEqual(updated["field_type"], "multi")
-        self.assertEqual([option["label"] for option in updated["options"]], ["追单", "没等确认"])
+        self.assertEqual(
+            [option["label"] for option in updated["options"] if option["active"]],
+            ["追单", "没等确认"],
+        )
+        self.assertFalse(next(option for option in updated["options"] if option["label"] == "逆势")["active"])
+        self.assertEqual(updated["options"][0]["id"], field["options"][0]["id"])
 
     def test_single_and_multi_values_use_option_ids(self):
         single = storage.create_custom_field(

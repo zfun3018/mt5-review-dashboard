@@ -29,6 +29,15 @@ DEFAULT_CLASSIFICATION_OPTIONS = (
     ("major_reversal", "strategy", "大反转交易", "#ff5c7a", 3),
 )
 
+DEFAULT_MISTAKE_OPTIONS = (
+    ("过早加仓", "#f2bd68"),
+    ("逆势交易", "#f2bd68"),
+    ("未等确认", "#f2bd68"),
+    ("减仓偏晚", "#f2bd68"),
+    ("止损执行偏晚", "#f2bd68"),
+    ("无明显错误", "#55d69b"),
+)
+
 
 def _campaign_repository() -> CampaignRepository:
     return CampaignRepository(
@@ -134,6 +143,10 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     if "active" not in custom_columns:
         conn.execute("ALTER TABLE custom_fields ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_custom_fields_active ON custom_fields(active)")
+    if "platforms" not in custom_columns:
+        conn.execute(
+            "ALTER TABLE custom_fields ADD COLUMN platforms TEXT NOT NULL DEFAULT '[\"mt5\",\"domestic_futures\"]'"
+        )
 
     conn.execute(
         """
@@ -143,8 +156,28 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             label TEXT NOT NULL,
             color TEXT NOT NULL DEFAULT '#2bd4ff',
             sort_order INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    option_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(custom_field_options)").fetchall()
+    }
+    if "active" not in option_columns:
+        conn.execute(
+            "ALTER TABLE custom_field_options ADD COLUMN active INTEGER NOT NULL DEFAULT 1"
+        )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS campaign_custom_values (
+            campaign_id TEXT NOT NULL REFERENCES trade_campaigns(id) ON DELETE CASCADE,
+            field_id INTEGER NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
+            value TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (campaign_id, field_id)
         )
         """
     )
@@ -186,6 +219,8 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
                     f"UPDATE trades SET {dimension} = ? WHERE {dimension} = ?",
                     (option_id, value),
                 )
+
+    _migrate_custom_fields_to_multi(conn)
 
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_events_event_hash ON raw_events(event_hash)"
@@ -580,11 +615,224 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
           ON trade_campaigns.id = campaign_source_trades.campaign_id
         """
     )
+    _ensure_mistake_custom_field(conn)
     revision = conn.execute(
         "SELECT value FROM schema_meta WHERE key = 'model_revision'"
     ).fetchone()
     if not revision or revision["value"] != CAMPAIGN_MODEL_REVISION:
         _campaign_repository().rebuild(conn=conn)
+
+
+def _legacy_custom_values(raw_value: Any) -> list[str]:
+    if raw_value is None:
+        return []
+    if isinstance(raw_value, str):
+        try:
+            parsed = json.loads(raw_value)
+        except (TypeError, json.JSONDecodeError):
+            parsed = raw_value
+    else:
+        parsed = raw_value
+    values = parsed if isinstance(parsed, list) else [parsed]
+    return list(dict.fromkeys(str(value).strip() for value in values if str(value).strip()))
+
+
+def _legacy_option_ids(
+    conn: sqlite3.Connection,
+    field_id: int,
+    raw_value: Any,
+    option_ids_by_id: dict[str, str],
+    option_ids_by_label: dict[str, str],
+) -> list[str]:
+    result: list[str] = []
+    for raw_item in _legacy_custom_values(raw_value):
+        option_id = option_ids_by_id.get(raw_item) or option_ids_by_label.get(raw_item)
+        if option_id is None:
+            max_order = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), 0) AS value FROM custom_field_options WHERE field_id = ?",
+                (field_id,),
+            ).fetchone()["value"]
+            cursor = conn.execute(
+                "INSERT INTO custom_field_options (field_id, label, color, sort_order) VALUES (?, ?, '#2bd4ff', ?)",
+                (field_id, raw_item, int(max_order) + 1),
+            )
+            option_id = str(cursor.lastrowid)
+            option_ids_by_id[option_id] = option_id
+            option_ids_by_label[raw_item] = option_id
+        if option_id not in result:
+            result.append(option_id)
+    return result
+
+
+def _migrate_custom_fields_to_multi(conn: sqlite3.Connection) -> None:
+    """Convert legacy custom-field values to the current multi-select contract."""
+    fields = conn.execute(
+        "SELECT id FROM custom_fields WHERE COALESCE(field_type, '') != 'multi'"
+    ).fetchall()
+    for field in fields:
+        field_id = int(field["id"])
+        option_rows = conn.execute(
+            "SELECT id, label FROM custom_field_options WHERE field_id = ?",
+            (field_id,),
+        ).fetchall()
+        option_ids_by_id = {str(row["id"]): str(row["id"]) for row in option_rows}
+        option_ids_by_label = {str(row["label"]): str(row["id"]) for row in option_rows}
+
+        for value_row in conn.execute(
+            "SELECT trade_id, value FROM trade_custom_values WHERE field_id = ?",
+            (field_id,),
+        ).fetchall():
+            option_ids = _legacy_option_ids(
+                conn, field_id, value_row["value"], option_ids_by_id, option_ids_by_label
+            )
+            conn.execute(
+                "UPDATE trade_custom_values SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE trade_id = ? AND field_id = ?",
+                (json.dumps(option_ids, ensure_ascii=False), value_row["trade_id"], field_id),
+            )
+
+        for value_row in conn.execute(
+            "SELECT campaign_id, value FROM campaign_custom_values WHERE field_id = ?",
+            (field_id,),
+        ).fetchall():
+            option_ids = _legacy_option_ids(
+                conn, field_id, value_row["value"], option_ids_by_id, option_ids_by_label
+            )
+            conn.execute(
+                "UPDATE campaign_custom_values SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE campaign_id = ? AND field_id = ?",
+                (json.dumps(option_ids, ensure_ascii=False), value_row["campaign_id"], field_id),
+            )
+
+        conn.execute(
+            "UPDATE custom_fields SET field_type = 'multi', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (field_id,),
+        )
+
+
+def _ensure_mistake_custom_field(conn: sqlite3.Connection) -> None:
+    """Keep the legacy mistake column readable while making the field generic."""
+    migrated = conn.execute(
+        "SELECT value FROM schema_meta WHERE key = 'mistake_custom_field_migrated'"
+    ).fetchone()
+    if migrated and migrated["value"] == "1":
+        return
+    row = conn.execute(
+        "SELECT id FROM custom_fields WHERE name = '犯错' ORDER BY id LIMIT 1"
+    ).fetchone()
+    if row:
+        field_id = int(row["id"])
+        conn.execute(
+            "UPDATE custom_fields SET field_type = 'multi' WHERE id = ?",
+            (field_id,),
+        )
+    else:
+        cursor = conn.execute(
+            """
+            INSERT INTO custom_fields (name, field_type, sort_order, active, platforms)
+            VALUES ('犯错', 'multi', COALESCE((SELECT MAX(sort_order) + 1 FROM custom_fields), 1), 1, '["mt5","domestic_futures"]')
+            """
+        )
+        field_id = int(cursor.lastrowid)
+
+    for index, (label, color) in enumerate(DEFAULT_MISTAKE_OPTIONS, start=1):
+        conn.execute(
+            """
+            INSERT INTO custom_field_options (field_id, label, color, sort_order)
+            SELECT ?, ?, ?, ?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM custom_field_options WHERE field_id = ? AND label = ?
+            )
+            """,
+            (field_id, label, color, index, field_id, label),
+        )
+
+    legacy_rows = conn.execute(
+        "SELECT id, mistake_tags FROM trade_campaigns WHERE mistake_tags IS NOT NULL AND mistake_tags != '[]'"
+    ).fetchall()
+    option_ids = {
+        str(option["label"]): str(option["id"])
+        for option in conn.execute(
+            "SELECT id, label FROM custom_field_options WHERE field_id = ?",
+            (field_id,),
+        ).fetchall()
+    }
+
+    def option_ids_for_values(raw_values: Any) -> list[str]:
+        try:
+            parsed = json.loads(raw_values or "[]") if isinstance(raw_values, str) else raw_values
+        except (TypeError, json.JSONDecodeError):
+            parsed = []
+        if not isinstance(parsed, list):
+            parsed = [parsed]
+        values = []
+        for tag in parsed:
+            value = str(tag or "").strip()
+            if not value:
+                continue
+            if value in option_ids.values():
+                option_id = value
+            elif value in option_ids:
+                option_id = option_ids[value]
+            else:
+                cursor = conn.execute(
+                    "INSERT INTO custom_field_options (field_id, label, color, sort_order) VALUES (?, ?, '#f2bd68', ?)",
+                    (field_id, value, len(option_ids) + 1),
+                )
+                option_id = str(cursor.lastrowid)
+                option_ids[value] = option_id
+            if option_id and option_id not in values:
+                values.append(option_id)
+        return values
+
+    for row in legacy_rows:
+        values = option_ids_for_values(row["mistake_tags"])
+        if values:
+            conn.execute(
+                """
+                INSERT INTO campaign_custom_values (campaign_id, field_id, value, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(campaign_id, field_id) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (str(row["id"]), field_id, json.dumps(values, ensure_ascii=False)),
+            )
+
+    trade_rows = conn.execute(
+        """
+        SELECT campaign_source_trades.campaign_id, trade_custom_values.value
+        FROM trade_custom_values
+        JOIN campaign_source_trades
+          ON campaign_source_trades.trade_id = trade_custom_values.trade_id
+        WHERE trade_custom_values.field_id = ?
+        """,
+        (field_id,),
+    ).fetchall()
+    for row in trade_rows:
+        values = option_ids_for_values(row["value"])
+        if not values:
+            continue
+        existing = conn.execute(
+            "SELECT value FROM campaign_custom_values WHERE campaign_id = ? AND field_id = ?",
+            (str(row["campaign_id"]), field_id),
+        ).fetchone()
+        merged = option_ids_for_values(existing["value"]) if existing else []
+        for value in values:
+            if value not in merged:
+                merged.append(value)
+        conn.execute(
+            """
+            INSERT INTO campaign_custom_values (campaign_id, field_id, value, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(campaign_id, field_id) DO UPDATE SET
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (str(row["campaign_id"]), field_id, json.dumps(merged, ensure_ascii=False)),
+        )
+    conn.execute(
+        "INSERT INTO schema_meta (key, value) VALUES ('mistake_custom_field_migrated', '1') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    )
 
 
 def seed_demo_data() -> None:

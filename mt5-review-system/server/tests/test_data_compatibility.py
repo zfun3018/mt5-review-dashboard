@@ -66,7 +66,7 @@ class DataCompatibilityTest(unittest.TestCase):
         self.assertIsNotNone(result.backup_path)
         self.assertTrue(result.backup_path.exists())
         self.assertTrue(result.report.compatible, result.report.differences)
-        self.assertEqual(after.schema_version, 4)
+        self.assertEqual(after.schema_version, 5)
         self.assertEqual(after.active_trades, before.active_trades)
         self.assertEqual(after.deleted_trades, 0)
         self.assertEqual(after.reviews, before.reviews)
@@ -84,7 +84,7 @@ class DataCompatibilityTest(unittest.TestCase):
 
         after = build_data_fingerprint(self.paths)
         self.assertTrue(result.report.compatible, result.report.differences)
-        self.assertEqual(after.schema_version, 4)
+        self.assertEqual(after.schema_version, 5)
         self.assertEqual(after.deleted_trades, before.deleted_trades)
         self.assertEqual(after.custom_values, before.custom_values)
         self.assertAlmostEqual(after.net_pnl, before.net_pnl, places=2)
@@ -96,7 +96,7 @@ class DataCompatibilityTest(unittest.TestCase):
         after = build_data_fingerprint(self.paths)
         second = upgrade_with_backup(self.paths)
         self.assertTrue(compare_fingerprints(before, after).compatible)
-        self.assertFalse(first.backup_created)
+        self.assertTrue(first.backup_created)
         self.assertFalse(second.backup_created)
 
     def test_failed_upgrade_leaves_original_database_unchanged(self):
@@ -141,7 +141,7 @@ class DataCompatibilityTest(unittest.TestCase):
         self.assertGreater(backup_path.stat().st_size, 0)
 
         after_fingerprint = build_data_fingerprint(self.paths)
-        self.assertEqual(after_fingerprint.schema_version, 4)
+        self.assertEqual(after_fingerprint.schema_version, 5)
         self.assertEqual(after_fingerprint.active_trades, before_fingerprint.active_trades)
         self.assertEqual(after_fingerprint.deleted_trades, before_fingerprint.deleted_trades)
         self.assertEqual(after_fingerprint.custom_values, before_fingerprint.custom_values)
@@ -191,7 +191,7 @@ class DataCompatibilityTest(unittest.TestCase):
         self.assertEqual(trade["screenshot_path"], "screenshots/v3-placeholder.png")
         self.assertEqual(campaign["review_text"], "V3 复盘文字")
         self.assertEqual(campaign["screenshot_path"], "screenshots/v3-placeholder.png")
-        self.assertEqual(custom_value["value"], "1")
+        self.assertEqual(custom_value["value"], '["1"]')
         self.assertEqual(set(campaign.keys()), {"review_text", "screenshot_path", "trade_type", "strategy"})
 
         # The legacy API still exposes the established analysis sections after

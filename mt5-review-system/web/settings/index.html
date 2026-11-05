@@ -42,11 +42,13 @@
             </div>
             <div class="settings-field-create">
               <input id="newCustomFieldName" type="text" placeholder="字段名称" maxlength="40" />
-              <select id="newCustomFieldType">
-                <option value="text">文本</option>
-                <option value="single">单选</option>
-                <option value="multi">多选</option>
-              </select>
+              <select id="newCustomFieldType" hidden aria-hidden="true"><option value="multi">多选</option></select>
+              <span class="custom-field-type-label">多选</span>
+              <span id="newCustomFieldPlatforms" class="field-platforms" aria-label="新字段启用平台">
+                <span class="field-platforms-label">启用平台</span>
+                <label class="field-platform-option"><input type="checkbox" data-new-platform="mt5" checked /><span>MT5</span></label>
+                <label class="field-platform-option"><input type="checkbox" data-new-platform="domestic_futures" checked /><span>国内期货</span></label>
+              </span>
               <button id="addCustomField" class="button-primary" type="button">新增字段</button>
             </div>
             <div id="customFieldSchema" class="custom-field-schema"></div>

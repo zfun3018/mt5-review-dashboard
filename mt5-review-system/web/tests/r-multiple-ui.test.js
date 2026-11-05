@@ -145,7 +145,7 @@ test("order detail puts editable review fields above the ledger", () => {
   assert.match(orderDetailSource, /id="campaignInitialStop"/);
   assert.match(orderDetailSource, /renderTagPicker\("trade_type_tags"/);
   assert.match(orderDetailSource, /renderTagPicker\("strategy_tags"/);
-  assert.match(orderDetailSource, /renderTagPicker\("mistake_tags"/);
+  assert.match(orderDetailSource, /customFieldGroups\.map/);
   assert.match(orderDetailSource, /id="detailReview" class="review-editor" maxlength="10000"/);
   assert.match(orderDetailSource, /renderScreenshotEditor\(campaign\)/);
   assert.match(orderDetailSource, /function saveTagSelection\(/);

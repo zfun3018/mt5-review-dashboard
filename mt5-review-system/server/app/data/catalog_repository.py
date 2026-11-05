@@ -7,9 +7,24 @@ from typing import Any
 
 from ..core.config import RuntimePaths
 from .database import connect
+from ..platforms import normalize_platform
 
 
 CLASSIFICATION_DIMENSIONS = {"trade_type", "strategy"}
+
+
+def _normalize_platforms(value: Any) -> list[str]:
+    if isinstance(value, list):
+        raw = value
+    else:
+        try:
+            raw = json.loads(str(value or "[]"))
+        except json.JSONDecodeError:
+            raw = []
+    if not isinstance(raw, list):
+        return []
+    allowed = {"mt5", "domestic_futures"}
+    return list(dict.fromkeys(str(item).strip() for item in raw if str(item).strip() in allowed))
 
 
 class CatalogRepository:
@@ -47,6 +62,63 @@ class CatalogRepository:
                 except json.JSONDecodeError:
                     value = []
             values.setdefault(str(row["trade_id"]), {})[str(row["field_id"])] = value
+
+        campaign_rows = conn.execute(
+            f"""
+            SELECT campaign_source_trades.trade_id,
+                   campaign_custom_values.field_id,
+                   campaign_custom_values.value,
+                   custom_fields.field_type
+            FROM campaign_source_trades
+            JOIN campaign_custom_values
+              ON campaign_custom_values.campaign_id = campaign_source_trades.campaign_id
+            JOIN custom_fields ON custom_fields.id = campaign_custom_values.field_id
+            WHERE campaign_source_trades.trade_id IN ({placeholders})
+            """,
+            trade_ids,
+        ).fetchall()
+        for row in campaign_rows:
+            raw = row["value"]
+            try:
+                parsed = json.loads(raw or "[]")
+            except json.JSONDecodeError:
+                parsed = []
+            value = parsed if row["field_type"] == "multi" and isinstance(parsed, list) else parsed
+            values.setdefault(str(row["trade_id"]), {})[str(row["field_id"])] = value
+        return values
+
+    def custom_values_for_campaign_ids(
+        self,
+        conn: sqlite3.Connection,
+        campaign_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        if not campaign_ids:
+            return {}
+        placeholders = ",".join("?" for _ in campaign_ids)
+        rows = conn.execute(
+            f"""
+            SELECT campaign_custom_values.campaign_id,
+                   campaign_custom_values.field_id,
+                   campaign_custom_values.value,
+                   custom_fields.field_type
+            FROM campaign_custom_values
+            JOIN custom_fields ON custom_fields.id = campaign_custom_values.field_id
+            WHERE campaign_custom_values.campaign_id IN ({placeholders})
+            """,
+            campaign_ids,
+        ).fetchall()
+        values: dict[str, dict[str, Any]] = {campaign_id: {} for campaign_id in campaign_ids}
+        for row in rows:
+            raw = row["value"]
+            try:
+                parsed = json.loads(raw or "[]")
+            except json.JSONDecodeError:
+                parsed = []
+            if row["field_type"] == "multi":
+                value: Any = parsed if isinstance(parsed, list) else []
+            else:
+                value = parsed
+            values.setdefault(str(row["campaign_id"]), {})[str(row["field_id"])] = value
         return values
 
     def list_classifications(
@@ -85,6 +157,7 @@ class CatalogRepository:
     def list_custom_fields(
         self,
         active_only: bool = False,
+        platform: str | None = None,
         *,
         conn: sqlite3.Connection | None = None,
     ) -> list[dict[str, Any]]:
@@ -94,7 +167,7 @@ class CatalogRepository:
             rows = [
                 dict(row)
                 for row in active_conn.execute(
-                    f"SELECT id, name, field_type, sort_order, active "
+                    f"SELECT id, name, field_type, sort_order, active, platforms "
                     f"FROM custom_fields {where_clause} ORDER BY sort_order, id"
                 ).fetchall()
             ]
@@ -106,7 +179,7 @@ class CatalogRepository:
                 placeholders = ",".join("?" for _ in field_ids)
                 for option in active_conn.execute(
                     f"""
-                    SELECT id, field_id, label, color, sort_order
+                    SELECT id, field_id, label, color, sort_order, active
                     FROM custom_field_options
                     WHERE field_id IN ({placeholders})
                     ORDER BY sort_order, id
@@ -118,8 +191,13 @@ class CatalogRepository:
             row["field_type"] = row.get("field_type") or "text"
             row["options"] = options.get(int(row["id"]), [])
             row["active"] = bool(row.get("active", 1))
-        return rows
-
+            row["platforms"] = _normalize_platforms(row.get("platforms"))
+            for option in row["options"]:
+                option["active"] = bool(option.get("active", 1))
+        if platform is None:
+            return rows
+        normalized_platform = normalize_platform(platform)
+        return [row for row in rows if normalized_platform in row["platforms"]]
     def get_analysis_settings(self, *, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
         context = nullcontext(conn) if conn is not None else closing(connect(self.paths))
         with context as active_conn:

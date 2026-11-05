@@ -214,7 +214,6 @@ export function createOrdersController({
   let selectedPositionId = null;
   let selectedTradeId = null;
   let workspaceReady = false;
-  const collapsedDayKeys = new Set();
   const trades = new Map();
   let listHeightSyncTimer = null;
   let loadMoreInFlight = false;
@@ -323,6 +322,19 @@ export function createOrdersController({
     for (let index = summaries.length - 1; index >= 0; index -= 1) {
       if (summaries[index]?.source_trade) return summaries[index].source_trade;
     }
+    return null;
+  }
+
+  function getCampaignForTrade(tradeId) {
+    for (const campaign of page.campaigns || []) {
+      if (campaign.source_trade_ids?.some((id) => String(id) === String(tradeId))) return campaign;
+      if (campaignPositionSummaries(campaign).some((summary) =>
+        [summary.source_trade, ...(summary.source_trades || [])].some((trade) => String(trade?.id) === String(tradeId))
+      )) return campaign;
+    }
+    if (campaignDetail && campaignPositionSummaries(campaignDetail).some((summary) =>
+      [summary.source_trade, ...(summary.source_trades || [])].some((trade) => String(trade?.id) === String(tradeId))
+    )) return campaignDetail;
     return null;
   }
 
@@ -522,29 +534,20 @@ export function createOrdersController({
   }
 
   function renderCampaignRows() {
-    setHtml(
-      "orderHead",
-      "",
-    );
-    const rows = groupCampaignsByDay(page.campaigns, platform).map((group) => {
+    const cards = groupCampaignsByDay(page.campaigns, platform).map((group) => {
       const groupPnl = group.campaigns.reduce((total, campaign) => total + Number(campaign.net_pnl || 0), 0);
-      const expanded = !collapsedDayKeys.has(group.key);
       const summary = `
-        <tr class="campaign-day-row" data-day-key="${escapeAttr(group.key)}">
-          <td>
-            <button class="campaign-day-toggle" type="button" data-day-toggle="${escapeAttr(group.key)}" aria-expanded="${expanded}">
-              <span class="campaign-day-chevron" aria-hidden="true">${expanded ? "−" : "+"}</span>
-              <span class="campaign-day-summary">
-              <strong class="campaign-day-date">${escapeHtml(group.label)}</strong>
-              <span class="campaign-day-weekday" title="${escapeAttr(group.weekday)}" aria-label="${escapeAttr(group.weekday)}">${escapeHtml(group.weekdaySymbol || "?")}</span>
-              <span class="campaign-day-count">${group.campaigns.length}笔</span>
-              <strong class="campaign-day-pnl ${profitClass(groupPnl)}">${formatOrderListPnl(groupPnl)}</strong>
-              </span>
-            </button>
-          </td>
-        </tr>
+        <header class="campaign-day-header">
+          <span class="campaign-day-dot" aria-hidden="true"></span>
+          <div class="campaign-day-summary">
+            <strong class="campaign-day-date">${escapeHtml(group.label)}</strong>
+            <span class="campaign-day-weekday" title="${escapeAttr(group.weekday)}" aria-label="${escapeAttr(group.weekday)}">${escapeHtml(group.weekdaySymbol || "?")}</span>
+            <span class="campaign-day-count">${group.campaigns.length}笔</span>
+            <strong class="campaign-day-pnl ${profitClass(groupPnl)}">${formatOrderListPnl(groupPnl)}</strong>
+          </div>
+        </header>
       `;
-      const campaignRows = group.campaigns.map((campaign, dayIndex) => {
+      const campaignRows = group.campaigns.map((campaign) => {
         const active = campaign.id === selectedCampaignId ? "active" : "";
         const positions = campaignPositionSummaries(campaign);
         const scratch = isScratchCampaign(campaign);
@@ -562,31 +565,27 @@ export function createOrdersController({
           : "";
         const timeInfo = campaignDateInfo(campaign.opened_at_utc);
         const contractDisplay = campaignContractDisplay(campaign);
-        const orderCell = `<td data-label="订单" class="campaign-order-cell">
+        const orderCell = `<div class="campaign-order-cell">
           <div class="campaign-list-order${active ? " glass-surface--fluid order-list-selected" : ""}">
-            <div class="campaign-list-meta">
-              <span class="campaign-list-index" aria-label="当日第 ${dayIndex + 1} 笔">${dayIndex + 1}</span>
-            </div>
+            <span class="campaign-list-opened">${timeInfo.time ? escapeHtml(timeInfo.time) : "--:--"}</span>
             <div class="campaign-list-main">
               <strong class="campaign-list-contract" title="${escapeAttr(contractDisplay.name)}">${escapeHtml(contractDisplay.name)}</strong>
               <span class="campaign-row-flags">${featuredMark}${scratchMark}${combinedMark}${missingStop}</span>
-              <span class="campaign-list-opened">${timeInfo.time ? escapeHtml(timeInfo.time) : ""}</span>
             </div>
             <strong class="campaign-list-pnl ${profitClass(campaign.net_pnl)}">${formatOrderListPnl(campaign.net_pnl)}</strong>
           </div>
-        </td>`;
+        </div>`;
         return `
-          <tr class="campaign-row${active ? ` ${active}` : ""}${scratch ? " scratch" : ""}${campaign.risk_status === "complete" ? "" : " has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}" data-day-sequence="${dayIndex + 1}">
+          <div class="campaign-row campaign-card-order${active ? ` ${active}` : ""}${scratch ? " scratch" : ""}${campaign.risk_status === "complete" ? "" : " has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}" data-day-key="${escapeAttr(group.key)}" role="listitem" tabindex="0">
             ${orderCell}
-          </tr>
+          </div>
         `;
       }).join("");
-      return summary + (expanded ? campaignRows : "");
+      return `<section class="campaign-day-card" data-day-key="${escapeAttr(group.key)}">${summary}<div class="campaign-day-orders">${campaignRows}</div></section>`;
     }).join("");
-    setHtml("orderRows", rows || `<tr><td colspan="1">没有匹配的主订单</td></tr>`);
+    setHtml("orderRows", cards || `<div class="order-card-empty muted-mini" role="listitem">没有匹配的主订单</div>`);
     applyListPanelHeight();
     globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
-    bindDayToggles();
     bindRowInteractions();
   }
 
@@ -640,13 +639,6 @@ export function createOrdersController({
     scheduleListHeightSync();
   }
 
-  function bindDayToggles() {
-    if (typeof view.querySelectorAll !== "function") return;
-    for (const button of view.querySelectorAll("[data-day-toggle]")) {
-      button.addEventListener("click", () => toggleDay(button.dataset.dayToggle));
-    }
-  }
-
   function syncListViewTabs() {
     for (const [id, value] of [["orderViewAll", "all"], ["orderViewFeatured", "featured"]]) {
       const button = getElement(id);
@@ -679,26 +671,22 @@ export function createOrdersController({
 
   function bindRowInteractions() {
     if (typeof view.querySelectorAll !== "function") return;
-    for (const row of view.querySelectorAll("tr[data-campaign-id]")) {
-      row.addEventListener("click", async (event) => {
+    for (const row of view.querySelectorAll(".campaign-card-order[data-campaign-id]")) {
+      const selectRow = async (event) => {
         if (event?.target?.closest?.("button, input, select, textarea, a")) return;
         selectedCampaignId = row.dataset.campaignId;
         selectedPositionId = row.dataset.positionId || null;
         selectedTradeId = row.dataset.tradeId || null;
         commitState({ campaign: selectedCampaignId, trade: selectedTradeId || undefined });
         await selectCampaign(selectedCampaignId);
+      };
+      row.addEventListener("click", selectRow);
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        selectRow(event);
       });
     }
-  }
-
-  function toggleDay(dayKey) {
-    if (collapsedDayKeys.has(dayKey)) collapsedDayKeys.delete(dayKey);
-    else collapsedDayKeys.add(dayKey);
-    renderCampaignRows();
-  }
-
-  function toggleExpand(dayKey) {
-    toggleDay(dayKey);
   }
 
   function renderLoadStatus() {
@@ -816,7 +804,7 @@ export function createOrdersController({
   async function loadCatalog() {
     try {
       const [fields, classifications, settings] = await Promise.all([
-        api.requestJson("/api/custom-fields?active_only=1"),
+        api.requestJson(platformApiPath("/api/custom-fields?active_only=1")),
         api.requestJson("/api/classification-options?active_only=1"),
         api.requestJson("/api/analysis-settings"),
       ]);
@@ -1140,6 +1128,18 @@ export function createOrdersController({
     }
   }
 
+  async function saveCampaignCustomValue(campaignId, fieldId, value) {
+    const updated = await api.requestJson(platformApiPath(`/api/campaigns/${encodeURIComponent(campaignId)}/review`), {
+      method: "PATCH",
+      body: { custom_fields: { [String(fieldId)]: value } },
+    });
+    for (const campaign of [campaignDetail, ...page.campaigns]) {
+      if (String(campaign?.id || "") !== String(campaignId)) continue;
+      Object.assign(campaign, updated || {});
+    }
+    return updated;
+  }
+
   async function handleStopSave(positionId, input) {
     const raw = input?.value?.trim?.() ?? "";
     const initialStop = raw === "" ? null : Number(raw);
@@ -1301,6 +1301,8 @@ export function createOrdersController({
     getChoiceValue: (trade, dimension) => trade?.[dimension] || "",
     setChoiceValue: setClassificationValue,
     saveChoiceValue: saveClassificationValue,
+    getCampaignForTrade,
+    saveCampaignCustomValue,
     rerender,
     applyFieldUpdate,
   });
@@ -1438,8 +1440,6 @@ export function createOrdersController({
     handleStopSave,
     deleteSelectedTrade,
     restoreSelectedTrade,
-    toggleDay,
-    toggleExpand,
     dispose,
     renderCampaignRows,
     getState: () => state,

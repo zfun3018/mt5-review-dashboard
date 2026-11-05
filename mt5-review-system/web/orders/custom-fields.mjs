@@ -21,6 +21,8 @@ export function createCustomFieldsModule({
   getChoiceValue,
   setChoiceValue,
   saveChoiceValue,
+  getCampaignForTrade,
+  saveCampaignCustomValue,
   rerender,
   applyFieldUpdate,
 }) {
@@ -282,6 +284,11 @@ export function createCustomFieldsModule({
     const save = async () => {
       if (dimension && typeof saveChoiceValue === "function") {
         await saveChoiceValue(tradeId, dimension, value);
+      } else if (typeof saveCampaignCustomValue === "function") {
+        const campaign = getCampaignForTrade?.(tradeId);
+        if (!campaign?.id) throw new Error("订单未找到");
+        await saveCampaignCustomValue(campaign.id, fieldId, value);
+        setTradeCustomValue(tradeId, fieldId, value);
       } else {
         await api.requestJson(`/api/trades/${encodeURIComponent(tradeId)}/custom-fields/${fieldId}`, {
           method: "PATCH",

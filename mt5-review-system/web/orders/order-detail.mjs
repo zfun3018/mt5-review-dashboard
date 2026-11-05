@@ -8,21 +8,21 @@ import {
   profitClass,
 } from "../shared/js/formatters.mjs";
 
-const DEFAULT_MISTAKE_OPTIONS = [
-  { id: "过早加仓", label: "过早加仓", color: "#f2bd68" },
-  { id: "逆势交易", label: "逆势交易", color: "#f2bd68" },
-  { id: "未等确认", label: "未等确认", color: "#f2bd68" },
-  { id: "减仓偏晚", label: "减仓偏晚", color: "#f2bd68" },
-  { id: "止损执行偏晚", label: "止损执行偏晚", color: "#f2bd68" },
-  { id: "无明显错误", label: "无明显错误", color: "#55d69b" },
-];
-
 function uniqueTags(value, fallback = []) {
   const source = Array.isArray(value) ? value : fallback;
   return [...new Set(source.map((item) => String(item || "").trim()).filter(Boolean))];
 }
 
 const SINGLE_TAG_GROUPS = new Set(["trade_type_tags", "strategy_tags"]);
+
+function customFieldGroup(fieldId) {
+  return `custom_field_${fieldId}`;
+}
+
+function customFieldIdFromGroup(group) {
+  const match = String(group || "").match(/^custom_field_(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
 
 export function shouldConfirmFeaturedRemoval(campaign) {
   return Boolean(campaign?.is_featured);
@@ -39,6 +39,15 @@ export function campaignContractDisplay(campaign) {
 
 function isSingleTagGroup(group) {
   return SINGLE_TAG_GROUPS.has(group);
+}
+
+function isCompactTagGroup(group) {
+  return isSingleTagGroup(group) || String(group || "").startsWith("custom_field_");
+}
+
+function customFieldValue(campaign, group) {
+  const fieldId = customFieldIdFromGroup(group);
+  return fieldId === null ? campaign?.[group] : campaign?.custom_fields?.[String(fieldId)];
 }
 
 function tagValues(group, value, fallback = []) {
@@ -191,13 +200,6 @@ export function createOrderDetailModule({
     return typeof view.getElementById === "function" ? view.getElementById(id) : null;
   }
 
-  function mistakeOptions(customFields) {
-    const field = (customFields || []).find((item) => item.name === "犯错" && item.field_type === "multi");
-    return field?.options?.length
-      ? field.options.map((option) => ({ ...option, id: String(option.id) }))
-      : DEFAULT_MISTAKE_OPTIONS;
-  }
-
   function renderScreenshotEditor(campaign) {
     const preview = campaign?.screenshot_url
       ? `<button class="shot-btn snapshot compact-snapshot" id="detailShot" data-shot="${escapeAttr(campaign.screenshot_url)}" title="放大截图"><img id="detailScreenshotImage" src="${escapeAttr(campaign.screenshot_url)}" alt="交易组合截图" /></button>`
@@ -218,7 +220,7 @@ export function createOrderDetailModule({
   function renderTagPicker(group, label, options, selected) {
     const values = tagValues(group, selected);
     const single = isSingleTagGroup(group);
-    const compact = single || group === "mistake_tags";
+    const compact = isCompactTagGroup(group);
     const displayValues = single ? visibleTagValues(options, values) : values;
     const unclassified = single && displayValues.length === 0;
     const selectionHint = compact ? "" : "可多选";
@@ -227,14 +229,12 @@ export function createOrderDetailModule({
       ? pickerValues.map((value) => options.find((option) => String(option.id) === value)?.label || value).join("、")
       : "添加");
     return `
-      <div class="campaign-tag-field${unclassified ? " is-unclassified" : ""}" data-tag-picker="${escapeAttr(group)}"${single ? ' data-single-choice="true"' : ""}>
+      <div class="campaign-tag-field${unclassified ? " is-unclassified" : ""}" data-tag-picker="${escapeAttr(group)}"${single ? ' data-single-choice="true"' : ""}${compact ? ' data-compact-choice="true"' : ""}>
         <span class="field-label">${escapeHtml(label)}${selectionHint ? ` <small>${selectionHint}</small>` : ""}</span>
         <button class="choice-cell detail-choice glass-menu-trigger${single ? " single-choice" : compact ? " compact-choice" : ""}" type="button" data-tag-trigger="${escapeAttr(group)}" aria-haspopup="listbox" aria-controls="campaignChoicePopover" aria-expanded="false"${compact ? ` aria-label="${escapeAttr(triggerLabel)}"` : ""}>
-          <span class="choice-cell-values">${single
-            ? `${renderTagPills(options, displayValues)}<i data-lucide="plus" aria-hidden="true"></i>`
-            : group === "mistake_tags"
-              ? `${renderTagPills(options, values)}<i data-lucide="plus" aria-hidden="true"></i>`
-              : renderTagPills(options, values) || '<span class="choice-placeholder">点击选择</span>'}</span>
+          <span class="choice-cell-values">${compact
+            ? `${renderTagPills(options, single ? displayValues : values)}<i data-lucide="plus" aria-hidden="true"></i>`
+            : renderTagPills(options, values) || '<span class="choice-placeholder">点击选择</span>'}</span>
           ${compact ? "" : '<span class="cell-caret" aria-hidden="true">v</span>'}
         </button>
       </div>
@@ -254,20 +254,21 @@ export function createOrderDetailModule({
     const values = picker?.querySelector?.(".choice-cell-values");
     if (values) {
       const single = isSingleTagGroup(group);
-      const compact = single || group === "mistake_tags";
+      const compact = isCompactTagGroup(group);
       const tags = renderTagPills(options, selected);
-      const displayTags = single ? renderTagPills(options, visibleTagValues(options, selected || [])) : tags;
+      const displayTags = compact
+        ? renderTagPills(options, single ? visibleTagValues(options, selected || []) : selected || [])
+        : tags;
       picker.classList?.toggle?.("is-unclassified", single && !displayTags);
-      values.innerHTML = single
+      values.innerHTML = compact
         ? `${displayTags}<i data-lucide="plus" aria-hidden="true"></i>`
-        : group === "mistake_tags"
-          ? `${tags}<i data-lucide="plus" aria-hidden="true"></i>`
         : tags || '<span class="choice-placeholder">点击选择</span>';
       if (compact) {
         const trigger = picker.querySelector?.("[data-tag-trigger]");
         const selectedValues = single ? visibleTagValues(options, selected || []) : uniqueTags(selected);
         const labels = selectedValues.map((value) => options.find((item) => String(item.id) === String(value))?.label || value);
-        trigger?.setAttribute?.("aria-label", `${group === "trade_type_tags" ? "交易场景" : group === "strategy_tags" ? "交易策略" : "犯错标签"}：${labels.join("、") || "添加"}`);
+        const label = picker.querySelector?.(".field-label")?.textContent?.trim() || group;
+        trigger?.setAttribute?.("aria-label", `${label}：${labels.join("、") || "添加"}`);
       }
       globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
     }
@@ -295,7 +296,7 @@ export function createOrderDetailModule({
     const node = choicePopover();
     if (!node) return;
     const single = isSingleTagGroup(group);
-    const selected = tagValues(group, campaign[group]);
+    const selected = tagValues(group, customFieldValue(campaign, group));
     node.innerHTML = `
       <div class="choice-popover-title"><strong>${escapeHtml(label)}</strong><span>${single ? "单选" : "可多选"}</span></div>
       <input class="choice-search" data-campaign-choice-search type="search" placeholder="查找选项" />
@@ -361,7 +362,7 @@ export function createOrderDetailModule({
         review_text: String(parsed.review_text || ""),
         trade_type_tags: tagValues("trade_type_tags", parsed.trade_type_tags),
         strategy_tags: tagValues("strategy_tags", parsed.strategy_tags),
-        mistake_tags: tagValues("mistake_tags", parsed.mistake_tags),
+        custom_fields: { ...(parsed.custom_fields || {}) },
       };
     } catch (error) {
       return null;
@@ -397,7 +398,7 @@ export function createOrderDetailModule({
       review_text: campaign.review_text || "",
       trade_type_tags: tagValues("trade_type_tags", campaign.trade_type_tags, campaign.trade_type ? [campaign.trade_type] : []),
       strategy_tags: tagValues("strategy_tags", campaign.strategy_tags, campaign.strategy ? [campaign.strategy] : []),
-      mistake_tags: tagValues("mistake_tags", campaign.mistake_tags),
+      custom_fields: { ...(campaign.custom_fields || {}) },
     };
   }
 
@@ -406,7 +407,9 @@ export function createOrderDetailModule({
       review_text: draft.review_text || "",
       trade_type_tags: tagValues("trade_type_tags", draft.trade_type_tags),
       strategy_tags: tagValues("strategy_tags", draft.strategy_tags),
-      mistake_tags: tagValues("mistake_tags", draft.mistake_tags),
+      custom_fields: Object.fromEntries(
+        Object.entries(draft.custom_fields || {}).map(([fieldId, value]) => [fieldId, uniqueTags(value)])
+      ),
     };
   }
 
@@ -422,7 +425,7 @@ export function createOrderDetailModule({
       review_text: effective.review_text,
       trade_type_tags: tagValues("trade_type_tags", effective.trade_type_tags),
       strategy_tags: tagValues("strategy_tags", effective.strategy_tags),
-      mistake_tags: tagValues("mistake_tags", effective.mistake_tags),
+      custom_fields: { ...(effective.custom_fields || {}) },
     });
     if (latest === draft) {
       pendingCampaignStates.delete(campaign.id);
@@ -438,7 +441,11 @@ export function createOrderDetailModule({
     const draft = { ...campaignDraft(campaign), ...changes };
     draft.trade_type_tags = tagValues("trade_type_tags", draft.trade_type_tags);
     draft.strategy_tags = tagValues("strategy_tags", draft.strategy_tags);
-    draft.mistake_tags = tagValues("mistake_tags", draft.mistake_tags);
+    draft.custom_fields = { ...(draft.custom_fields || {}) };
+    const group = Object.keys(changes).find((key) => customFieldIdFromGroup(key) !== null);
+    if (group) {
+      draft.custom_fields[String(customFieldIdFromGroup(group))] = uniqueTags(changes[group]);
+    }
     pendingCampaignStates.set(campaign.id, draft);
     storeCampaignDraft(campaign, draft);
     Object.assign(campaign, draft);
@@ -717,11 +724,16 @@ export function createOrderDetailModule({
     }
     const sceneOptions = classificationOptions("trade_type");
     const strategyOptions = classificationOptions("strategy");
-    const mistakes = mistakeOptions(customFields);
-    const customFieldInputs = customFields
-      .filter((field) => field.name !== "犯错")
-      .map((field) => `<div class="field compact-field"><label>${escapeHtml(field.name)}</label>${trade ? renderCustomValueEditor(trade, field, "detail") : `<span class="muted-mini">暂无来源订单</span>`}</div>`)
-      .join("");
+    const customFieldGroups = customFields
+      .filter((field) => field.field_type === "multi" && field.active !== false)
+      .map((field) => {
+        const group = customFieldGroup(field.id);
+        const selected = campaign.custom_fields?.[String(field.id)] || [];
+        const options = (field.options || []).filter(
+          (option) => option.active !== false || selected.includes(String(option.id))
+        );
+        return { field, group, options, selected };
+      });
     const records = executionRows(detail);
     const stop = campaignStop(detail);
     const checkinCount = Math.max(0, Number(campaign.checkin_count) || 0);
@@ -751,11 +763,11 @@ export function createOrderDetailModule({
               <div class="detail-primary-review-fields">
                 <div class="order-info-field stop-field ${stop ? "" : "missing"}">
                   <label for="campaignInitialStop">初始止损</label>
-                  <input id="campaignInitialStop" class="numeric-cell-input" type="number" step="any" inputmode="decimal" value="${escapeAttr(stop)}" placeholder="—" aria-label="初始止损价格" />
+                  <input id="campaignInitialStop" class="numeric-cell-input" type="number" step="any" inputmode="decimal" value="${escapeAttr(stop)}" placeholder="" aria-label="初始止损价格" />
                 </div>
                 ${renderTagPicker("trade_type_tags", "交易场景", sceneOptions, campaign.trade_type_tags || (campaign.trade_type ? [campaign.trade_type] : []))}
                 ${renderTagPicker("strategy_tags", "交易策略", strategyOptions, campaign.strategy_tags || (campaign.strategy ? [campaign.strategy] : []))}
-                ${renderTagPicker("mistake_tags", "犯错标签", mistakes, campaign.mistake_tags)}
+                ${customFieldGroups.map(({ field, group, options, selected }) => renderTagPicker(group, field.name, options, selected)).join("")}
               </div>
             </section>
             <section class="review-editor-panel order-secondary-context">
@@ -764,7 +776,6 @@ export function createOrderDetailModule({
             </section>
           </div>
         </div>
-        ${customFieldInputs ? `<div class="field-grid detail-custom-fields">${customFieldInputs}</div>` : ""}
         <section class="execution-section order-secondary-context" aria-label="成交流水">
           <div class="section-head"><h3>成交流水</h3><span>组合订单共 ${records.length} 条执行记录</span></div>
           <div class="execution-table-wrap">
@@ -790,7 +801,12 @@ export function createOrderDetailModule({
       </div>
     `;
     renderDetailIcons();
-    bindDetailInteractions(campaign, trade, { trade_type_tags: sceneOptions, strategy_tags: strategyOptions, mistake_tags: mistakes });
+    const optionGroups = Object.fromEntries([
+      ["trade_type_tags", sceneOptions],
+      ["strategy_tags", strategyOptions],
+      ...customFieldGroups.map(({ group, options }) => [group, options]),
+    ]);
+    bindDetailInteractions(campaign, trade, optionGroups);
     getElement("deleteOrder")?.addEventListener("click", () => onDeleteTrade?.());
     getElement("restoreOrder")?.addEventListener("click", () => onRestoreTrade?.());
     getElement("featureCampaign")?.addEventListener("click", async () => {

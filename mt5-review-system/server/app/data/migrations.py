@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS custom_fields (
     name TEXT NOT NULL UNIQUE,
     field_type TEXT NOT NULL DEFAULT 'text',
     sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    platforms TEXT NOT NULL DEFAULT '["mt5","domestic_futures"]',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -89,6 +91,7 @@ CREATE TABLE IF NOT EXISTS custom_field_options (
     label TEXT NOT NULL,
     color TEXT NOT NULL DEFAULT '#2bd4ff',
     sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -99,6 +102,14 @@ CREATE TABLE IF NOT EXISTS trade_custom_values (
     value TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (trade_id, field_id)
+);
+
+CREATE TABLE IF NOT EXISTS campaign_custom_values (
+    campaign_id TEXT NOT NULL REFERENCES trade_campaigns(id) ON DELETE CASCADE,
+    field_id INTEGER NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
+    value TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (campaign_id, field_id)
 );
 
 CREATE TABLE IF NOT EXISTS equity_snapshots (
@@ -231,7 +242,7 @@ def ensure_schema(
         previous_version = read_schema_version(conn)
         migrate(conn, previous_version)
         conn.execute(
-            "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4') "
+            "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '5') "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
         )
         if migration_backup:

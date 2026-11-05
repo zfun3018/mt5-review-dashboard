@@ -11,12 +11,15 @@ class SettingsService:
     def get_classifications(self, dimension=None, active_only=False):
         return self.catalogs.list_classifications(dimension, active_only)
 
-    def get_custom_fields(self, active_only=False):
+    def get_custom_fields(self, active_only=False, platform=None):
         # Preserve compatibility with lightweight catalog adapters that still
         # expose the original zero-argument read method.
-        if active_only:
-            return self.catalogs.list_custom_fields(active_only=True)
-        return self.catalogs.list_custom_fields()
+        try:
+            return self.catalogs.list_custom_fields(active_only=active_only, platform=platform)
+        except TypeError:
+            if active_only:
+                return self.catalogs.list_custom_fields(active_only=True)
+            return self.catalogs.list_custom_fields()
 
     def restore_custom_field(self, field_id: int):
         from ..data.catalog_commands import restore_custom_field

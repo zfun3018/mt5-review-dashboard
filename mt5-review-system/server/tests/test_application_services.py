@@ -489,7 +489,8 @@ class ApplicationRepositoryReadTest(TemporaryStorageCase):
         self.assertTrue(classifications)
         self.assertTrue(all(row["dimension"] == "trade_type" for row in classifications))
         self.assertTrue(all(row["active"] for row in classifications))
-        self.assertEqual(custom_fields, [{**field, "options": []}])
+        self.assertEqual(next(item for item in custom_fields if item["id"] == field["id"]), field)
+        self.assertTrue(any(item["name"] == "犯错" for item in custom_fields))
         self.assertEqual(analysis_settings, {"scratch_threshold_r": 0.15})
 
     def test_album_repository_filters_counts_and_pages_before_custom_values(self):
@@ -677,7 +678,7 @@ class StorageApplicationAdapterTest(unittest.TestCase):
                 calls.append(("classifications", dimension, active_only))
                 return ["classification"]
 
-            def get_custom_fields(self):
+            def get_custom_fields(self, active_only=False):
                 calls.append(("custom_fields",))
                 return ["field"]
 

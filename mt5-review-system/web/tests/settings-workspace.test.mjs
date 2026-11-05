@@ -89,7 +89,12 @@ const DEFAULT_ROUTES = {
   },
   "/api/custom-fields": {
     custom_fields: [
-      { id: 1, name: "复盘结论", field_type: "single", sort_order: 1, options: [{ id: 11, field_id: 1, label: "盈利", color: "#2bd4ff", sort_order: 1 }] },
+      { id: 1, name: "复盘结论", field_type: "single", sort_order: 1, platforms: ["mt5", "domestic_futures"], options: [{ id: 11, field_id: 1, label: "盈利", color: "#2bd4ff", sort_order: 1 }] },
+    ],
+  },
+  "/api/custom-fields?platform=all": {
+    custom_fields: [
+      { id: 1, name: "复盘结论", field_type: "single", sort_order: 1, platforms: ["mt5", "domestic_futures"], options: [{ id: 11, field_id: 1, label: "盈利", color: "#2bd4ff", sort_order: 1 }] },
     ],
   },
   "/api/analysis-settings": { scratch_threshold_r: 0.2 },
@@ -179,6 +184,10 @@ test("settings uses the shared glass visual contract without changing its page s
   assert.match(settingsCss, /\.settings-tab\.is-active[\s\S]*--pill-color/);
   assert.match(settingsCss, /\.settings-panel[\s\S]*backdrop-filter/);
   assert.match(settingsCss, /\.settings-danger-zone[\s\S]*var\(--color-negative\)/);
+  assert.match(settingsSource, /\/api\/custom-fields\?platform=all/);
+  assert.match(settingsCss, /\.custom-field-card::before,[\s\S]*\.option-row:not\(\.is-inactive\)::after[\s\S]*display:\s*none/);
+  assert.match(settingsCss, /\.option-editor\s*\{[\s\S]*border-radius:\s*var\(--radius-inner\)/);
+  assert.match(schemaSource, /\[data-custom-field-platform\][\s\S]*addEventListener\("change"/);
   assert.match(settingsCss, /@media\s*\(max-width:\s*720px\)/);
 });
 
@@ -437,7 +446,7 @@ test("settings loads configuration without analysis or campaigns", async () => {
   await controller.load();
   assert.deepEqual(new Set(api.paths), new Set([
     "/api/classification-options",
-    "/api/custom-fields",
+    "/api/custom-fields?platform=all",
     "/api/analysis-settings",
     "/api/status",
     "/api/backups",
@@ -520,6 +529,17 @@ test("custom field type and options are sent when saved", async () => {
   assert.equal(body.options.length, 2);
   assert.deepEqual(body.options[0], { id: 11, label: "盈利", color: "#2bd4ff" });
   assert.deepEqual(body.options[1], { label: "亏损", color: "#ff5c7a" });
+});
+
+test("custom fields can be permanently deleted after being stopped", async () => {
+  const { api, controller } = controllerWith();
+  await controller.load();
+  await controller.deleteCustomField(1);
+  await controller.purgeCustomField(1);
+
+  const index = api.paths.indexOf("/api/custom-fields/1/purge");
+  assert.ok(index >= 0);
+  assert.equal(api.methods[index], "DELETE");
 });
 
 test("scratch threshold validates range before saving", async () => {

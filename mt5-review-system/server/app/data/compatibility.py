@@ -188,7 +188,7 @@ def upgrade_with_backup(
     backup_created = False
     backup_record: tuple[str, str, int] | None = None
     if (
-        before.schema_version < 4
+        before.schema_version < 5
         and paths.database.exists()
         and paths.database.stat().st_size > 0
     ):
@@ -213,7 +213,7 @@ def upgrade_with_backup(
             if migration_hook is not None:
                 migration_hook()
             conn.execute(
-                "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4') "
+                "INSERT INTO schema_meta (key, value) VALUES ('schema_version', '5') "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
             )
             if backup_record is not None:

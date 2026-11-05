@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 from urllib.parse import unquote
 
-from ..responses import created, not_found, ok
+from ..responses import bad_request, created, not_found, ok
 from . import Body, Query, first, path_part, request_body
 
 if TYPE_CHECKING:
@@ -40,7 +40,13 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
 
     def custom_fields(path: str, query: Query, body: Body):
         active_only = (first(query, "active_only", "0") or "0") in {"1", "true"}
-        fields = storage.list_custom_fields(active_only=True) if active_only else storage.list_custom_fields()
+        platform = first(query, "platform", None)
+        if platform is not None and platform != "all":
+            fields = storage.list_custom_fields(active_only=active_only, platform=platform)
+        elif active_only:
+            fields = storage.list_custom_fields(active_only=True)
+        else:
+            fields = storage.list_custom_fields()
         return ok({"custom_fields": fields})
 
     def create_custom_field(path: str, query: Query, body: Body):
@@ -74,6 +80,19 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
             storage.purge_custom_field(field_id)
         except KeyError:
             return not_found("Field not found")
+        except ValueError as error:
+            return bad_request(str(error))
+        return ok({"ok": True})
+
+    def custom_field_option_purge(path: str, query: Query, body: Body):
+        field_id = int(path_part(path, 3))
+        option_id = int(path_part(path, 5))
+        try:
+            storage.purge_custom_field_option(field_id, option_id)
+        except KeyError:
+            return not_found("Option not found")
+        except ValueError as error:
+            return bad_request(str(error))
         return ok({"ok": True})
 
     def classification_options(path: str, query: Query, body: Body):
@@ -172,6 +191,13 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
         "PUT", "/api/custom-fields/", custom_field_put, reads_body=True
     )
     # Register the more specific suffix route before the generic field route.
+    router.add_prefix(
+        "DELETE",
+        "/api/custom-fields/",
+        custom_field_option_purge,
+        suffix="/purge",
+        contains="/options/",
+    )
     router.add_prefix("DELETE", "/api/custom-fields/", custom_field_purge, suffix="/purge")
     router.add_prefix("DELETE", "/api/custom-fields/", custom_field_delete)
     router.add_prefix("POST", "/api/custom-fields/", custom_field_restore, suffix="/restore")

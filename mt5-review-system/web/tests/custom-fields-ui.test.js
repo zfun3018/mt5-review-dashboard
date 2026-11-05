@@ -27,7 +27,9 @@ const classificationsSource = fs.readFileSync(path.join(__dirname, "..", "settin
 
 test("custom select fields use the choice popover in table and detail views", () => {
   assert.match(ordersSource, /renderCustomValueEditor\(editableTrade, field, "table"\)/);
-  assert.match(orderDetailSource, /renderCustomValueEditor\(trade, field, "detail"\)/);
+  assert.match(orderDetailSource, /customFieldGroups/);
+  assert.match(orderDetailSource, /renderTagPicker\(group, field\.name, options, selected\)/);
+  assert.match(orderDetailSource, /custom_fields/);
   assert.match(customFieldsSource, /data-choice-trigger/);
   assert.match(customFieldsSource, /choice-popover/);
   assert.match(customFieldsSource, /\u67e5\u627e\u6216\u521b\u5efa\u9009\u9879/);
@@ -79,10 +81,14 @@ test("custom field type and options are sent when fields are added or saved", ()
   assert.match(settingsHtml, /newCustomFieldType/);
   assert.match(schemaSource, /field_type:\s*fieldType/);
   assert.match(schemaSource, /collectOptions/);
+  assert.match(schemaSource, /data-custom-field-platform/);
+  assert.match(schemaSource, /platforms/);
   assert.match(schemaSource, /data-custom-field-restore/);
   assert.match(schemaSource, /custom-fields\/\$\{fieldId\}\/restore/);
   assert.match(schemaSource, /data-custom-field-purge/);
   assert.match(schemaSource, /custom-fields\/\$\{fieldId\}\/purge/);
+  assert.match(schemaSource, /data-option-purge/);
+  assert.match(schemaSource, /custom-fields\/\$\{fieldId\}\/options\/\$\{optionId\}\/purge/);
 });
 
 test("classification manager supports data-driven create, rename, and archive", () => {

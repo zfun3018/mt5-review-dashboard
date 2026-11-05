@@ -193,6 +193,18 @@ class HttpRouterTest(unittest.TestCase):
         self.assertEqual(response.payload, {"imported": True})
         self.assertEqual(self.import_calls, 1)
 
+    def test_custom_field_option_purge_route_forwards_field_and_option_ids(self):
+        response = self.router.dispatch(
+            "DELETE", "/api/custom-fields/7/options/11/purge", {}, None
+        )
+
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertEqual(response.payload, {"ok": True})
+        self.assertEqual(
+            self.storage.calls,
+            [("purge_custom_field_option", (7, 11), {})],
+        )
+
     def test_every_legacy_get_route_preserves_query_call_status_and_payload(self):
         analysis = {
             "system_evaluation": [{"date": "2026-09-02"}],
@@ -426,6 +438,18 @@ class HttpRouterTest(unittest.TestCase):
                 },
             },
             {
+                "name": "custom fields across platforms",
+                "method": "GET",
+                "path": "/api/custom-fields",
+                "query": {"platform": ["all"]},
+                "body": None,
+                "call": ("list_custom_fields", (), {}),
+                "status": HTTPStatus.OK,
+                "payload": {
+                    "custom_fields": self.storage.results["list_custom_fields"]
+                },
+            },
+            {
                 "name": "classification options",
                 "method": "GET",
                 "path": "/api/classification-options",
@@ -480,7 +504,7 @@ class HttpRouterTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(len(cases), 16)
+        self.assertEqual(len(cases), 17)
         self.assert_route_contracts(cases)
 
     def test_every_legacy_mutation_route_preserves_body_call_status_and_payload(self):
@@ -1043,9 +1067,10 @@ class HttpRouterTest(unittest.TestCase):
             ("DELETE", "/api/trends/2"),
             ("DELETE", "/api/custom-fields/7"),
             ("DELETE", "/api/custom-fields/7/purge"),
+            ("DELETE", "/api/custom-fields/7/options/11/purge"),
         }
 
-        self.assertEqual(len(requires_body | does_not_require_body), 41)
+        self.assertEqual(len(requires_body | does_not_require_body), 42)
         for method, path in requires_body:
             with self.subTest(method=method, path=path, expected=True):
                 self.assertTrue(self.router.route_requires_body(method, path))

@@ -453,7 +453,7 @@ class ArchitectureContractTest(TemporaryStorageCase):
             ).fetchone()["value"]
         finally:
             conn.close()
-        self.assertEqual(version, "4")
+        self.assertEqual(version, "5")
         self.assertEqual(seed_calls, [True])
 
     def test_failed_migration_rolls_back_all_schema_data_and_version_state(self):

@@ -327,6 +327,9 @@ class CampaignRepository:
             return []
         ordered_ids = [str(row["id"]) for row in campaign_rows]
         placeholders = ",".join("?" for _ in ordered_ids)
+        campaign_custom_values = self.catalog.custom_values_for_campaign_ids(
+            conn, ordered_ids
+        )
         today = to_beijing(datetime.now(timezone.utc)).date().isoformat()
         checkin_rows = conn.execute(
             f"""
@@ -453,6 +456,7 @@ class CampaignRepository:
         records = []
         for campaign in campaign_rows:
             campaign_id = str(campaign["id"])
+            campaign["custom_fields"] = campaign_custom_values.get(campaign_id, {})
             checkin = checkins.get(campaign_id, {"count": 0, "checked_in": False})
             campaign["checkin_count"] = checkin["count"]
             campaign["checkin_checked_in_today"] = checkin["checked_in"]

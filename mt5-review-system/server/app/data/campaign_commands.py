@@ -26,7 +26,11 @@ from ..domain.analytics import to_beijing
 from ..domain.campaigns import calculate_position_risk
 from ..platforms import normalize_platform
 from .campaign_repository import CampaignRepository
-from .catalog_commands import _ensure_classification_option
+from .catalog_commands import (
+    _ensure_classification_option,
+    _normalize_custom_value,
+    _option_ids_for_field,
+)
 
 
 def _campaign_repository() -> CampaignRepository:
@@ -451,6 +455,52 @@ def update_campaign_review(
             (campaign_id, normalized_platform),
         ).fetchone()
 
+        def custom_field_row(field_id: int):
+            row = conn.execute(
+                "SELECT id, name, field_type, active, platforms FROM custom_fields WHERE id = ?",
+                (field_id,),
+            ).fetchone()
+            if not row or not row["active"]:
+                raise ValueError("Custom field is inactive or missing")
+            try:
+                platforms = json.loads(row["platforms"] or "[]")
+            except json.JSONDecodeError:
+                platforms = []
+            if normalized_platform not in platforms:
+                raise ValueError("Custom field is not enabled for this platform")
+            return row
+
+        def save_campaign_custom_value(field_id: int, raw_value: Any) -> list[str]:
+            field = custom_field_row(field_id)
+            existing_value = conn.execute(
+                "SELECT value FROM campaign_custom_values WHERE campaign_id = ? AND field_id = ?",
+                (campaign_id, field_id),
+            ).fetchone()
+            allowed = _option_ids_for_field(
+                conn,
+                field_id,
+                existing_value["value"] if existing_value else None,
+            )
+            value, stored = _normalize_custom_value(raw_value, field["field_type"], allowed)
+            conn.execute(
+                """
+                INSERT INTO campaign_custom_values (campaign_id, field_id, value, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(campaign_id, field_id) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (campaign_id, field_id, stored),
+            )
+            return value if isinstance(value, list) else [value] if value else []
+
+        custom_field_values = payload.get("custom_fields")
+        if custom_field_values is not None:
+            if not isinstance(custom_field_values, dict):
+                raise ValueError("custom_fields must be an object")
+            for raw_field_id, raw_value in custom_field_values.items():
+                save_campaign_custom_value(int(raw_field_id), raw_value)
+
         def tag_values(key: str, fallback_key: str, fallback: str) -> list[str]:
             explicit = key in payload or fallback_key in payload
             if key in payload:
@@ -484,6 +534,26 @@ def update_campaign_review(
             for value in tag_values("strategy_tags", "strategy", current["strategy"] or "strategy_unclassified")
         ]
         mistake_tags = tag_values("mistake_tags", "", "")
+        if "mistake_tags" in payload:
+            mistake_field = conn.execute(
+                "SELECT id FROM custom_fields WHERE name = '犯错' ORDER BY id LIMIT 1"
+            ).fetchone()
+            if mistake_field:
+                mistake_field_id = int(mistake_field["id"])
+                mistake_ids = _ensure_mistake_option_ids(
+                    conn, mistake_field_id, mistake_tags
+                )
+                save_campaign_custom_value(mistake_field_id, mistake_ids)
+        elif custom_field_values is not None:
+            mistake_field = conn.execute(
+                "SELECT id FROM custom_fields WHERE name = '犯错' ORDER BY id LIMIT 1"
+            ).fetchone()
+            if mistake_field and str(mistake_field["id"]) in custom_field_values:
+                mistake_tags = _legacy_mistake_labels(
+                    conn,
+                    custom_field_values[str(mistake_field["id"])],
+                    int(mistake_field["id"]),
+                )
         trade_type = trade_type_tags[0] if trade_type_tags else "unclassified"
         strategy = strategy_tags[0] if strategy_tags else "strategy_unclassified"
         conn.execute(
@@ -521,7 +591,52 @@ def update_campaign_review(
                 """,
                 (review_text, source["trade_id"]),
             )
-    updated = get_campaign(campaign_id)
+    updated = _campaign_repository().get(campaign_id)
     if not updated:
         raise KeyError(campaign_id)
     return updated
+
+
+def _legacy_mistake_labels(
+    conn: Any,
+    raw_value: Any,
+    field_id: int,
+) -> list[str]:
+    values = raw_value if isinstance(raw_value, list) else [raw_value]
+    option_ids = {str(row["id"]): str(row["label"]) for row in conn.execute(
+        "SELECT id, label FROM custom_field_options WHERE field_id = ?",
+        (field_id,),
+    ).fetchall()}
+    return [option_ids[str(value)] for value in values if str(value) in option_ids]
+
+
+def _ensure_mistake_option_ids(
+    conn: Any,
+    field_id: int,
+    raw_values: list[str],
+) -> list[str]:
+    options = {
+        str(row["id"]): str(row["label"])
+        for row in conn.execute(
+            "SELECT id, label FROM custom_field_options WHERE field_id = ?",
+            (field_id,),
+        ).fetchall()
+    }
+    labels_to_ids = {label: option_id for option_id, label in options.items()}
+    values = []
+    for raw_value in raw_values:
+        value = str(raw_value or "").strip()
+        if not value:
+            continue
+        option_id = value if value in options else labels_to_ids.get(value)
+        if option_id is None:
+            cursor = conn.execute(
+                "INSERT INTO custom_field_options (field_id, label, color, sort_order) VALUES (?, ?, '#f2bd68', ?)",
+                (field_id, value, len(options) + 1),
+            )
+            option_id = str(cursor.lastrowid)
+            options[option_id] = value
+            labels_to_ids[value] = option_id
+        if option_id not in values:
+            values.append(option_id)
+    return values

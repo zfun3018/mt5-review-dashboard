@@ -44,22 +44,16 @@
 
       <div class="orders-layout">
         <div class="orders-index-column">
+          <div class="orders-list-controls">
+            <div class="orders-list-views" role="tablist" aria-label="订单范围">
+              <button id="orderViewAll" class="view-tab active" type="button" role="tab" aria-selected="true" data-order-view="all">全部订单</button>
+              <button id="orderViewFeatured" class="view-tab" type="button" role="tab" aria-selected="false" data-order-view="featured">精选订单</button>
+            </div>
+          </div>
           <article class="panel trades-panel glass-surface--clear" aria-label="订单列表">
-            <div class="panel-head orders-panel-head">
-              <div class="orders-list-views" role="tablist" aria-label="订单范围">
-                <button id="orderViewAll" class="view-tab active" type="button" role="tab" aria-selected="true" data-order-view="all">全部订单</button>
-                <button id="orderViewFeatured" class="view-tab" type="button" role="tab" aria-selected="false" data-order-view="featured">精选订单</button>
-              </div>
-            </div>
             <div class="table-wrap">
-              <table class="orders-table">
-                <thead id="orderHead"></thead>
-                <tbody id="orderRows"></tbody>
-              </table>
-            </div>
-            <div class="order-list-footer" aria-live="polite">
-              <span id="orderTotal" class="pagination-total"></span>
-              <span id="orderLoadStatus" class="muted-mini">下滑加载更多</span>
+              <div id="orderHead" hidden></div>
+              <div id="orderRows" class="order-card-list" role="list" aria-label="按日期分组的订单"></div>
             </div>
           </article>
         </div>

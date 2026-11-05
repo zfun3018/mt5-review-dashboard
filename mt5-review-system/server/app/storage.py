@@ -318,11 +318,16 @@ def list_classification_options(
     return _application_services().settings.get_classifications(dimension, active_only)
 
 
-def list_custom_fields(active_only: bool = False) -> list[dict[str, Any]]:
+def list_custom_fields(
+    active_only: bool = False,
+    platform: str | None = None,
+) -> list[dict[str, Any]]:
     service = _application_services().settings
+    if platform is None:
+        return service.get_custom_fields(active_only=True) if active_only else service.get_custom_fields()
     if active_only:
-        return service.get_custom_fields(active_only=True)
-    return service.get_custom_fields()
+        return service.get_custom_fields(active_only=True, platform=platform)
+    return service.get_custom_fields(platform=platform)
 
 
 def get_analysis_settings() -> dict[str, Any]:
@@ -408,6 +413,7 @@ create_custom_field = _synchronized_owner(catalog_commands.create_custom_field)
 update_custom_field = _synchronized_owner(catalog_commands.update_custom_field)
 delete_custom_field = _synchronized_owner(catalog_commands.delete_custom_field)
 purge_custom_field = _synchronized_owner(catalog_commands.purge_custom_field)
+purge_custom_field_option = _synchronized_owner(catalog_commands.purge_custom_field_option)
 restore_custom_field = _synchronized_owner(catalog_commands.restore_custom_field)
 update_trade_custom_value = _synchronized_owner(catalog_commands.update_trade_custom_value)
 

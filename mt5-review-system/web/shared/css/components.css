@@ -263,6 +263,7 @@
 .button-primary,
 .button-danger {
   padding: 0 var(--space-3);
+  white-space: nowrap;
 }
 
 .button-primary {

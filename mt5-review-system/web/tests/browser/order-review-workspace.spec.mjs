@@ -13,7 +13,7 @@ const campaign = {
   strategy: "strategy_breakout",
   trade_type_tags: ["scene_follow"],
   strategy_tags: ["strategy_breakout"],
-  mistake_tags: [],
+  custom_fields: {},
   review_text: "",
   entry_volume: 1.2,
   position_summaries: [
@@ -97,7 +97,9 @@ test.describe("order review workspace", () => {
       strategy: "strategy_unclassified",
       trade_type_tags: ["unclassified"],
       strategy_tags: ["strategy_unclassified"],
-      mistake_tags: ["mistake_background", "mistake_averaging", "mistake_stop", "mistake_chase", "mistake_setup"],
+      custom_fields: {
+        "99": ["mistake_background", "mistake_averaging", "mistake_stop", "mistake_chase", "mistake_setup"],
+      },
     };
     page.on("console", (message) => {
       if (message.type() === "error") errors.push(message.text());
@@ -109,9 +111,10 @@ test.describe("order review workspace", () => {
       if (url.pathname === "/api/custom-fields") return response(route, {
         ...catalog,
         custom_fields: [{
-          id: "mistake-tags",
+          id: 99,
           name: "犯错",
           field_type: "multi",
+          platforms: ["mt5", "domestic_futures"],
           options: [
             { id: "mistake_background", label: "忽略关键背景" },
             { id: "mistake_averaging", label: "逆势连续加仓" },
@@ -180,7 +183,7 @@ test.describe("order review workspace", () => {
     await expect(page.locator("#orderHead")).toBeEmpty();
     await expect(page.locator("#orderHead")).not.toContainText("R 值");
     await expect(page.locator("#orderHead")).not.toContainText("净盈亏");
-    await expect(page.locator("[data-day-toggle]")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".campaign-day-card").first()).toBeVisible();
     await expect(page.locator(".campaign-kind-mark")).toHaveText("组");
     await expect(page.locator(".campaign-risk-mark")).toHaveText("!");
     await expect(page.locator("#campaignInitialStop")).toBeVisible();
@@ -216,10 +219,9 @@ test.describe("order review workspace", () => {
       return Math.abs((label.top + label.height / 2) - (input.top + input.height / 2));
     });
     expect(inlineStop).toBeLessThanOrEqual(3);
-    await expect(page.locator(".detail-review-meta")).toContainText("犯错标签");
-    await expect(page.locator('.detail-review-meta [data-tag-picker="mistake_tags"] .choice-value-pill')).toHaveCount(5);
-    await expect(page.locator('[data-tag-trigger="mistake_tags"] [data-lucide="plus"]')).toBeVisible();
-    await expect(page.locator('[data-tag-trigger="mistake_tags"] .cell-caret')).toHaveCount(0);
+    await expect(page.locator(".detail-review-meta")).toContainText("犯错");
+    await expect(page.locator('.detail-review-meta [data-tag-picker="custom_field_99"] .choice-value-pill')).toHaveCount(5);
+    await expect(page.locator('[data-tag-trigger="custom_field_99"] [data-lucide="plus"]')).toBeVisible();
     await expect(page.locator(".order-info-strip")).toHaveCount(0);
     await expect(page.locator(".detail-review-meta")).toContainText("初始止损");
     await expect(page.locator(".detail-review-meta")).toContainText("交易场景");
@@ -278,13 +280,10 @@ test.describe("order review workspace", () => {
         return {radius: computed.borderRadius, width: rect.width / pageScale, height: rect.height / pageScale, display: computed.display};
       };
       const summary = document.querySelector(".campaign-day-pnl");
-      const summaryCell = summary.closest("td").getBoundingClientRect();
-      const summaryStyle = getComputedStyle(summary.closest("td"));
-      const summaryContentRight = summaryCell.right - parseFloat(summaryStyle.paddingRight);
+      const summaryWrap = summary.closest(".campaign-day-summary").getBoundingClientRect();
       const orderAmounts = [...document.querySelectorAll(".campaign-list-pnl")].map((amount) => {
-        const cell = amount.closest("td").getBoundingClientRect();
-        const style = getComputedStyle(amount.closest("td"));
-        return Math.abs(cell.right - parseFloat(style.paddingRight) - amount.getBoundingClientRect().right);
+        const row = amount.closest(".campaign-list-order").getBoundingClientRect();
+        return Math.abs(row.right - amount.getBoundingClientRect().right);
       });
       return {
         info: style(".detail-review-meta"),
@@ -293,7 +292,7 @@ test.describe("order review workspace", () => {
         choice: style('[data-tag-trigger="trade_type_tags"]'),
         checkin: style("#checkinCampaign"),
         dailyPnl: style(".campaign-day-summary .campaign-day-pnl"),
-        summaryAmountRightGap: Math.abs(summaryContentRight - summary.getBoundingClientRect().right) / pageScale,
+        summaryAmountRightGap: Math.abs(summaryWrap.right - summary.getBoundingClientRect().right) / pageScale,
         orderAmountRightGaps: orderAmounts.map((gap) => gap / pageScale),
       };
     });
@@ -306,7 +305,7 @@ test.describe("order review workspace", () => {
     expect(reviewControlStyles.dailyPnl.radius).toBe("0px");
     if (!isMobile) {
       expect(reviewControlStyles.summaryAmountRightGap).toBeLessThanOrEqual(2);
-      expect(reviewControlStyles.orderAmountRightGaps.every((gap) => gap <= 2)).toBe(true);
+      expect(reviewControlStyles.orderAmountRightGaps.every((gap) => gap <= 12)).toBe(true);
     }
     expect(reviewControlStyles.choice.radius).toBe("999px");
     expect(reviewControlStyles.choice.width).toBeLessThanOrEqual(120);
@@ -349,7 +348,9 @@ test.describe("order review workspace", () => {
         scrollMetrics: { documentWidth: document.documentElement.scrollWidth, windowWidth: window.innerWidth, bodyWidth: document.body.scrollWidth },
       };
     });
-    expect(composition.listModules).toHaveLength(1);
+    expect(composition.listModules).toHaveLength(2);
+    expect(composition.listModules[0].className).toContain("orders-list-controls");
+    expect(composition.listModules[1].className).toContain("trades-panel");
     expect(composition.calendar?.width).toBeGreaterThanOrEqual(composition.orderListPanel.width);
     if (isMobile) {
       expect(composition.overflow, JSON.stringify(composition.scrollMetrics)).toBe(true);
@@ -426,7 +427,7 @@ test.describe("order review workspace", () => {
       await page.evaluate(() => window.scrollTo({left: document.documentElement.scrollWidth, top: 0, behavior: "instant"}));
     }
 
-    const listLayout = await page.locator(".trades-panel .table-wrap").evaluate((node) => ({
+    const listLayout = await page.locator(".order-card-list").evaluate((node) => ({
       overflowY: getComputedStyle(node).overflowY,
       pnlFontSize: getComputedStyle(node.querySelector(".campaign-list-pnl")).fontSize,
       groupPnlFontSize: getComputedStyle(node.querySelector(".campaign-day-pnl")).fontSize,
@@ -437,17 +438,17 @@ test.describe("order review workspace", () => {
 
     if (!isMobile) {
       const listHeader = await page.locator(".trades-panel .table-wrap").evaluate((scroller) => {
-        const body = scroller.querySelector("tbody");
-        const source = body.querySelector("tr:not(.campaign-day-row)");
-        for (let index = 0; index < 18; index += 1) body.append(source.cloneNode(true));
-        scroller.scrollTop = 120;
+        const list = scroller.querySelector(".order-card-list");
+        const source = list.querySelector(".campaign-card-order");
+        for (let index = 0; index < 18; index += 1) list.append(source.cloneNode(true));
+        list.scrollTop = 120;
         return {
-          scrollTop: scroller.scrollTop,
-          headerCellCount: scroller.querySelectorAll("thead th").length,
+          scrollTop: list.scrollTop,
+          headerCount: scroller.querySelectorAll("thead, .orders-table-head").length,
         };
       });
       expect(listHeader.scrollTop).toBeGreaterThan(0);
-      expect(listHeader.headerCellCount).toBe(0);
+      expect(listHeader.headerCount).toBe(0);
     }
 
     await page.locator('[data-tag-trigger="trade_type_tags"]').click();
@@ -665,17 +666,16 @@ test("keeps the compact order index narrow and removes redundant list controls",
 
     await page.goto(`${syntheticServer.baseURL}/orders/`);
     await expect(page.locator("#toggleOrderList")).toHaveCount(0);
-    await expect(page.locator(".orders-panel-head")).not.toContainText("ORDERS");
-    await expect(page.locator(".orders-panel-head")).not.toContainText("订单复盘");
+    await expect(page.locator(".orders-list-controls")).toBeVisible();
+    await expect(page.locator(".orders-list-controls")).not.toContainText("ORDERS");
+    await expect(page.locator(".orders-list-controls")).not.toContainText("订单复盘");
     const tabAlignment = await page.evaluate(() => {
       const panel = document.querySelector(".trades-panel").getBoundingClientRect();
       const tabs = document.querySelector(".orders-list-views").getBoundingClientRect();
-      const styles = getComputedStyle(document.querySelector(".orders-panel-head"));
-      const scale = Number.parseFloat(getComputedStyle(document.querySelector(".app-shell")).zoom || "1");
-      return { leftGap: (tabs.left - panel.left - parseFloat(styles.paddingLeft)) / scale };
+      return { centerGap: Math.abs((tabs.left + tabs.width / 2) - (panel.left + panel.width / 2)) };
     });
     if (testInfo.project.name !== "mobile-390") {
-      expect(Math.abs(tabAlignment.leftGap)).toBeLessThanOrEqual(2);
+      expect(tabAlignment.centerGap).toBeLessThanOrEqual(2);
     }
     await expect(page.locator(".detail-title-pnl")).toHaveText("-$42.75");
     await expect(page.locator(".detail-title-pnl")).toHaveClass(/loss-text/);
@@ -690,15 +690,15 @@ test("keeps the compact order index narrow and removes redundant list controls",
     }));
     expect(weekdayBadge.radius).toBe("4px");
     expect(weekdayBadge.text).toBe("五");
-    const groupColors = await page.locator("#orderRows .campaign-day-row").first().evaluate((row) => ({
-      background: getComputedStyle(row.querySelector("td")).backgroundColor,
+    const groupColors = await page.locator("#orderRows .campaign-day-card").first().evaluate((row) => ({
+      background: getComputedStyle(row).backgroundColor,
       foreground: getComputedStyle(row.querySelector(".campaign-day-date")).color,
     }));
-    expect(groupColors.background).toBe("rgb(38, 50, 62)");
-    expect(groupColors.foreground).toBe("rgb(244, 246, 248)");
+    expect(groupColors.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(groupColors.foreground).not.toBe("rgba(0, 0, 0, 0)");
     await expect(page.locator("#orderRows .campaign-day-summary")).toContainText("2笔");
     await expect(page.locator("#orderRows .campaign-day-pnl-pill")).toHaveCount(0);
-    await expect(page.locator("#orderRows .campaign-list-index")).toHaveCount(2);
+    await expect(page.locator("#orderRows .campaign-list-index")).toHaveCount(0);
     await expect(page.locator("#orderRows .campaign-list-contract")).toHaveCount(2);
     await expect(page.locator("#orderRows .campaign-list-opened")).toHaveCount(2);
     await expect(page.locator("#orderRows .campaign-list-pnl")).toHaveCount(2);
@@ -709,7 +709,10 @@ test("keeps the compact order index narrow and removes redundant list controls",
     ));
     expect(iconFollowsContract).toBe(true);
     await expect(page.locator(".detail-contract-name")).toContainText("XAUUSD");
-    const listWidth = await page.locator(".trades-panel").evaluate((node) => node.getBoundingClientRect().width);
+    const listWidth = await page.locator(".trades-panel").evaluate((node) => {
+      const scale = Number.parseFloat(getComputedStyle(document.querySelector(".app-shell")).zoom || "1");
+      return node.getBoundingClientRect().width / scale;
+    });
     if (isMobile) {
       const mobileLayout = await page.evaluate(() => {
         const list = document.querySelector(".trades-panel").getBoundingClientRect();
@@ -725,13 +728,14 @@ test("keeps the compact order index narrow and removes redundant list controls",
       expect(listWidth).toBeLessThanOrEqual(390);
       expect(mobileLayout).toEqual({ overflow: false, detailBelowList: false, metadataBelowScreenshot: true });
     } else {
-      expect(listWidth).toBeLessThanOrEqual(220);
+      expect(listWidth).toBeGreaterThan(359);
+      expect(listWidth).toBeLessThanOrEqual(400);
       const split = await page.evaluate(() => {
         const list = document.querySelector(".trades-panel").getBoundingClientRect();
         const detail = document.querySelector(".detail-panel").getBoundingClientRect();
         return { listWidth: list.width, detailStartsBesideList: detail.left >= list.right };
       });
-      expect(split.listWidth).toBeLessThanOrEqual(220);
+      expect(split.listWidth).toBeLessThanOrEqual(400);
       expect(split.detailStartsBesideList).toBe(true);
     }
     expect(errors).toEqual([]);

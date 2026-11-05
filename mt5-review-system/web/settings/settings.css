@@ -170,9 +170,51 @@
   gap: var(--space-2);
 }
 
+.settings-field-create > button {
+  align-self: center;
+  height: var(--control-height);
+}
+
 .settings-field-create input {
   flex: 1;
   max-width: 320px;
+}
+
+.field-platforms {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.field-platforms-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.field-platform-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.option-row.is-inactive {
+  opacity: 0.58;
+}
+
+.option-row.is-inactive::after {
+  content: "已停用，历史填写仍保留";
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.custom-field-type-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .custom-field-schema {
@@ -211,7 +253,7 @@
   gap: var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-inner);
   background: var(--color-surface-raised);
 }
 
@@ -229,6 +271,36 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-2);
+}
+
+.option-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Nested glass surfaces must not place their refraction layer over form controls. */
+.custom-field-card::before,
+.custom-field-card::after,
+.option-editor::before,
+.option-editor::after,
+.option-row::before,
+.option-row:not(.is-inactive)::after {
+  display: none;
+}
+
+.option-row.is-inactive::after {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  grid-column: 2 / -1;
+  background: none;
+  filter: none;
+  mix-blend-mode: normal;
+  opacity: 1;
 }
 
 .option-row input[type="color"] {

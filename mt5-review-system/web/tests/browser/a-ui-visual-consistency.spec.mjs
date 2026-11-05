@@ -180,14 +180,21 @@ for (const [pageName, route] of routes) {
     expect(browserErrors).toEqual([]);
 
     if (pageName.includes("orders")) {
-      const activeRowColor = await page.evaluate(() => {
-        const row = document.createElement("tr");
-        row.className = "active";
-        row.innerHTML = "<td>visual contract</td>";
-        document.querySelector(".orders-table tbody")?.append(row);
-        return getComputedStyle(row).backgroundColor;
+      const activeOrderStyles = await page.evaluate(() => {
+        const host = document.querySelector(".order-card-list") || document.body;
+        const row = document.createElement("div");
+        row.className = "campaign-card-order active";
+        row.innerHTML = '<div class="campaign-order-cell"><div class="campaign-list-order"><span>09:42</span><strong>visual contract</strong><strong>1.00</strong></div></div>';
+        host.append(row);
+        const order = row.querySelector(".campaign-list-order");
+        const style = getComputedStyle(order);
+        const result = {backgroundImage: style.backgroundImage, radius: style.borderRadius, filter: style.backdropFilter};
+        row.remove();
+        return result;
       });
-      expect(activeRowColor).toBe("rgba(121, 200, 213, 0.14)");
+      expect(activeOrderStyles.backgroundImage).toContain("linear-gradient");
+      expect(activeOrderStyles.radius).toBe("999px");
+      expect(activeOrderStyles.filter).toContain("blur");
     }
   });
 }
