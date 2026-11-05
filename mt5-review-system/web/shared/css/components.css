@@ -23,12 +23,23 @@
 .glass-surface--fluid::before,
 .modal-surface::before,
 .floating-context-card::before,
-.glass-menu::before {
+.glass-menu::before,
+.panel::before,
+.filter-bar::before,
+.popover::before,
+.menu::before {
   position: absolute;
   z-index: 1;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 1%, var(--glass-highlight) 18%, rgba(255, 255, 255, 0.06) 76%, transparent);
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--glass-spectrum-edge);
+  filter: blur(1.6px);
+  opacity: 0.72;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
   content: "";
   pointer-events: none;
 }
@@ -111,9 +122,9 @@
   box-shadow: var(--shadow-float);
 }
 
-/* A moving refraction band gives each glass object a visible surface response.
+/* A static diagonal refraction gives each glass object a visible surface response.
    It stays on a pointer-free pseudo-element so text, controls, and menus remain
-   fully interactive while only transform and opacity are animated. */
+   fully interactive while unlit areas stay close to the black page background. */
 .glass-surface,
 .glass-surface--clear,
 .glass-surface--fluid,
@@ -140,28 +151,25 @@
 .settings-panel::after {
   position: absolute;
   z-index: 1;
-  top: -72%;
-  bottom: -72%;
-  left: -58%;
-  width: 42%;
+  inset: -12%;
   background: linear-gradient(
-    105deg,
-    transparent 0%,
-    rgba(220, 247, 255, 0.06) 24%,
-    rgba(220, 247, 255, 0.2) 39%,
-    rgba(220, 247, 255, 0.32) 45%,
-    rgba(121, 200, 213, 0.22) 54%,
-    rgba(255, 255, 255, 0.08) 62%,
-    transparent 74%
+    135deg,
+    rgba(220, 247, 255, 0.07) 0%,
+    transparent 13%,
+    transparent 39%,
+    rgba(220, 247, 255, 0.025) 47%,
+    rgba(255, 255, 255, 0.035) 51%,
+    transparent 57%,
+    transparent 82%,
+    rgba(255, 214, 126, 0.06) 94%,
+    transparent 100%
   );
-  filter: blur(13px);
+  filter: blur(12px);
   mix-blend-mode: screen;
-  opacity: 0.9;
-  transform: translate3d(-155%, 0, 0) rotate(18deg);
-  animation: glass-surface-sheen var(--motion-duration-sheen) var(--motion-easing-fluid) infinite;
+  opacity: 0.68;
+  animation: none;
   content: "";
   pointer-events: none;
-  will-change: transform, opacity;
 }
 
 .glass-surface > *,
@@ -176,13 +184,6 @@
 .settings-panel > * {
   position: relative;
   z-index: 2;
-}
-
-@keyframes glass-surface-sheen {
-  0%, 8% { opacity: 0; transform: translate3d(-155%, 0, 0) rotate(18deg); }
-  22% { opacity: 0.92; }
-  48% { opacity: 0.52; }
-  70%, 100% { opacity: 0; transform: translate3d(420%, 0, 0) rotate(18deg); }
 }
 
 .glass-menu__option {
@@ -356,18 +357,6 @@ a[aria-disabled="true"] {
   -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
 }
 
-.modal-surface::before,
-.popover::before,
-.menu::before {
-  position: absolute;
-  z-index: 2;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 1%, rgba(255, 255, 255, 0.28) 18%, rgba(255, 255, 255, 0.11) 76%, transparent);
-  content: "";
-  pointer-events: none;
-}
-
 .popover[hidden],
 .menu[hidden] {
   display: none;
@@ -398,17 +387,6 @@ a[aria-disabled="true"] {
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
-}
-
-.panel::before,
-.filter-bar::before {
-  position: absolute;
-  z-index: 2;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 1%, rgba(255, 255, 255, 0.28) 18%, rgba(255, 255, 255, 0.11) 76%, transparent);
-  content: "";
-  pointer-events: none;
 }
 
 input,

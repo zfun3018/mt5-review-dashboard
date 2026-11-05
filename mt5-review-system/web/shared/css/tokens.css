@@ -4,11 +4,11 @@
   --color-bg: #000000;
   --color-bg-atmosphere: #000000;
   --glass-atmosphere: var(--color-bg-atmosphere);
-  --glass-base: rgba(23, 25, 29, 0.68);
+  --glass-base: rgba(23, 25, 29, 0.30);
   --glass-base-fallback: #1e2d39;
-  --glass-clear: rgba(38, 41, 47, 0.74);
+  --glass-clear: rgba(38, 41, 47, 0.36);
   --glass-clear-fallback: #2c4351;
-  --glass-fluid: linear-gradient(145deg, rgba(54, 59, 67, 0.78), rgba(13, 14, 18, 0.66));
+  --glass-fluid: linear-gradient(145deg, rgba(54, 59, 67, 0.42), rgba(13, 14, 18, 0.24));
   --glass-fluid-fallback: #354f60;
   --color-surface: var(--glass-base);
   --color-surface-raised: var(--glass-clear);
@@ -82,6 +82,7 @@
   --focus-ring-color: rgba(121, 200, 213, 0.72);
   --focus-ring-shadow: 0 0 0 3px rgba(121, 200, 213, 0.26), 0 0 24px rgba(121, 200, 213, 0.16);
   --glass-highlight: rgba(232, 250, 255, 0.34);
+  --glass-spectrum-edge: conic-gradient(from 205deg, rgba(255, 157, 120, 0.3) 0 8%, transparent 14% 25%, rgba(112, 198, 255, 0.38) 31% 39%, transparent 46% 58%, rgba(184, 145, 255, 0.3) 64% 72%, transparent 78% 88%, rgba(255, 214, 126, 0.28) 94% 100%);
   --shadow-contact: 0 5px 16px rgba(0, 0, 0, 0.24);
   --shadow-ambient: 0 32px 84px rgba(0, 0, 0, 0.42), 0 0 42px rgba(61, 156, 190, 0.1);
   --shadow-window: 0 48px 130px rgba(0, 0, 0, 0.65), 0 12px 34px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.16);

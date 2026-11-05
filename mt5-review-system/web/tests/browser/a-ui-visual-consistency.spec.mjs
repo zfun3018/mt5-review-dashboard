@@ -141,7 +141,7 @@ for (const [pageName, route] of routes) {
     expect(styles.panelRadius).toBe("24px");
     expect(styles.panelShadow).toContain("32px 84px");
     expect(styles.panelBackgroundImage === "none" || styles.panelBackgroundImage.includes("linear-gradient") || styles.panelBackgroundColor.includes("27, 43, 56")).toBe(true);
-    expect(styles.panelHighlight).toContain("linear-gradient");
+    expect(styles.panelHighlight).toMatch(/(?:linear|conic)-gradient/);
     if (styles.primaryRadius) {
       expect(styles.primaryRadius).toBe("999px");
       expect(styles.primaryBackground).toContain("linear-gradient");

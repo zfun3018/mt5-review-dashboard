@@ -14,6 +14,7 @@ test("shared Fluid Luminous tokens expose the visual contract", async () => {
     "--glass-base",
     "--glass-clear",
     "--glass-fluid",
+    "--glass-spectrum-edge",
     "--glass-blur",
     "--glass-saturation",
     "--motion-duration-expand",
@@ -77,11 +78,14 @@ test("shared components expose glass, menu, tag, state, and motion primitives", 
   assert.match(shell, /app-page-bar__actions/);
 });
 
-test("glass surfaces expose a visible moving refraction layer", async () => {
+test("glass surfaces expose a visible static diagonal refraction layer", async () => {
   const components = await readFile(join(cssDir, "components.css"), "utf8");
   assert.match(components, /\.glass-surface::after[\s\S]*?\.glass-menu::after/);
-  assert.match(components, /background:\s*linear-gradient\(\s*105deg,[\s\S]*?rgba\(220, 247, 255, 0\.2\)/);
-  assert.match(components, /animation:\s*glass-surface-sheen\s+var\(--motion-duration-sheen\)/);
-  assert.match(components, /@keyframes\s+glass-surface-sheen[\s\S]*?transform:[\s\S]*?translate3d/);
-  assert.match(components, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.glass-surface::after[\s\S]*?animation:\s*none/);
+  assert.match(components, /background:\s*linear-gradient\(\s*135deg,[\s\S]*?rgba\(220, 247, 255, 0\.07\)/);
+  assert.match(components, /mix-blend-mode:\s*screen/);
+  assert.match(components, /background:\s*var\(--glass-spectrum-edge\)/);
+  assert.match(components, /mask-composite:\s*exclude/);
+  assert.match(components, /animation:\s*none/);
+  assert.doesNotMatch(components, /glass-surface-sheen/);
+  assert.doesNotMatch(components, /will-change:\s*transform/);
 });
