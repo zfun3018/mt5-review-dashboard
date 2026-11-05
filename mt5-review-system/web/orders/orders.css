@@ -3817,7 +3817,7 @@ html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mis
 
 html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-cell.detail-choice {
   display: flex;
-  width: max-content;
+  width: 100%;
   min-width: 28px;
   max-width: 100%;
   min-height: 28px;
@@ -3832,7 +3832,9 @@ html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mis
 
 html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-cell-values {
   display: flex;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
   flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
@@ -4022,6 +4024,15 @@ html[data-platform] .detail-body.order-detail-workspace .detail-review-meta.glas
 html[data-platform] .detail-body.order-detail-workspace .order-secondary-context {
   background: var(--glass-nested) !important;
   box-shadow: var(--shadow-contact), inset 0 1px 0 rgba(232, 250, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.38);
+}
+
+html[data-platform] .detail-body.order-detail-workspace .import-source-section.is-secondary.glass-surface--clear {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: var(--glass-nested) !important;
+  box-shadow: var(--shadow-float);
 }
 
 .campaign-row.active .order-list-selected {

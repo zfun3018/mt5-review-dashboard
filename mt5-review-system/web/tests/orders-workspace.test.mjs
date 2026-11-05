@@ -319,6 +319,7 @@ test("order details expose import batch provenance without absolute paths", () =
   assert.match(markup, /abc123/);
   assert.doesNotMatch(markup, /[A-Z]:\\/);
   assert.match(markup, /import-source-section/);
+  assert.match(markup, /import-source-section[^>]*glass-surface--clear/);
   assert.ok(orderDetailSource.indexOf('class="execution-section"') < orderDetailSource.lastIndexOf("renderImportSourcesMarkup"));
 });
 

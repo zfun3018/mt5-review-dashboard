@@ -65,8 +65,8 @@ function campaignStop(detail) {
 
 export function renderImportSourcesMarkup(sources = []) {
   const items = Array.isArray(sources) ? sources : [];
-  if (!items.length) return '<section class="import-source-section is-secondary order-secondary-context" aria-label="导入来源"><div class="section-head"><h3>导入来源</h3></div><div class="import-source-empty">来源信息不可用（可能是历史导入数据）</div></section>';
-  return `<section class="import-source-section is-secondary order-secondary-context" aria-label="导入来源">
+  if (!items.length) return '<section class="import-source-section is-secondary order-secondary-context glass-surface--clear" aria-label="导入来源"><div class="section-head"><h3>导入来源</h3></div><div class="import-source-empty">来源信息不可用（可能是历史导入数据）</div></section>';
+  return `<section class="import-source-section is-secondary order-secondary-context glass-surface--clear" aria-label="导入来源">
     <div class="section-head"><h3>导入来源</h3><span>${items.length} 个批次</span></div>
     <div class="import-source-list">${items.map((source) => `
       <article class="import-source-item">

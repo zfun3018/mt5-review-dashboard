@@ -161,7 +161,7 @@
 .settings-panel::after {
   position: absolute;
   z-index: 1;
-  inset: -12%;
+  inset: 0;
   background: linear-gradient(
     135deg,
     rgba(220, 247, 255, 0.07) 0%,
