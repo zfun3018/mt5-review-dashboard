@@ -54,6 +54,16 @@
   box-shadow: var(--shadow-float);
 }
 
+.glass-surface--clear .glass-surface--clear {
+  background: var(--glass-nested);
+  box-shadow: var(--shadow-float);
+}
+
+.glass-surface--clear .glass-surface--fluid {
+  background: var(--glass-nested-fluid);
+  box-shadow: var(--shadow-float);
+}
+
 .glass-surface:hover,
 .glass-surface--clear:hover,
 .glass-surface--fluid:hover,

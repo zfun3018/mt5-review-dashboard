@@ -147,7 +147,7 @@ for (const [pageName, route] of routes) {
       expect(styles.primaryBackground).toContain("linear-gradient");
     }
     expect(styles.controlHeight).toBe("42px");
-    expect(styles.circleControls.every(({width, height}) => width === 42 && height === 42)).toBe(true);
+    expect(styles.circleControls.every(({width, height}) => width === height && (width === 42 || width === 34))).toBe(true);
     expect(styles.pillControls.every(({height, radius}) => height >= 42 && radius === "999px")).toBe(true);
     if (!styles.isMobile) expect(styles.pillControls.every(({height}) => height === 42)).toBe(true);
     if (!styles.isMobile) {

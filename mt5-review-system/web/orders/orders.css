@@ -4007,6 +4007,23 @@ html[data-platform] .detail-review-meta.glass-surface--fluid {
   box-shadow: var(--shadow-float);
 }
 
+/* Keep stacked detail modules darker than their parent so each layer reads as
+   a separate floating pane instead of one continuous pale surface. */
+html[data-platform] .detail-body.order-detail-workspace .order-screenshot-stage.glass-surface--clear {
+  background: var(--glass-nested) !important;
+  box-shadow: var(--shadow-float);
+}
+
+html[data-platform] .detail-body.order-detail-workspace .detail-review-meta.glass-surface--fluid {
+  background: var(--glass-nested-fluid) !important;
+  box-shadow: var(--shadow-float);
+}
+
+html[data-platform] .detail-body.order-detail-workspace .order-secondary-context {
+  background: var(--glass-nested) !important;
+  box-shadow: var(--shadow-contact), inset 0 1px 0 rgba(232, 250, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.38);
+}
+
 .campaign-row.active .order-list-selected {
   border-color: rgba(var(--color-accent-rgb), 0.55);
   border-radius: var(--radius-control);

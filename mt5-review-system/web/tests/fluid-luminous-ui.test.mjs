@@ -14,6 +14,8 @@ test("shared Fluid Luminous tokens expose the visual contract", async () => {
     "--glass-base",
     "--glass-clear",
     "--glass-fluid",
+    "--glass-nested",
+    "--glass-nested-fluid",
     "--glass-spectrum-edge",
     "--glass-blur",
     "--glass-saturation",

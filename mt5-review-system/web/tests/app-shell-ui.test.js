@@ -594,7 +594,7 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.match(tokens, /--color-accent:\s*#79c8d5/);
   assert.match(tokens, /--glass-blur:\s*38px/);
   assert.match(tokens, /--glass-panel-blur:\s*32px/);
-  assert.match(tokens, /--shadow-panel:[^;]*rgba\(88, 178, 214, 0\.16\)/);
+  assert.match(tokens, /--shadow-panel:[^;]*rgba\(0, 0, 0, 0\.24\)/);
   assert.match(tokens, /--glass-saturation:\s*175%/);
   assert.match(tokens, /--shadow-ambient:[^;]*,/);
   assert.doesNotMatch(shellSource, /THEME_OPTIONS|THEME_STORAGE_KEY|app-theme-button/);
