@@ -8,7 +8,7 @@ set "PROJECT_DIR=%ROOT_DIR%\mt5-review-system"
 rem One-click launch is intended for a trusted home/office LAN.
 rem Direct start.ps1 and Python execution still default to loopback.
 if "%MT5_REVIEW_HOST%"=="" set "MT5_REVIEW_HOST=0.0.0.0"
-if "%MT5_REVIEW_PORT%"=="" set "MT5_REVIEW_PORT=8787"
+if "%MT5_REVIEW_PORT%"=="" set "MT5_REVIEW_PORT=9277"
 set "DASHBOARD_URL=http://127.0.0.1:%MT5_REVIEW_PORT%"
 
 rem v0.6.0: route data + config to the canonical main-folder locations

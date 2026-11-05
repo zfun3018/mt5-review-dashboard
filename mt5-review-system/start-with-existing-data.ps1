@@ -30,7 +30,7 @@ $env:MT5_REVIEW_DATA_DIR    = $V05DataDir
 $env:MT5_REVIEW_CONFIG_FILE = $V05ConfigFile
 
 if (-not $env:MT5_REVIEW_HOST) { $env:MT5_REVIEW_HOST = "127.0.0.1" }
-if (-not $env:MT5_REVIEW_PORT) { $env:MT5_REVIEW_PORT = "8787" }
+if (-not $env:MT5_REVIEW_PORT) { $env:MT5_REVIEW_PORT = "9277" }
 
 Write-Host "[v0.6.1] project root  : $ScriptRoot"
 Write-Host "[v0.6.1] data dir      : $env:MT5_REVIEW_DATA_DIR"

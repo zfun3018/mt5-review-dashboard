@@ -139,14 +139,14 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
   expect(visual.calendarCanvas.height).toBeGreaterThan(0);
   expect(visual.calendarDayCount).toBe(31);
   expect(visual.calendarOrientation).toBe("vertical");
-  expect(visual.navLink.width).toBe(48);
-  expect(visual.navLink.height).toBe(48);
-  expect(visual.navLinkRadius).toBe("15px");
+  expect(visual.navLink.width).toBe(40);
+  expect(visual.navLink.height).toBe(40);
+  expect(visual.navLinkRadius).toBe("50%");
   expect(visual.navIconBackground).toBe("rgba(0, 0, 0, 0)");
   expect(visual.calendarChart.y + visual.calendarChart.height).toBeLessThanOrEqual(visual.calendarPanel.y + visual.calendarPanel.height);
-  expect(visual.collapseButton.width).toBe(42);
-  expect(visual.collapseButton.height).toBe(42);
-  expect(visual.collapseRadius).toBe("15px");
+  expect(visual.collapseButton.width).toBe(34);
+  expect(visual.collapseButton.height).toBe(34);
+  expect(visual.collapseRadius).toBe("50%");
 });
 
 test("MT5 calendar labels break onto lines and evaluation headers stay legible while scrolling", async ({page, syntheticServer}, testInfo) => {

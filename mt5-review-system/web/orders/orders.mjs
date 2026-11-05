@@ -45,6 +45,7 @@ const campaignTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
 
 const CHECKIN_WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
 const ORDER_BATCH_SIZE = 50;
+const ORDERS_CANVAS_MIN_WIDTH = 1544;
 
 function parseCalendarDate(value) {
   const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -621,6 +622,22 @@ export function createOrdersController({
       listHeightSyncTimer = null;
       applyListPanelHeight();
     }, 0);
+  }
+
+  function syncOrdersCanvasScale() {
+    const shell = view.querySelector?.(".app-shell");
+    const windowObject = view.defaultView || globalThis;
+    const viewportWidth = Number(windowObject.innerWidth || 0);
+    if (!shell || !viewportWidth) return;
+    const availableWidth = Math.max(1, viewportWidth - 24);
+    const scale = Math.min(1, availableWidth / ORDERS_CANVAS_MIN_WIDTH);
+    shell.style.zoom = scale.toFixed(4);
+    shell.toggleAttribute?.("data-orders-scaled", scale < 0.999);
+  }
+
+  function handleViewportResize() {
+    syncOrdersCanvasScale();
+    scheduleListHeightSync();
   }
 
   function bindDayToggles() {
@@ -1324,10 +1341,12 @@ export function createOrdersController({
   function init() {
     const cleanup = typeof mountShell === "function"
       ? mountShell({
-        activeRoute: "/orders/", title: "订单复盘", onRefresh, share: true,
+        activeRoute: "/orders/", title: "订单", onRefresh, share: true,
         toolbarFilters: view.querySelector?.(".order-filters"),
       })
       : null;
+
+    syncOrdersCanvasScale();
 
     const timePreset = getElement("timePreset");
     const startFilter = getElement("startFilter");
@@ -1394,14 +1413,14 @@ export function createOrdersController({
       });
     }
     const windowObject = view.defaultView || globalThis;
-    windowObject.addEventListener?.("resize", scheduleListHeightSync);
+    windowObject.addEventListener?.("resize", handleViewportResize);
 
     return cleanup;
   }
 
   function dispose() {
     if (listHeightSyncTimer) clearTimeout(listHeightSyncTimer);
-    (view.defaultView || globalThis).removeEventListener?.("resize", scheduleListHeightSync);
+    (view.defaultView || globalThis).removeEventListener?.("resize", handleViewportResize);
     detachListScroll?.();
     gate.abortAll();
     customFieldsModule.dispose();

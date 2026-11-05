@@ -1259,5 +1259,15 @@ class HttpAdapterTest(unittest.TestCase):
         self.assertEqual(traversal_status, HTTPStatus.NOT_FOUND)
         self.assertNotIn(b"private", traversal_body)
 
+    def test_client_disconnect_during_response_write_is_ignored(self):
+        class AbortedWriter:
+            def write(self, body):
+                raise ConnectionAbortedError(10053, "client closed connection")
+
+        handler = object.__new__(ReviewRequestHandler)
+        handler.wfile = AbortedWriter()
+
+        handler._write_response_body(b"synthetic payload")
+
 if __name__ == "__main__":
     unittest.main()

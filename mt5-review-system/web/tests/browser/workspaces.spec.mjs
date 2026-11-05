@@ -59,9 +59,9 @@ test.describe("workspaces — desktop", () => {
     const navigation = page.locator('aside[aria-label="应用导航"]');
     await expect(navigation).toBeVisible();
 
-    await page.getByRole("link", { name: "订单复盘" }).click();
+    await page.getByRole("link", { name: "订单" }).click();
     await expect(page).toHaveURL(/\/orders\//);
-    await expect(page.getByRole("heading", { name: "订单复盘" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "订单" }).first()).toBeVisible();
 
     await page.getByRole("link", { name: "设置" }).click();
     await expect(page).toHaveURL(/\/settings\//);
@@ -105,18 +105,20 @@ test.describe("workspaces — desktop", () => {
     const filters = page.locator(".app-page-bar__filters");
     await expect(filters).toBeVisible();
     for (const id of ["timePreset", "startFilter", "endFilter", "deletedFilter"]) {
-      await expect(filters.locator(`#${id}`)).toBeVisible();
+      if (id === "timePreset") await expect(filters.locator(`#${id}`)).toBeHidden();
+      else await expect(filters.locator(`#${id}`)).toBeVisible();
     }
+    await expect(filters.locator(".app-filter-presets")).toBeVisible();
     for (const id of ["sideFilter", "tradeTypeFilter", "strategyFilter", "riskMissingOnly"]) {
       await expect(page.locator(`#${id}`)).toHaveCount(0);
     }
     await expect(page.locator(".app-page-bar__search")).toHaveCount(0);
-    await page.locator("#timePreset").selectOption("7d");
+    await filters.locator('.app-filter-preset[data-preset="7d"]').click();
     await expect(page).toHaveURL(/preset=7d/);
     await page.locator("#deletedFilter").selectOption("deleted");
     await expect(page).toHaveURL(/deleted=deleted/);
     await page.reload();
-    await expect(page.locator("#timePreset")).toHaveValue("7d");
+    await expect(filters.locator('.app-filter-preset.is-active')).toHaveAttribute("data-preset", "7d");
     await expect(page.locator("#deletedFilter")).toHaveValue("deleted");
     await assertNoOverflow(page);
     await expectNoErrors(page, errors);
@@ -126,7 +128,7 @@ test.describe("workspaces — desktop", () => {
     const errors = attachConsoleAssertions(page);
     await page.goto(`${syntheticServer.baseURL}/album/`);
     await expect(page).toHaveURL(/\/orders\/\?listView=featured/);
-    await expect(page.getByRole("heading", { name: "订单复盘" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "订单" }).first()).toBeVisible();
     await assertNoOverflow(page);
     await expectNoErrors(page, errors);
   });
@@ -173,11 +175,12 @@ test.describe("workspaces — 390px mobile", () => {
     await page.goto(`${syntheticServer.baseURL}/dashboard/`);
     const dashboardFilters = page.locator(".app-page-bar__filters");
     await expect(dashboardFilters).toBeVisible();
-    await expect(dashboardFilters.locator("#timePreset")).toBeVisible();
+    await expect(dashboardFilters.locator("#timePreset")).toBeHidden();
+    await expect(dashboardFilters.locator(".app-filter-presets")).toBeVisible();
     await expect(dashboardFilters.locator("#startDateFilter")).toBeVisible();
     await expect(dashboardFilters.locator("#endDateFilter")).toBeVisible();
     await expect(page.locator(".app-page-bar__search")).toHaveCount(0);
-    await page.locator("#timePreset").selectOption("30d");
+    await dashboardFilters.locator('.app-filter-preset[data-preset="30d"]').click();
     await expect(page).toHaveURL(/preset=30d/);
 
     await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=domestic_futures`);
@@ -194,7 +197,7 @@ test.describe("workspaces — 390px mobile", () => {
     // On mobile the navigation is rendered with `aria-hidden="true"` and
     // `inert`; opening the drawer toggles both. We assert the toggle by
     // checking that links inside become reachable.
-    const ordersLink = page.getByRole("link", { name: "订单复盘" });
+    const ordersLink = page.getByRole("link", { name: "订单" });
     await expect(ordersLink).toBeHidden();
 
     await menuButton.click();
@@ -218,7 +221,7 @@ test.describe("workspaces — 390px mobile", () => {
   }) => {
     const errors = attachConsoleAssertions(page);
     await page.goto(`${syntheticServer.baseURL}/orders/`);
-    await expect(page.getByRole("heading", { name: "订单复盘" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "订单" }).first()).toBeVisible();
     await assertNoOverflow(page);
 
     await page.goto(`${syntheticServer.baseURL}/settings/`);

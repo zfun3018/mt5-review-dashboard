@@ -537,5 +537,5 @@ test("album prefers the human-readable contract display name", () => {
 test("album is no longer listed as a shared shell destination", async () => {
   const { NAV_ITEMS } = await import("../shared/js/shell.mjs");
   assert.ok(!NAV_ITEMS.some((item) => item.href === "/album/"));
-  assert.ok(NAV_ITEMS.some((item) => item.href === "/orders/" && item.label === "订单复盘"));
+  assert.ok(NAV_ITEMS.some((item) => item.href === "/orders/" && item.label === "订单"));
 });

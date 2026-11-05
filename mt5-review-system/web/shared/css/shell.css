@@ -253,6 +253,8 @@
 .app-shell__main {
   position: relative;
   z-index: 2;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   background: rgba(8, 11, 15, 0.18);
 }
@@ -469,7 +471,276 @@
   }
 }
 
+/* Shared page chrome: controls sit directly on the page while each navigation
+   destination keeps the same circular glass icon treatment. */
+html[data-platform] .app-page-bar {
+  position: relative;
+  top: auto;
+  min-height: 56px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-platform] .app-navigation {
+  position: fixed;
+  box-sizing: border-box;
+  top: 12px;
+  left: 12px;
+  width: var(--sidebar-expanded-width);
+  height: calc(100dvh - 24px);
+  min-height: 0;
+  margin: 0;
+  border: 1px solid rgba(216, 239, 247, 0.18);
+  border-radius: var(--radius-window);
+  background: linear-gradient(150deg, rgba(38, 45, 54, 0.34), rgba(7, 10, 14, 0.52));
+  box-shadow: var(--shadow-float);
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+html[data-platform] .app-shell {
+  grid-template-columns: var(--sidebar-expanded-width) minmax(0, 1fr);
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] {
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+}
+
+html[data-platform] .app-navigation__brand {
+  justify-content: flex-start;
+  min-height: 58px;
+  padding: 10px 14px;
+}
+
+html[data-platform] .app-navigation__brand-copy,
+html[data-platform] .app-navigation__section-title {
+  display: none;
+}
+
+html[data-platform] .app-navigation__mark {
+  border-radius: var(--radius-circle);
+}
+
+html[data-platform] .app-navigation__links {
+  justify-items: stretch;
+  gap: 10px;
+  padding: 12px 8px;
+}
+
+html[data-platform] .app-navigation__link,
+html[data-platform] .app-navigation__meta-link {
+  box-sizing: border-box;
+  width: auto;
+  min-width: 0;
+  height: 48px;
+  min-height: 48px;
+  justify-content: flex-start;
+  gap: 11px;
+  margin: 0;
+  padding: 5px 9px;
+  border: 1px solid rgba(216, 239, 247, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html[data-platform] .app-navigation__link > svg,
+html[data-platform] .app-navigation__meta-link > svg {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 7px;
+  border: 1px solid rgba(216, 239, 247, 0.16);
+  border-radius: var(--radius-circle);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+html[data-platform] .app-navigation__link[aria-current="page"] {
+  border-color: rgba(var(--color-accent-rgb), 0.48);
+  background: radial-gradient(circle at 32% 24%, rgba(222, 251, 255, 0.24), rgba(var(--color-accent-rgb), 0.14) 55%, rgba(4, 8, 12, 0.48));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+html[data-platform] .app-navigation__label {
+  display: inline;
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__link,
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__meta-link {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  justify-content: center;
+  gap: 0;
+  margin-inline: auto;
+  padding: 0;
+  border-radius: var(--radius-circle);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation {
+  width: var(--sidebar-collapsed-width);
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__brand {
+  justify-content: center;
+  padding-inline: 6px;
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__links {
+  padding-inline: 7px;
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__link > svg,
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__meta-link > svg {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__label {
+  display: none;
+}
+
+html[data-platform] .app-navigation__footer {
+  justify-items: center;
+  padding: 10px 8px;
+  border-top-color: rgba(216, 239, 247, 0.1);
+}
+
+html[data-platform] .app-navigation__environment {
+  display: none;
+}
+
+html[data-platform] .app-icon-button.app-navigation__collapse,
+html[data-platform] .app-page-bar__actions > .app-icon-button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid rgba(216, 239, 247, 0.18);
+  border-radius: var(--radius-circle);
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+}
+
+html[data-platform] .app-page-bar__filters .filter-bar,
+html[data-platform] .app-page-bar__filters .domestic-filter-bar {
+  min-height: 0;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-platform] .app-page-bar__actions {
+  min-width: 0;
+  gap: 8px;
+}
+
+html[data-platform] .app-page-bar__filters .filter-bar select,
+html[data-platform] .app-page-bar__filters .toolbar-date-control,
+html[data-platform] .app-page-bar__filters .domestic-range button {
+  height: 30px;
+  min-height: 30px;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgba(239, 245, 248, 0.84);
+  font-size: 11px;
+}
+
+html[data-platform] .app-page-bar__filters .filter-bar select:focus,
+html[data-platform] .app-page-bar__filters .toolbar-date-control:focus-within {
+  border-color: rgba(var(--color-accent-rgb), 0.38);
+  outline: 0;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html[data-platform] .app-page-bar__filters .domestic-range button.is-active {
+  border-color: rgba(255, 255, 255, 0.38);
+  background: linear-gradient(145deg, #b2eaf0, #6bc1ce);
+  color: #081115;
+  box-shadow: 0 3px 10px rgba(75, 181, 199, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.76);
+}
+
+html[data-platform] .app-page-bar__filters .toolbar-date-control {
+  padding-inline: 8px;
+  border: 1px solid rgba(216, 239, 247, 0.14);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+html[data-platform] .app-page-bar__filters #deletedFilter {
+  height: 30px;
+  border: 1px solid rgba(216, 239, 247, 0.14);
+  background: rgba(26, 34, 42, 0.48);
+}
+
+html[data-platform] .app-page-bar__filters .toolbar-date-control input[type="date"] {
+  background: transparent;
+}
+
+html[data-platform] .app-page-bar__filters .app-filter-native-select {
+  display: none !important;
+}
+
+html[data-platform] .app-filter-presets,
+html[data-platform] .domestic-range {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(216, 239, 247, 0.12);
+  border-radius: var(--radius-pill);
+  background: rgba(3, 6, 9, 0.2);
+}
+
+html[data-platform] .app-filter-preset,
+html[data-platform] .app-page-bar__filters .domestic-range button {
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgba(239, 245, 248, 0.78);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html[data-platform] .app-filter-preset:hover,
+html[data-platform] .app-page-bar__filters .domestic-range button:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html[data-platform] .app-filter-preset.is-active,
+html[data-platform] .app-page-bar__filters .domestic-range button.is-active {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: linear-gradient(145deg, #b6edf2, #6bc1ce);
+  color: #081115;
+  box-shadow: 0 3px 10px rgba(75, 181, 199, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+html[data-platform] .app-filter-preset:focus-visible,
+html[data-platform] .app-page-bar__filters .domestic-range button:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
 .app-page-bar__title {
+  width: 100%;
   overflow: hidden;
   gap: 12px;
 }
@@ -487,6 +758,12 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
+}
+
+.app-page-bar__title > .app-page-bar__filters {
+  margin-left: auto;
+  flex: 0 1 auto;
+  justify-content: flex-end;
 }
 
 .app-page-bar__filters .filter-bar,
@@ -566,6 +843,13 @@
 }
 
 @media (max-width: 720px), (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  .app-page-bar__title > .app-page-bar__filters {
+    min-width: 0;
+    margin-left: 0;
+    flex: 1 1 0;
+    justify-content: flex-start;
+  }
+
   .app-page-bar__title {
     gap: 7px;
   }

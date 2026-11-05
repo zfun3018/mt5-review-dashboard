@@ -136,6 +136,112 @@ html[data-platform="domestic_futures"] td {
   border-bottom-color: var(--color-border);
 }
 
+html[data-platform] .app-page-bar {
+  position: relative;
+  top: auto;
+  min-height: 56px;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-platform] .app-navigation {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  height: calc(100dvh - 24px);
+  margin: 0;
+  border: 1px solid rgba(216, 239, 247, 0.18);
+  border-radius: var(--radius-window);
+  background: linear-gradient(150deg, rgba(38, 45, 54, 0.34), rgba(7, 10, 14, 0.52));
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+html[data-platform] .app-navigation__mark,
+html[data-platform] .app-navigation__link,
+html[data-platform] .app-navigation__meta-link {
+  border-radius: var(--radius-circle);
+}
+
+html[data-platform] .app-navigation__link,
+html[data-platform] .app-navigation__meta-link {
+  width: auto;
+  min-width: 0;
+  height: 48px;
+  min-height: 48px;
+  justify-content: flex-start;
+  gap: 11px;
+  margin: 0;
+  padding: 5px 9px;
+  border-color: rgba(216, 239, 247, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html[data-platform] .app-navigation__link > svg,
+html[data-platform] .app-navigation__meta-link > svg {
+  box-sizing: content-box;
+  width: 16px;
+  height: 16px;
+  padding: 7px;
+  border: 1px solid rgba(216, 239, 247, 0.16);
+  border-radius: var(--radius-circle);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+html[data-platform] .app-navigation__section-title,
+html[data-platform] .app-navigation__brand-copy,
+html[data-platform] .app-navigation__environment {
+  display: none;
+}
+
+html[data-platform] .app-navigation__links {
+  justify-items: stretch;
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__link,
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__meta-link {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  justify-content: center;
+  gap: 0;
+  margin-inline: auto;
+  padding: 0;
+  border-radius: var(--radius-circle);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__link > svg,
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__meta-link > svg {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__label {
+  display: none;
+}
+
+html[data-platform] .app-navigation__link[aria-current="page"] {
+  border-color: rgba(var(--color-accent-rgb), 0.48);
+  background: radial-gradient(circle at 32% 24%, rgba(222, 251, 255, 0.24), rgba(var(--color-accent-rgb), 0.14) 55%, rgba(4, 8, 12, 0.48));
+}
+
+html[data-platform] .app-icon-button.app-navigation__collapse,
+html[data-platform] .app-page-bar__actions > .app-icon-button {
+  border-radius: var(--radius-circle);
+}
+
 @media (max-width: 720px), (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
   html[data-platform="mt5"] .app-navigation,
   html[data-platform="domestic_futures"] .app-navigation {

@@ -46,7 +46,7 @@ test("isolated A1 visual demo demonstrates the glass component contract", async 
   expect(new Set(styles.circles.map(({width, height, radius}) => `${width}/${height}/${radius}`)).size).toBe(1);
   expect(styles.circles[0]).toEqual({width: "42px", height: "42px", radius: "50%"});
   expect(new Set(styles.pillHeights)).toEqual(new Set(["42px"]));
-  expect(styles.glassFill).toBe("rgba(18, 22, 29, 0.58)");
+  expect(styles.glassFill).toBe("rgba(27, 31, 36, .25)");
 
   await page.getByRole("button", {name: "组件预览"}).click();
   await expect(page.getByRole("dialog")).toBeVisible();

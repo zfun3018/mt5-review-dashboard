@@ -18,7 +18,7 @@ Set-Location $ProjectRoot
 
 # Keep the unauthenticated service local unless LAN access is explicitly requested.
 if (-not $env:MT5_REVIEW_HOST) { $env:MT5_REVIEW_HOST = "127.0.0.1" }
-if (-not $env:MT5_REVIEW_PORT) { $env:MT5_REVIEW_PORT = "8787" }
+if (-not $env:MT5_REVIEW_PORT) { $env:MT5_REVIEW_PORT = "9277" }
 
 function Get-ListeningProcessIds {
   @(Get-NetTCPConnection -State Listen -LocalPort ([int]$env:MT5_REVIEW_PORT) -ErrorAction SilentlyContinue |

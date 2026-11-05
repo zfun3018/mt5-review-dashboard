@@ -931,13 +931,14 @@ test("all primary review controls share one framed row below the screenshot", ()
   assert.match(detailBody, /<section class="detail-review-meta[^"]*"[^>]*>[\s\S]*campaignInitialStop[\s\S]*renderTagPicker\("trade_type_tags"[\s\S]*renderTagPicker\("strategy_tags"[\s\S]*renderTagPicker\("mistake_tags"[\s\S]*<\/section>/);
   assert.doesNotMatch(detailBody, /class="order-info-strip"/);
   assert.match(detailBody, /id="saveState"/);
-  assert.match(orderDetailSource.slice(0, detailHeaderEnd), /主订单 <span class="detail-time">/);
-  assert.doesNotMatch(orderDetailSource.slice(0, detailHeaderEnd), /主订单 · \$\{escapeHtml\(formatBeijingDateTime/);
+  assert.doesNotMatch(detailHeader, /主订单/);
+  assert.match(detailHeader, /detail-title-pnl[^>]*>[\s\S]*<span class="detail-time">开仓 /);
+  assert.match(ordersStyle, /html\[data-platform\]\s+\.orders-layout > \.detail-panel\.order-detail-stage\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none/s);
 });
 
-test("narrow detail layouts place review notes beside the review metadata", () => {
+test("narrow detail layouts place review notes below screenshot and review metadata", () => {
   assert.match(orderDetailSource, /<div class="detail-review-column">[\s\S]*detail-review-meta[\s\S]*review-editor-panel[\s\S]*<\/div>\s*<\/div>/);
-  assert.match(ordersStyle, /@container order-detail \(max-width: 1289px\)[\s\S]*\.detail-review-column\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)\s+minmax\(320px/);
+  assert.match(ordersStyle, /@container order-detail \(max-width: 1289px\)[\s\S]*\.detail-review-column\s*\{[\s\S]*flex-direction:\s*column/);
 });
 
 test("initial stop and single classification controls use content-sized compact inputs", () => {
@@ -951,7 +952,7 @@ test("initial stop and single classification controls use content-sized compact 
   assert.match(orderDetailSource, /is-unclassified/);
   assert.match(ordersStyle, /\.stop-field\s*\{[^}]*display:\s*flex/);
   assert.doesNotMatch(ordersStyle, /\.campaign-tag-field\.is-unclassified \.field-label\s*\{[^}]*display:\s*none/);
-  assert.match(orderDetailSource, /<div class="section-head"><h3>复盘记录<\/h3><span class="review-autosave-state"><span id="saveState"/);
+  assert.match(orderDetailSource, /<div class="section-head"><h3>复盘记录<\/h3><div class="review-editor-meta"><span class="review-autosave-state"><span id="saveState"/);
   assert.doesNotMatch(orderDetailSource, /<div class="order-info-save"><span id="saveState"/);
 });
 
@@ -1093,12 +1094,12 @@ test("order action icons have a wide hit-area gap", () => {
   assert.match(ordersStyle, /\.detail-order-actions\s*\{[\s\S]*gap:\s*14px/);
 });
 
-test("screenshot layout preserves the image's natural aspect ratio", () => {
+test("screenshot fills its module and clips to the glass corner radius", () => {
   const compactStyle = ordersStyle.slice(ordersStyle.lastIndexOf(".snapshot.compact-snapshot"));
-  assert.match(compactStyle, /aspect-ratio:\s*auto/);
-  assert.match(compactStyle, /width:\s*100%;[\s\S]*height:\s*auto;/);
-  assert.doesNotMatch(compactStyle, /min-height:\s*280px/);
-  assert.match(ordersStyle, /\.screenshot-preview\s*\{[\s\S]*display:\s*flex/);
+  assert.match(compactStyle, /width:\s*100%;[\s\S]*height:\s*100%/);
+  assert.match(compactStyle, /object-fit:\s*cover/);
+  assert.match(ordersStyle, /\.detail-hero-grid > \.order-screenshot-stage\s*\{[^}]*overflow:\s*hidden[^}]*border-radius:\s*var\(--radius-panel\)/s);
+  assert.match(ordersStyle, /\.detail-hero-grid > \.order-screenshot-stage \.screenshot-preview\s*\{[^}]*overflow:\s*hidden/);
   assert.match(ordersStyle, /\.detail-hero-grid\s*\{[\s\S]*grid-template-columns:\s*fit-content\(70%\)\s+minmax\(0, 1fr\)/);
   assert.match(ordersStyle, /\.detail-hero-grid\s*\{[\s\S]*overflow:\s*visible/);
   assert.match(ordersStyle, /\.screenshot-editor\s*\{[\s\S]*width:\s*fit-content/);

@@ -38,7 +38,6 @@ test("domestic futures dashboard has a latest import status region and no global
 test("shared shell gives domestic futures its own workspace brand", () => {
   const shell = fs.readFileSync(path.join(webRoot, "shared/js/shell.mjs"), "utf8");
 
-  assert.match(shell, /const workspaceBrand = isDomesticFutures \? "国内期货" : "MT5 复盘"/);
   assert.match(shell, /const workspaceMark = isDomesticFutures \? "期" : "MT"/);
 });
 

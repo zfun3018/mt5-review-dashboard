@@ -242,8 +242,8 @@ test("shell defines the four workspace destinations", async () => {
   assert.deepEqual(
     NAV_ITEMS.map(({href, label}) => ({href, label})),
     [
-      {href: "/dashboard/", label: "复盘仪表盘"},
-      {href: "/orders/", label: "订单复盘"},
+      {href: "/dashboard/", label: "仪表盘"},
+      {href: "/orders/", label: "订单"},
       {href: "/settings/", label: "设置"},
     ],
   );
@@ -301,7 +301,7 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
     action.textContent = "刷新";
     const cleanup = shell.mountShell({
       activeRoute: "/orders/",
-      title: "订单复盘",
+      title: "订单",
       actions: [action],
     });
     const links = root.querySelectorAll("a");
@@ -311,11 +311,11 @@ test("shell manages active navigation, drawer focus, escape, collapse, and clean
 
     assert.equal(typeof cleanup, "function");
     assert.equal(links.find((link) => link.getAttribute("href") === "/orders/").getAttribute("aria-current"), "page");
-    assert.equal(root.querySelectorAll('[aria-label="订单复盘"]')[0].textContent, "订单复盘");
+    assert.equal(root.querySelectorAll('[aria-label="订单"]')[0].textContent, "订单");
     assert.equal(menuButton.getAttribute("title"), "打开导航");
     assert.equal(iconRefreshes, 1);
     assert.ok(root.querySelector('[data-ui="window-controls"]'));
-    assert.ok(root.querySelector('[data-ui="navigation-section"]'));
+    assert.equal(root.querySelector('[data-ui="navigation-section"]'), null);
     assert.equal(root.querySelector('[data-ui="toolbar-context"]'), null);
 
     collapseButton.dispatchEvent({type: "click"});
@@ -375,7 +375,7 @@ test("shell renders current route, platform, refresh/import action, and collapse
     const afterFilter = document.createElement("span");
     filterParent.append(beforeFilter, filter, afterFilter);
     root.append(filterParent);
-    const cleanup = mountShell({activeRoute: "/orders/", title: "订单复盘", toolbarFilters: [filter], onRefresh: () => { refreshes += 1; return refreshPending; }});
+    const cleanup = mountShell({activeRoute: "/orders/", title: "订单", toolbarFilters: [filter], onRefresh: () => { refreshes += 1; return refreshPending; }});
     assert.equal(root.querySelector('[aria-current="page"]').getAttribute("href"), "/orders/");
     const actions = root.querySelector('[data-ui="page-actions"]');
     assert.ok(actions.children.some((node) => node.classList.contains("app-platform-button")));
@@ -603,12 +603,12 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.match(domesticWorkspace, /\.app-page-bar,[\s\S]*?min-height:\s*56px/s);
   assert.match(shell, /\.app-shell::before\s*\{[^}]*box-shadow:\s*20px 0 58px/s);
   assert.match(domesticWorkspace, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
-  assert.doesNotMatch(domesticWorkspace, /\.app-navigation\s*\{[^}]*backdrop-filter:/s);
+  assert.match(domesticWorkspace, /html\[data-platform\] \.app-navigation\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
   assert.match(shell, /\.app-navigation\s*\{[^}]*min-height:\s*calc\(100dvh - 24px\)/s);
   assert.match(domesticDashboard, /\.domestic-module\s*\{[^}]*border-radius:\s*var\(--radius-panel\)[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
   assert.match(dashboard, /\.panel\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
   assert.match(shell, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
-  assert.match(shell, /\.app-page-bar\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-blur\)\)/s);
+  assert.match(shell, /html\[data-platform\] \.app-page-bar\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none[^}]*backdrop-filter:\s*none/s);
   assert.match(shell, /\.app-page-bar\s*\{[^}]*min-height:\s*56px/s);
   assert.match(shell, /\.app-page-bar__actions\s*>\s*\.app-icon-button\s*\{[^}]*width:\s*30px[^}]*height:\s*30px/s);
   assert.match(shell, /\.app-shell\[data-navigation-collapsed="true"\]\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-collapsed-width\)/s);

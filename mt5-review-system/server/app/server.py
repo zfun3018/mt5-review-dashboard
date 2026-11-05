@@ -115,7 +115,7 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
-        self.wfile.write(content)
+        self._write_response_body(content)
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0") or 0)
@@ -134,7 +134,16 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             self.send_header(name, value)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        self._write_response_body(body)
+
+    def _write_response_body(self, body: bytes) -> None:
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            # The client may cancel a request while the response is being sent.
+            # Treat that as a completed request from the server's perspective so
+            # the worker thread does not emit a noisy traceback.
+            return
 
 
 def build_runtime_config(

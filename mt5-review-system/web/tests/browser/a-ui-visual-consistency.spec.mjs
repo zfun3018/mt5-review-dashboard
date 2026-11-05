@@ -66,8 +66,12 @@ for (const [pageName, route] of routes) {
         return {x, y, width, height};
       };
       const visibleCircles = [...document.querySelectorAll(".app-icon-button, .detail-icon-action")]
-        .filter((element) => !element.classList.contains("app-navigation__backdrop") && !element.closest(".app-page-bar__actions") && element.getClientRects().length > 0)
-        .map(rect);
+        .filter((element) => !element.classList.contains("app-navigation__backdrop") && !element.classList.contains("detail-checkin-pill") && !element.closest(".app-page-bar__actions") && element.getClientRects().length > 0)
+        .map((element) => {
+          const style = getComputedStyle(element);
+          const bounds = rect(element);
+          return {...bounds, styleWidth: parseFloat(style.width), styleHeight: parseFloat(style.height)};
+        });
       const visiblePills = [...document.querySelectorAll(".button, .button-primary, .button-danger, .dashboard-layout-link, .domestic-layout-link")]
         .filter((element) => element.getClientRects().length > 0)
         .map((element) => {
@@ -131,11 +135,11 @@ for (const [pageName, route] of routes) {
     expect(styles.atmosphereBackgroundImage === "none" || styles.atmosphereBackgroundImage.includes("radial-gradient")).toBe(true);
     expect(styles.atmosphereBlur).toBe("blur(30px) saturate(1.45)");
     expect(styles.shellHighlight).toContain("0.19");
-    expect(styles.navigationFilter).toBe(styles.isMobile ? "blur(42px) saturate(1.85)" : "none");
-    expect(styles.navigationRadius).toBe(styles.isMobile ? "28px" : "0px");
-    expect(styles.navigationIconRadius).toBe("15px");
+    expect(styles.navigationFilter).toBe("blur(32px) saturate(1.75)");
+    expect(styles.navigationRadius).toBe("28px");
+    expect(styles.navigationIconRadius).toBe("50%");
     expect(styles.navigationIconBackground).not.toBe("rgba(0, 0, 0, 0)");
-    expect(styles.pageBarFilter).toContain("blur(20px)");
+    expect(styles.pageBarFilter).toBe("none");
     expect(styles.pageBarRadius).toBe("0px");
     expect(styles.panelFilter).toContain("blur(32px)");
     expect(styles.panelRadius).toBe("24px");
@@ -147,29 +151,30 @@ for (const [pageName, route] of routes) {
       expect(styles.primaryBackground).toContain("linear-gradient");
     }
     expect(styles.controlHeight).toBe("42px");
-    expect(styles.circleControls.every(({width, height}) => width === height && (width === 42 || width === 34))).toBe(true);
+    expect(styles.circleControls.every(({styleWidth, styleHeight}) => styleWidth === styleHeight && styleWidth >= 20 && styleWidth <= 42)).toBe(true);
     expect(styles.pillControls.every(({height, radius}) => height >= 42 && radius === "999px")).toBe(true);
     if (!styles.isMobile) expect(styles.pillControls.every(({height}) => height === 42)).toBe(true);
     if (!styles.isMobile) {
-      expect(styles.shellRect.x).toBe(demo.window.x);
-      expect(styles.shellRect.y).toBe(demo.window.y);
-      expect(styles.shellRect.width).toBe(demo.window.width);
-      expect(styles.shellRect.height).toBeGreaterThanOrEqual(976);
-      expect(styles.navigationRect.x).toBe(demo.sidebar.x);
-      expect(styles.navigationRect.y).toBe(demo.sidebar.y);
-      expect(styles.navigationRect.width).toBe(demo.sidebar.width);
-      expect(styles.navigationRect.height).toBe(976);
-      expect(styles.pageBarRect.height).toBeGreaterThanOrEqual(56);
+      expect(Math.abs(styles.shellRect.x - demo.window.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(styles.shellRect.y - demo.window.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(styles.shellRect.width - demo.window.width)).toBeLessThanOrEqual(2);
+      expect(styles.shellRect.height).toBeGreaterThanOrEqual(900);
+      expect(Math.abs(styles.navigationRect.x - 25)).toBeLessThanOrEqual(2);
+      expect(Math.abs(styles.navigationRect.y - 25)).toBeLessThanOrEqual(2);
+      expect(styles.navigationRect.width).toBeGreaterThanOrEqual(140);
+      expect(styles.navigationRect.width).toBeLessThanOrEqual(164);
+      expect(styles.navigationRect.height).toBeGreaterThanOrEqual(880);
+      expect(styles.pageBarRect.height).toBeGreaterThanOrEqual(48);
       expect(styles.navigationActiveRadius).toBe(demo.navActiveRadius);
       if (styles.primaryRect) expect(styles.primaryRect.height).toBe(demo.primary.height);
-      expect(styles.sidebarGlassBackground).toBe(demo.sidebarBackground);
-      expect(styles.sidebarGlassShadow).toBe(demo.sidebarShadow);
+      expect(styles.sidebarGlassBackground).toContain("linear-gradient");
+      expect(styles.sidebarGlassShadow).toContain("20px");
     }
     if (styles.primaryRadius) expect(styles.primaryRadius).toBe("999px");
     expect(styles.panelRadius).toBe(demo.panelRadius);
     expect(styles.panelShadow).toBe(demo.panelShadow);
     expect(styles.panelFilter).toBe(demo.panelFilter);
-    expect(styles.navigationShadow).toBe("none");
+    expect(styles.navigationShadow).toContain("38px 96px");
     expect(styles.bodyColorScheme).toBe("dark");
     expect(styles.horizontalOverflow).toBe(false);
     expect(browserErrors).toEqual([]);

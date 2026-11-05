@@ -3385,6 +3385,7 @@ html[data-platform] .order-detail-heading {
 
 html[data-platform] .order-detail-heading .eyebrow {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   margin: 0;
@@ -3847,29 +3848,33 @@ html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mis
   white-space: nowrap;
 }
 
-/* The order index remains a fixed left rail. Only the detail workspace adapts
-   to the available width, keeping the screenshot at its usable minimum. */
+/* The order index stays fixed while the detail canvas reserves room for a
+   1000px screenshot. The controller scales the complete shell when needed. */
 html:has(.orders-layout) {
-  overflow-x: visible;
+  overflow-x: clip;
 }
 
 .orders-layout {
   display: grid;
-  min-width: 1220px;
+  width: 1230px;
+  min-width: 1230px;
   grid-template-columns: 220px minmax(0, 1fr);
 }
 
 body:has(.orders-layout) .app-shell {
-  overflow-x: auto;
+  width: 1544px;
+  min-width: 1544px;
+  overflow-x: clip;
   overflow-y: visible;
 }
 
-body:has(.orders-layout) .app-shell[data-navigation-collapsed="true"] {
-  min-width: calc(var(--sidebar-collapsed-width) + 1276px + 24px);
+body:has(.orders-layout) .app-shell__main {
+  width: 100%;
+  min-width: 0;
 }
 
-body:has(.orders-layout) .app-shell__main {
-  min-width: 1276px;
+body:has(.orders-layout) .app-page-bar {
+  min-width: 0;
 }
 
 .orders-index-column {
@@ -3877,18 +3882,18 @@ body:has(.orders-layout) .app-shell__main {
 }
 
 .orders-layout > .detail-panel {
-  min-width: 0;
+  min-width: 1020px;
   overflow: visible;
   container-name: order-detail;
   container-type: inline-size;
 }
 
 .detail-panel > .detail-host {
-  min-width: 1000px;
+  min-width: 1020px;
 }
 
 .detail-hero-grid {
-  grid-template-columns: minmax(1000px, 1fr) minmax(280px, 0.42fr);
+  grid-template-columns: minmax(1020px, 1fr);
 }
 
 .orders-layout + .checkin-calendar-panel {
@@ -3898,14 +3903,15 @@ body:has(.orders-layout) .app-shell__main {
 
 @container order-detail (max-width: 1289px) {
   .detail-hero-grid {
-    grid-template-columns: minmax(1000px, 1fr);
+    grid-template-columns: minmax(1020px, 1fr);
   }
 
   .detail-review-column {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
+    display: flex;
+    flex-direction: column;
     align-items: stretch;
   }
+
 }
 
 @media (max-width: 1080px) {
@@ -4208,5 +4214,369 @@ html[data-platform] .detail-review-meta.floating-context-card {
 
   .execution-table-wrap {
     max-width: 100%;
+  }
+}
+
+/* Final order-review canvas contract. The left index and the detail canvas
+   keep their desktop geometry; once the viewport cannot fit the 1000px
+   screenshot, orders.mjs zooms this complete canvas, including the index. */
+body:has(.orders-layout) .app-shell,
+body:has(.orders-layout) .app-shell[data-navigation-collapsed="true"] {
+  width: max(1544px, calc(100vw - 24px)) !important;
+  min-width: 1544px !important;
+  zoom: var(--orders-page-scale, 1);
+}
+
+body:has(.orders-layout) .app-shell__main {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.orders-layout {
+  width: 100% !important;
+  min-width: 1230px !important;
+  grid-template-columns: 220px minmax(1020px, 1fr) !important;
+}
+
+.orders-layout > .detail-panel,
+.detail-panel > .detail-host {
+  min-width: 1020px !important;
+}
+
+.orders-layout > .detail-panel {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.detail-hero-grid {
+  display: grid !important;
+  grid-template-columns: minmax(1000px, 1fr) minmax(280px, 0.42fr) !important;
+}
+
+.detail-review-column {
+  display: flex !important;
+  min-width: 0;
+  flex-direction: column !important;
+}
+
+@container order-detail (max-width: 1289px) {
+  .detail-hero-grid {
+    grid-template-columns: minmax(1000px, 1fr) !important;
+  }
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields {
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap !important;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] {
+  max-width: 100%;
+  flex: 1 1 100%;
+}
+
+/* Let the screenshot and review cards float independently on the black page.
+   Keep the order identity and its actions together in one compact glass rail. */
+html[data-platform] .detail-body.order-detail-workspace.glass-surface--clear {
+  padding: 8px 6px;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-platform] .order-detail-title {
+  min-height: 46px;
+  padding: 6px 10px;
+  border: 1px solid rgba(152, 202, 231, 0.22);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(132deg, rgba(191, 230, 247, 0.105), transparent 24%, transparent 78%, rgba(98, 194, 228, 0.045)),
+    rgba(5, 9, 14, 0.64);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(239, 250, 255, 0.12);
+}
+
+html[data-platform] .detail-order-actions {
+  gap: 6px;
+}
+
+html[data-platform] .detail-order-actions .detail-icon-action {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  flex-basis: 30px;
+}
+
+html[data-platform] .detail-order-actions .detail-icon-action svg {
+  width: 12px;
+  height: 12px;
+}
+
+html[data-platform] .detail-order-actions .detail-checkin-pill {
+  min-width: 96px;
+  height: 30px;
+  padding-inline: 8px;
+}
+
+html[data-platform] .detail-order-actions .detail-action-divider {
+  height: 18px;
+}
+
+html[data-platform] .detail-title-pnl {
+  padding: 2px 7px;
+}
+
+html[data-platform] .orders-layout > .detail-panel.order-detail-stage {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-platform] .orders-layout > .detail-panel.order-detail-stage::before,
+html[data-platform] .orders-layout > .detail-panel.order-detail-stage::after,
+html[data-platform] .detail-body.order-detail-workspace.glass-surface--clear::before,
+html[data-platform] .detail-body.order-detail-workspace.glass-surface--clear::after {
+  display: none !important;
+  content: none !important;
+}
+
+html[data-platform] .detail-body.order-detail-workspace.glass-surface--clear {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-platform] .order-detail-heading .eyebrow {
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+html[data-platform] .order-detail-heading .detail-contract-name,
+html[data-platform] .order-detail-heading .detail-contract-code {
+  color: var(--color-text);
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+html[data-platform] .order-detail-heading .detail-title-pnl {
+  margin-left: 0;
+  padding: 3px 9px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+html[data-platform] .order-detail-heading .detail-time {
+  color: rgba(224, 233, 241, 0.72);
+  font-size: 11px;
+  font-weight: 450;
+}
+
+html[data-platform] .detail-hero-grid > .order-screenshot-stage {
+  box-sizing: border-box;
+  align-self: stretch;
+  min-height: 280px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+}
+
+html[data-platform] .detail-hero-grid > .order-screenshot-stage .screenshot-preview {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  max-width: none;
+  overflow: hidden;
+  place-items: stretch;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+
+html[data-platform] .order-screenshot-stage .snapshot.compact-snapshot,
+html[data-platform] .order-screenshot-stage .snapshot.compact-snapshot img {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  border: 0;
+  border-radius: inherit;
+}
+
+html[data-platform] .order-screenshot-stage .screenshot-empty {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+
+html[data-platform] .review-editor-panel.order-secondary-context {
+  flex: 1 1 auto;
+  min-height: 320px;
+  padding: 12px 14px;
+  border-radius: var(--radius-panel);
+}
+
+html[data-platform] .review-editor-panel .section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html[data-platform] .review-editor-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-left: auto;
+  color: rgba(224, 233, 241, 0.72);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+html[data-platform] .review-editor-panel .review-editor {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 240px;
+  padding: 12px;
+  border: 1px solid rgba(216, 239, 247, 0.18);
+  border-radius: var(--radius-inner);
+  background: rgba(255, 255, 255, 0.025);
+  color: #f7f8fa;
+  line-height: 1.7;
+  resize: vertical;
+}
+
+html[data-platform] .review-editor-panel .review-editor::placeholder {
+  color: rgba(224, 233, 241, 0.48);
+}
+
+html[data-platform] .checkin-calendar-panel {
+  padding: 16px;
+  border: 1px solid rgba(216, 239, 247, 0.2);
+  border-radius: var(--radius-panel);
+  background: rgba(6, 9, 13, 0.58);
+  box-shadow: var(--shadow-contact), inset 0 1px 0 rgba(232, 250, 255, 0.08);
+}
+
+html[data-platform] .checkin-calendar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+html[data-platform] .checkin-calendar-head h3,
+html[data-platform] .checkin-calendar-month-label {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+html[data-platform] .checkin-calendar-month {
+  gap: 10px;
+}
+
+html[data-platform] .checkin-calendar-weekdays,
+html[data-platform] .checkin-calendar-grid {
+  gap: 6px;
+}
+
+html[data-platform] .checkin-calendar-weekdays span {
+  padding-block: 4px;
+  color: rgba(224, 233, 241, 0.62);
+  font-size: 11px;
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day {
+  display: flex;
+  min-height: 68px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 1px solid rgba(216, 239, 247, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(224, 233, 241, 0.62);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day:not(.is-empty):hover {
+  border-color: rgba(var(--color-accent-rgb), 0.42);
+  background: rgba(255, 255, 255, 0.065);
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day strong {
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day span {
+  margin: 0;
+  color: rgba(224, 233, 241, 0.52);
+  font-size: 10px;
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day.has-checkin {
+  border-color: rgba(var(--color-positive-rgb), 0.5);
+  background: rgba(var(--color-positive-rgb), 0.12);
+  color: var(--color-positive);
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day.has-checkin strong,
+html[data-platform] .checkin-calendar-grid .checkin-day.has-checkin span {
+  color: var(--color-positive);
+}
+
+html[data-platform] .checkin-calendar-grid .checkin-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--color-accent), 0 0 16px rgba(var(--color-accent-rgb), 0.12);
+}
+
+html[data-platform] .import-source-section.is-secondary .section-head h3 {
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html[data-platform] .import-source-section.is-secondary .section-head > span,
+html[data-platform] .import-source-section.is-secondary .import-source-item__head span,
+html[data-platform] .import-source-section.is-secondary .import-source-item__meta,
+html[data-platform] .import-source-section.is-secondary .import-source-empty {
+  color: rgba(224, 233, 241, 0.52);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+html[data-platform] .import-source-section.is-secondary .import-source-item__head strong {
+  color: rgba(239, 245, 248, 0.78);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+@media (max-width: 720px) {
+  html[data-platform] .checkin-calendar-panel {
+    padding: 10px;
+  }
+
+  html[data-platform] .checkin-calendar-grid .checkin-day {
+    min-height: 54px;
+    gap: 4px;
   }
 }

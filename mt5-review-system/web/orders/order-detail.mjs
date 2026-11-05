@@ -730,8 +730,7 @@ export function createOrderDetailModule({
       <div class="detail-body order-detail-workspace glass-surface--clear">
         <header class="detail-title order-detail-title">
           <div class="order-detail-heading">
-            <p class="eyebrow">主订单 <span class="detail-time">开仓 ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} · ${formatVolume(campaign.entry_volume)} 手 · ${escapeHtml(rMultipleLabel(campaign))}</span></p>
-            <h2><span class="detail-contract-name">${escapeHtml(contractDisplay.name)}</span>${contractDisplay.code ? ` <span class="detail-contract-code">${escapeHtml(contractDisplay.code)}</span>` : ""} · ${campaign.side === "long" ? "多单" : "空单"}<span class="detail-title-pnl ${profitClass(campaign.net_pnl)}" aria-label="净盈亏 ${escapeAttr(formatMoney(campaign.net_pnl))}">${escapeHtml(formatMoney(campaign.net_pnl))}</span></h2>
+            <p class="eyebrow"><span class="detail-contract-name">${escapeHtml(contractDisplay.name)}</span>${contractDisplay.code ? ` <span class="detail-contract-code">${escapeHtml(contractDisplay.code)}</span>` : ""} · ${campaign.side === "long" ? "多单" : "空单"}<span class="detail-title-pnl ${profitClass(campaign.net_pnl)}" aria-label="净盈亏 ${escapeAttr(formatMoney(campaign.net_pnl))}">${escapeHtml(formatMoney(campaign.net_pnl))}</span><span class="detail-time">开仓 ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} · ${formatVolume(campaign.entry_volume)} 手 · ${escapeHtml(rMultipleLabel(campaign))}</span></p>
           </div>
           <div class="detail-order-actions" aria-label="订单操作">
             <span class="detail-action-group" aria-label="订单状态">
@@ -760,7 +759,7 @@ export function createOrderDetailModule({
               </div>
             </section>
             <section class="review-editor-panel order-secondary-context">
-              <div class="section-head"><h3>复盘记录</h3><span class="review-autosave-state"><span id="saveState" aria-live="polite">自动保存已开启</span></span><span id="reviewCount">${String(campaign.review_text || "").length} / 10000</span></div>
+              <div class="section-head"><h3>复盘记录</h3><div class="review-editor-meta"><span class="review-autosave-state"><span id="saveState" aria-live="polite">自动保存已开启</span></span><span id="reviewCount">${String(campaign.review_text || "").length} / 10000</span></div></div>
               <textarea id="detailReview" class="review-editor" maxlength="10000" placeholder="记录入场依据、执行过程、风险控制与改进计划">${escapeHtml(campaign.review_text || "")}</textarea>
             </section>
           </div>

@@ -720,7 +720,7 @@ export function createDashboardController({
     renderLatestImportSummary();
     const cleanup = typeof mountShell === "function"
       ? mountShell({
-        activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh,
+        activeRoute: "/dashboard/", title: "仪表盘", onRefresh,
         refreshLabel: workspace.actionLabel, refreshIcon: workspace.actionIcon,
         refreshErrorMessage: workspace.showMarketClock ? "刷新数据失败" : "打开数据导入失败", share: true,
         toolbarFilters: view.querySelector?.("#legacyDashboard .filter-bar"),

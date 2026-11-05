@@ -4,8 +4,8 @@ import { PLATFORM_OPTIONS, platformLabel, readPlatform, withPlatform, writePlatf
 
 // Icons are rendered by the locally vendored Lucide v1.8.0 UMD release.
 export const NAV_ITEMS = Object.freeze([
-  {href: "/dashboard/", label: "复盘仪表盘", icon: "chart-no-axes-combined"},
-  {href: "/orders/", label: "订单复盘", icon: "list-checks"},
+  {href: "/dashboard/", label: "仪表盘", icon: "chart-no-axes-combined"},
+  {href: "/orders/", label: "订单", icon: "list-checks"},
   {href: "/settings/", label: "设置", icon: "settings"},
 ]);
 
@@ -185,7 +185,6 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   const previousPlatform = document.body?.getAttribute("data-platform");
   document.body?.setAttribute("data-platform", activePlatform);
   const isDomesticFutures = activePlatform === "domestic_futures";
-  const workspaceBrand = isDomesticFutures ? "国内期货" : "MT5 复盘";
   const workspaceMark = isDomesticFutures ? "期" : "MT";
   const actionLabel = refreshLabel || (activePlatform === "domestic_futures" ? "导入数据" : "刷新数据");
   const actionIcon = refreshIcon || (activePlatform === "domestic_futures" ? "upload" : "refresh-cw");
@@ -205,11 +204,6 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   if (mobileViewport) navigation.setAttribute("inert", "");
   const brand = createElement("div", {className: "app-navigation__brand"});
   const mark = createElement("span", {className: "app-navigation__mark", text: workspaceMark});
-  const brandCopy = createElement("span", {className: "app-navigation__brand-copy"});
-  brandCopy.append(
-    createElement("strong", {text: workspaceBrand}),
-    createElement("span", {text: isDomesticFutures ? "复盘工作区" : "交易工作台"}),
-  );
   const windowControls = createElement("div", {
     className: "app-navigation__window-controls",
     attributes: {"data-ui": "window-controls", "aria-hidden": "true"},
@@ -219,17 +213,12 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     createElement("span", {className: "app-navigation__window-dot app-navigation__window-dot--minimize"}),
     createElement("span", {className: "app-navigation__window-dot app-navigation__window-dot--maximize"}),
   );
-  brand.append(windowControls, mark, brandCopy);
+  brand.append(windowControls, mark);
 
   const links = createElement("nav", {
     className: "app-navigation__links",
     attributes: {"aria-label": "工作区"},
   });
-  links.append(createElement("span", {
-    className: "app-navigation__section-title",
-    text: "工作区",
-    attributes: {"data-ui": "navigation-section"},
-  }));
   const currentRoute = normalizedRoute(activeRoute);
   for (const item of NAV_ITEMS) {
     const link = createElement("a", {
@@ -299,13 +288,57 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
     });
     toolbarTitle.append(search);
   }
+  let filters = null;
   if (filterNodes.length) {
-    const filters = createElement("div", {
+    filters = createElement("div", {
       className: "app-page-bar__filters",
       attributes: {"aria-label": "页面筛选"},
     });
     filters.append(...filterNodes);
+    const preset = filters.querySelector?.("#timePreset");
+    const presetGroup = preset?.parentElement;
+    const presetButtons = [];
+    let syncPresetButtons = () => {};
+    if (preset && presetGroup && preset.options?.length) {
+      const segmented = createElement("div", {
+        className: "app-filter-presets",
+        attributes: {role: "tablist", "aria-label": preset.getAttribute("aria-label") || "时间范围"},
+      });
+      for (const option of preset.options) {
+        const button = createElement("button", {
+          className: "app-filter-preset",
+          text: option.textContent,
+          attributes: {type: "button", role: "tab", "aria-selected": "false", "data-preset": option.value},
+        });
+        const onPresetClick = () => {
+          preset.value = option.value;
+          const EventConstructor = preset.ownerDocument?.defaultView?.Event || globalThis.Event;
+          if (EventConstructor) preset.dispatchEvent(new EventConstructor("change", {bubbles: true}));
+          syncPresetButtons();
+        };
+        button.addEventListener("click", onPresetClick);
+        presetButtons.push({button, value: option.value, onPresetClick});
+        segmented.append(button);
+      }
+      presetGroup.insertBefore(segmented, preset);
+      preset.classList.add("app-filter-native-select");
+      preset.setAttribute("aria-hidden", "true");
+      preset.tabIndex = -1;
+      syncPresetButtons = () => presetButtons.forEach(({button, value}) => {
+        const active = preset.value === value;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+      preset.addEventListener("change", syncPresetButtons);
+      syncPresetButtons();
+      globalThis.queueMicrotask?.(syncPresetButtons);
+    }
     toolbarTitle.append(filters);
+    filterNodes._cleanupPresetButtons = () => {
+      if (!preset) return;
+      preset.removeEventListener("change", syncPresetButtons);
+      presetButtons.forEach(({button, onPresetClick}) => button.removeEventListener("click", onPresetClick));
+    };
   }
   const actionArea = createElement("div", {className: "app-page-bar__actions", attributes: {"data-ui": "page-actions"}});
   appendActions(actionArea, actions);
@@ -386,6 +419,7 @@ export function mountShell({activeRoute = "/dashboard/", title = "", actions = [
   mediaQuery?.addEventListener?.("change", onViewportChange);
 
   const cleanup = () => {
+    filterNodes._cleanupPresetButtons?.();
     menuButton.removeEventListener("click", onMenuClick);
     backdrop.removeEventListener("click", onBackdropClick);
     collapseButton.removeEventListener("click", onCollapseClick);
