@@ -15,6 +15,7 @@
   box-shadow: var(--shadow-raised);
   backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  transition: border-color var(--motion-duration-hover) ease, box-shadow var(--motion-duration-hover) ease, transform var(--motion-duration-hover) ease;
 }
 
 .glass-surface::before,
@@ -34,11 +35,24 @@
 
 .glass-surface--clear {
   background: var(--glass-clear);
+  box-shadow: var(--shadow-panel);
 }
 
 .glass-surface--fluid {
   background: var(--glass-fluid);
   box-shadow: var(--shadow-float);
+}
+
+.glass-surface:hover,
+.glass-surface--clear:hover,
+.glass-surface--fluid:hover,
+.panel:hover,
+.market-card:hover,
+.domestic-module:hover,
+.settings-panel:hover {
+  border-color: rgba(232, 250, 255, 0.42);
+  box-shadow: var(--shadow-float);
+  transform: translate3d(0, -2px, 0);
 }
 
 .floating-context-card {
@@ -105,7 +119,11 @@
 .glass-surface--fluid,
 .modal-surface,
 .floating-context-card,
-.glass-menu {
+.glass-menu,
+.panel,
+.market-card,
+.domestic-module,
+.settings-panel {
   isolation: isolate;
   overflow: hidden;
 }
@@ -121,21 +139,24 @@
 .domestic-module::after,
 .settings-panel::after {
   position: absolute;
-  z-index: 0;
-  top: -62%;
-  bottom: -62%;
-  left: -44%;
-  width: 34%;
+  z-index: 1;
+  top: -72%;
+  bottom: -72%;
+  left: -58%;
+  width: 42%;
   background: linear-gradient(
     105deg,
     transparent 0%,
-    rgba(220, 247, 255, 0.04) 31%,
-    rgba(220, 247, 255, 0.2) 48%,
-    rgba(121, 200, 213, 0.12) 56%,
+    rgba(220, 247, 255, 0.06) 24%,
+    rgba(220, 247, 255, 0.2) 39%,
+    rgba(220, 247, 255, 0.32) 45%,
+    rgba(121, 200, 213, 0.22) 54%,
+    rgba(255, 255, 255, 0.08) 62%,
     transparent 74%
   );
-  filter: blur(9px);
-  opacity: 0.7;
+  filter: blur(13px);
+  mix-blend-mode: screen;
+  opacity: 0.9;
   transform: translate3d(-155%, 0, 0) rotate(18deg);
   animation: glass-surface-sheen var(--motion-duration-sheen) var(--motion-easing-fluid) infinite;
   content: "";
@@ -143,11 +164,25 @@
   will-change: transform, opacity;
 }
 
+.glass-surface > *,
+.glass-surface--clear > *,
+.glass-surface--fluid > *,
+.modal-surface > *,
+.floating-context-card > *,
+.glass-menu > *,
+.panel > *,
+.market-card > *,
+.domestic-module > *,
+.settings-panel > * {
+  position: relative;
+  z-index: 2;
+}
+
 @keyframes glass-surface-sheen {
-  0%, 12% { opacity: 0; transform: translate3d(-155%, 0, 0) rotate(18deg); }
-  24% { opacity: 0.72; }
-  52% { opacity: 0.42; }
-  76%, 100% { opacity: 0; transform: translate3d(420%, 0, 0) rotate(18deg); }
+  0%, 8% { opacity: 0; transform: translate3d(-155%, 0, 0) rotate(18deg); }
+  22% { opacity: 0.92; }
+  48% { opacity: 0.52; }
+  70%, 100% { opacity: 0; transform: translate3d(420%, 0, 0) rotate(18deg); }
 }
 
 .glass-menu__option {
