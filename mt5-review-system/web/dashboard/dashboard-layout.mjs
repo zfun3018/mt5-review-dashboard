@@ -36,7 +36,7 @@ const MT5_DEFINITIONS = [
   definition("monthly-pnl", "月度盈亏", "按平仓月份汇总成本后的净盈亏", 0, 21, 6, 7, 5, 6, "chart", "resize"),
   definition("heatmap", "周期共振热力图", "按北京时间查看交易集中区间", 6, 21, 6, 7, 5, 6, "chart", "resize"),
   definition("sessions", "盘面胜率", "按交易时段比较净盈亏和胜率", 0, 28, 4, 7, 3, 4, "metrics", "scroll"),
-  definition("period-overview", "交易系统评估", "六项指标分别比较四个周期，保留各自刻度和实际数值", 4, 28, 8, 9, 8, 8, "chart", "resize"),
+  definition("period-overview", "交易系统评估", "四个周期各一张卡，展示六项核心指标", 4, 28, 8, 9, 8, 8, "metrics", "flow"),
   definition("daily-evaluation", "每日订单汇总", "按北京时间平仓日汇总交易结果", 0, 36, 12, 10, 8, 7, "table", "scroll"),
   definition("mode-evaluation", "交易模式评估", "比较交易场景和策略的真实贡献", 0, 46, 12, 9, 6, 5, "table", "scroll"),
 ];
@@ -72,7 +72,12 @@ function normalizeItem(definitionItem, raw = {}) {
   const requestedX = legacyCalendarMinimum ? Number(raw.x ?? definitionItem.x) + 1 : raw.x ?? definitionItem.x;
   const w = clamp(requestedWidth, definitionItem.minW, Math.min(definitionItem.maxW, 12));
   const legacyEvaluationTitle = definitionItem.id === "period-overview" && raw.title === "周期交易概览";
-  const legacyEvaluationSubtitle = definitionItem.id === "period-overview" && raw.subtitle === "同时比较四个周期的六项核心指标";
+  const legacyEvaluationSubtitle = definitionItem.id === "period-overview"
+    && new Set([
+      "同时比较四个周期的六项核心指标",
+      "六项指标分别比较四个周期，保留各自刻度和实际数值",
+      "六项核心指标，快速对比四个周期",
+    ]).has(raw.subtitle);
   const legacyMonthlyPnlSubtitles = new Set([
     "按平仓月份汇总成本后的净盈亏",
     "按平仓月份展示各品种净盈亏构成",

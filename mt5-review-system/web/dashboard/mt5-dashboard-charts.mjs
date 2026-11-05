@@ -5,7 +5,7 @@ import {
   collapseEquityPointsByBeijingDay,
   formatEquityAxisDate,
 } from "./domestic-futures-charts.mjs";
-import {formatMoney, formatPercent, formatRatio, formatRValue} from "../shared/js/formatters.mjs";
+import {formatMoney} from "../shared/js/formatters.mjs";
 
 function toFiniteNumber(value, fallback = 0) {
   const number = Number(value);
@@ -146,216 +146,8 @@ export function buildMt5CalendarOption(payload = {}) {
   };
 }
 
-const SYSTEM_EVALUATION_PERIODS = Object.freeze([
-  ["yesterday", "昨日"],
-  ["last_7_days", "近 7 天"],
-  ["last_30_days", "近 30 天"],
-  ["last_365_days", "近 365 天"],
-]);
-
-const SYSTEM_EVALUATION_METRICS = Object.freeze([
-  {key: "net_pnl", label: "总盈亏", description: "交易净盈亏合计，已计入费用"},
-  {key: "trade_count", label: "交易笔数", description: "按合并后的 Campaign 计数"},
-  {key: "payoff_ratio", label: "净盈亏比", description: "平均盈利 Campaign 与平均亏损 Campaign 的净盈亏之比"},
-  {key: "net_win_rate", label: "净胜率", description: "基于有效 R 值，剔除打平后的胜率"},
-  {key: "expectancy_r", label: "数学期望", description: "有效 Campaign 的平均 R 值"},
-  {key: "sqn", label: "收益稳定度", description: "SQN；至少需要 30 个有效 R 样本"},
-]);
-
-function metricForSystemEvaluation(period, metric) {
-  const rMetrics = period?.r_metrics || {};
-  const completeCount = Number(rMetrics.complete_count || 0);
-  if (metric.key === "net_pnl") {
-    return {raw: period?.net_pnl, label: period?.net_pnl == null ? "—" : formatMoney(period.net_pnl)};
-  }
-  if (metric.key === "trade_count") {
-    return {raw: period?.order_count, label: period?.order_count == null ? "—" : String(period.order_count)};
-  }
-  if (metric.key === "payoff_ratio") {
-    return {raw: period?.payoff_ratio, label: formatRatio(period?.payoff_ratio)};
-  }
-  if (metric.key === "net_win_rate") {
-    return completeCount ? {raw: rMetrics.decisive_win_rate, label: formatPercent(rMetrics.decisive_win_rate)} : {raw: null, label: "—"};
-  }
-  if (metric.key === "expectancy_r") {
-    return {raw: rMetrics.expectancy_r, label: formatRValue(rMetrics.expectancy_r)};
-  }
-  if (metric.key === "sqn") {
-    if (rMetrics.sqn_status === "available" && Number.isFinite(Number(rMetrics.sqn))) {
-      return {raw: rMetrics.sqn, label: Number(rMetrics.sqn).toFixed(2)};
-    }
-    const label = rMetrics.sqn_status === "zero_variance" ? "无波动" : "样本不足";
-    return {raw: null, label};
-  }
-  return {raw: null, label: "—"};
-}
-
-function systemEvaluationMetricColor(metricKey, value) {
-  if (metricKey === "trade_count" || metricKey === "net_win_rate") return "rgba(118, 178, 255, 0.72)";
-  if (!Number.isFinite(Number(value))) return "rgba(255, 255, 255, 0.25)";
-  const amount = Number(value);
-  if (metricKey === "payoff_ratio") {
-    if (amount === 1) return "rgba(255, 255, 255, 0.40)";
-    return amount > 1 ? "#69d6ab" : "#ff7d88";
-  }
-  if (amount === 0) return "rgba(255, 255, 255, 0.40)";
-  return amount > 0 ? "#69d6ab" : "#ff7d88";
-}
-
-function systemEvaluationAxisBounds(metricKey, entries) {
-  const values = entries
-    .filter((entry) => entry.available)
-    .map((entry) => Number(entry.value))
-    .filter(Number.isFinite);
-  if (!values.length) return {min: 0, max: 1};
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  if (metricKey === "net_win_rate") return {min: 0, max: Math.max(1, max) * 1.05};
-  if (metricKey === "trade_count") return {min: 0, max: Math.max(1, max) * 1.4};
-  if (metricKey === "payoff_ratio") return {min: 0, max: Math.max(1, max) * 1.35};
-  if (metricKey === "sqn" && min >= 0) return {min: 0, max: Math.max(1, max) * 1.35};
-  const low = Math.min(0, min);
-  const high = Math.max(0, max);
-  const span = Math.max(high - low, Math.abs(low), Math.abs(high), 0.01);
-  const padding = span * 0.22;
-  return {min: low < 0 ? low - padding : 0, max: high > 0 ? high + padding : padding};
-}
-
-const SYSTEM_EVALUATION_UNITS = Object.freeze([
-  "USD · 零轴区分盈亏方向",
-  "笔 · 仅比较数量",
-  "倍 · 1.00 为盈亏平衡",
-  "% · 排除打平交易",
-  "R / 笔 · 零轴区分正负期望",
-  "SQN · 至少 30 个有效 R 样本",
-]);
-
-export function buildMt5SystemEvaluationOption(payload = {}, chartWidth = 720) {
-  const state = chartMetricState(payload, "periods");
-  const periods = payload.periods || {};
-  const payloadReady = SYSTEM_EVALUATION_PERIODS.every(([key]) => periods[key] && typeof periods[key] === "object");
-  const columns = Number(chartWidth) < 600 ? 1 : 2;
-  const rows = Math.ceil(SYSTEM_EVALUATION_METRICS.length / columns);
-  const columnGap = 4;
-  const rowGap = 2;
-  const panelWidth = (100 - columnGap * (columns - 1)) / columns;
-  const panelHeight = (100 - rowGap * (rows - 1)) / rows;
-  const panels = SYSTEM_EVALUATION_METRICS.map((metric, index) => {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    const left = column * (panelWidth + columnGap);
-    const top = row * (panelHeight + rowGap);
-    const entries = SYSTEM_EVALUATION_PERIODS.map(([periodKey, periodLabel]) => {
-      const result = payloadReady && !state
-        ? metricForSystemEvaluation(periods[periodKey], metric)
-        : {raw: null, label: "—"};
-      const available = result.raw !== null && result.raw !== undefined && Number.isFinite(Number(result.raw));
-      const rMetrics = periods[periodKey]?.r_metrics || {};
-      return {
-        value: available ? Number(result.raw) : 0,
-        available,
-        label: result.label,
-        periodKey,
-        periodLabel,
-        metricKey: metric.key,
-        metricLabel: metric.label,
-        description: metric.description,
-        sampleCount: Number(rMetrics.complete_count || 0),
-        itemStyle: {
-          color: available ? systemEvaluationMetricColor(metric.key, result.raw) : "rgba(255, 255, 255, 0.18)",
-          opacity: available ? 1 : 0,
-        },
-      };
-    });
-    const title = {
-      text: metric.label,
-      subtext: SYSTEM_EVALUATION_UNITS[index],
-      left: `${left}%`,
-      top: `${top}%`,
-      itemGap: 1,
-      textStyle: {color: "#e5ebf4", fontSize: 10, fontWeight: 600},
-      subtextStyle: {color: "#798596", fontSize: 8},
-    };
-    const grid = {
-      left: `${left}%`,
-      top: `${top + Math.min(8, panelHeight * 0.24)}%`,
-      width: `${panelWidth}%`,
-      height: `${Math.max(10, panelHeight - Math.min(11, panelHeight * 0.32))}%`,
-      containLabel: true,
-    };
-    const bounds = systemEvaluationAxisBounds(metric.key, entries);
-    const xAxis = {
-      type: "value",
-      gridIndex: index,
-      min: bounds.min,
-      max: bounds.max,
-      axisLabel: {show: false},
-      axisLine: {show: false},
-      axisTick: {show: false},
-      splitLine: {show: false},
-    };
-    const yAxis = {
-      type: "category",
-      gridIndex: index,
-      data: SYSTEM_EVALUATION_PERIODS.map(([, label]) => label),
-      inverse: true,
-      axisLabel: {color: "#9eabba", fontSize: 8, margin: 6, hideOverlap: true},
-      axisLine: {show: false},
-      axisTick: {show: false},
-      splitLine: {show: false},
-    };
-    const series = {
-      name: metric.label,
-      type: "bar",
-      xAxisIndex: index,
-      yAxisIndex: index,
-      data: entries,
-      barMaxWidth: 9,
-      barMinHeight: 1,
-      itemStyle: {borderRadius: [0, 4, 4, 0]},
-      label: {
-        show: true,
-        position: "right",
-        distance: 4,
-        color: "#dce4ef",
-        fontSize: 8,
-        fontWeight: 600,
-        formatter: ({data}) => data?.label || "—",
-      },
-      labelLayout: {hideOverlap: true},
-      emphasis: {disabled: true},
-    };
-    if (metric.key === "net_pnl" || metric.key === "expectancy_r") {
-      series.markLine = {silent: true, symbol: "none", label: {show: false}, lineStyle: {color: "rgba(225, 235, 248, 0.30)", type: "dashed", width: 1}, data: [{xAxis: 0}]};
-    } else if (metric.key === "payoff_ratio") {
-      series.markLine = {silent: true, symbol: "none", label: {show: false}, lineStyle: {color: "rgba(225, 235, 248, 0.30)", type: "dashed", width: 1}, data: [{xAxis: 1}]};
-    }
-    return {title, grid, xAxis, yAxis, series};
-  });
-  const unavailableMessage = !payloadReady ? "周期数据尚未加载，请重启本地服务" : state?.label;
-  return {
-    animation: false,
-    grid: panels.map((panel) => panel.grid),
-    title: panels.map((panel) => panel.title),
-    tooltip: {
-      trigger: "item",
-      formatter: ({data = {}} = {}) => [
-        `<strong>${data.periodLabel || ""} · ${data.metricLabel || ""}</strong>`,
-        `数值：${data.label || "—"}`,
-        `<span style="color:#8d96a3">${data.description || ""}</span>`,
-        data.metricKey === "sqn" ? `<span style="color:#8d96a3">有效 R 样本：${data.sampleCount || 0}</span>` : "",
-      ].join("<br/>"),
-    },
-    xAxis: panels.map((panel) => panel.xAxis),
-    yAxis: panels.map((panel) => panel.yAxis),
-    series: panels.map((panel) => panel.series),
-    graphic: unavailableMessage ? [{type: "text", left: "center", top: "middle", style: {text: unavailableMessage, fill: "#8d96a3", fontSize: 12}}] : [],
-  };
-}
-
 export const MT5_CHART_DEFINITIONS = Object.freeze([
   {key: "equity", elementId: "equityChart", buildOption: buildMt5EquityOption},
-  {key: "systemEvaluation", elementId: "systemEvaluationChart", buildOption: buildMt5SystemEvaluationOption},
   {key: "calendar", elementId: "calendarChart", buildOption: buildMt5CalendarOption},
   {key: "monthlyPnl", elementId: "monthlyPnlChart", buildOption: buildMonthlyPnlOption},
   {key: "heatmap", elementId: "heatmapChart", buildOption: buildHeatmapOption},
@@ -378,7 +170,6 @@ export function createMt5DashboardCharts({
   const states = new Map(entries.map((entry) => [entry.key, "loading"]));
   const resizeTarget = globalThis.window;
   let latestPayload = {};
-  let systemEvaluationColumns = null;
   let disposed = false;
 
   if (!echarts?.init) return {update() {}, updateModule() {}, resize() {}, getStates: () => ({}), dispose() {}};
@@ -386,10 +177,6 @@ export function createMt5DashboardCharts({
   function markState(entry, state) {
     states.set(entry.key, state);
     if (entry.node.dataset) entry.node.dataset.chartState = state;
-  }
-
-  function chartColumns(width) {
-    return Number(width) < 600 ? 1 : 2;
   }
 
   function mount(entry) {
@@ -401,10 +188,6 @@ export function createMt5DashboardCharts({
     if (typeof ResizeObserver === "function") {
       const observer = new ResizeObserver(() => {
         try {
-          const width = Number(entry.node.clientWidth) || 720;
-          if (entry.key === "systemEvaluation" && systemEvaluationColumns !== chartColumns(width)) {
-            updateEntry(entry, latestPayload);
-          }
           instances.get(entry.key)?.resize({animation: false});
         } catch {
           markState(entry, "error");
@@ -426,10 +209,6 @@ export function createMt5DashboardCharts({
 
   const resize = () => entries.forEach((entry) => {
     try {
-      const width = Number(entry.node.clientWidth) || 720;
-      if (entry.key === "systemEvaluation" && systemEvaluationColumns !== chartColumns(width)) {
-        updateEntry(entry, latestPayload);
-      }
       instances.get(entry.key)?.resize({animation: false});
     } catch {
       markState(entry, "error");
@@ -442,7 +221,6 @@ export function createMt5DashboardCharts({
       const instance = mount(entry);
       const width = Number(entry.node.clientWidth) || 720;
       instance.setOption(entry.buildOption(payload, width), {notMerge: true, lazyUpdate: false});
-      if (entry.key === "systemEvaluation") systemEvaluationColumns = chartColumns(width);
       markState(entry, "value");
     } catch {
       markState(entry, "error");

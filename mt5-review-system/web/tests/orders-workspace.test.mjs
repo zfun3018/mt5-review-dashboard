@@ -23,6 +23,7 @@ import {
   shouldConfirmFeaturedRemoval,
 } from "../orders/order-detail.mjs";
 import { formatBeijingDateTime } from "../shared/js/formatters.mjs";
+import { shiftDateKey, todayBeijing } from "../shared/js/date-range.mjs";
 
 const ordersSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.mjs"), "utf8");
 const ordersStyle = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "orders", "orders.css"), "utf8");
@@ -196,7 +197,7 @@ test("featured is a view of the same campaign order list", async () => {
 test("order list appends the next batch without splitting the visible workflow into pages", async () => {
   const first = campaign("C-1", { opened_at_utc: "2026-10-20T01:00:00Z" });
   const second = campaign("C-2", { opened_at_utc: "2026-10-20T02:00:00Z" });
-  const { api, controller } = controllerWith(
+  const { api, controller, view } = controllerWith(
     { search: "" },
     {
       "/api/campaigns?page=1&page_size=50": {
@@ -255,8 +256,10 @@ test("orders workspace uses a scroll status instead of page navigation controls"
   assert.match(ordersStyle, /\.trades-panel \.table-wrap[\s\S]*overflow-y:\s*auto/);
 });
 
-test("sticky order table headers use an opaque surface while rows scroll underneath", () => {
-  assert.match(ordersStyle, /html\[data-platform\] \.orders-table thead th\s*\{[^}]*position:\s*sticky[^}]*z-index:\s*5[^}]*background:\s*#151a22/s);
+test("order list omits the redundant table header", async () => {
+  const { view, controller } = controllerWith({ search: "" }, {}, { campaigns: [campaign("C-NO-HEADER")] });
+  await controller.loadList();
+  assert.equal(view.getElementById("orderHead").innerHTML, "");
 });
 
 test("featured campaigns are visibly marked in the main order list", async () => {
@@ -281,7 +284,7 @@ test("main order list renders the canonical contract display name", async () => 
 
   await controller.loadList();
 
-  assert.match(view.getElementById("orderHead").innerHTML, /订单信息/);
+  assert.doesNotMatch(view.getElementById("orderHead").innerHTML, /订单/);
   assert.match(view.getElementById("orderRows").innerHTML, /黄金期货/);
 });
 
@@ -315,7 +318,7 @@ test("order details expose import batch provenance without absolute paths", () =
   assert.match(markup, /1001, 1002/);
   assert.match(markup, /abc123/);
   assert.doesNotMatch(markup, /[A-Z]:\\/);
-  assert.match(markup, /import-source-section is-secondary/);
+  assert.match(markup, /import-source-section/);
   assert.ok(orderDetailSource.indexOf('class="execution-section"') < orderDetailSource.lastIndexOf("renderImportSourcesMarkup"));
 });
 
@@ -337,13 +340,45 @@ test("MT5 and domestic futures use the same compact order-list structure", async
     await controller.loadList();
 
     const html = view.getElementById("orderRows").innerHTML;
-    assert.match(view.getElementById("orderHead").innerHTML, /<th>订单信息<\/th><th>R 值<\/th><th>净盈亏<\/th>/);
+    assert.doesNotMatch(view.getElementById("orderHead").innerHTML, /<th>订单<\/th>/);
     assert.match(html, /campaign-list-order/);
     assert.match(html, /campaign-list-contract/);
     assert.match(html, /<span class="campaign-list-opened">11:00<\/span>/);
     assert.match(html, />-72\.02<\/strong>/);
     assert.doesNotMatch(html, /\$-?72\.02/);
   }
+});
+
+test("order list stays in the compact one-field format without changing the selected campaign", async () => {
+  const selected = campaign("C-COMPACT-LIST", {
+    opened_at_utc: "2026-10-20T03:00:00Z",
+    net_pnl: -12.5,
+    position_summaries: [position("P-COMPACT-LIST")],
+  });
+  const { controller, view } = controllerWith(
+    { search: "?campaign=C-COMPACT-LIST" },
+    {},
+    { campaigns: [selected] },
+  );
+
+  await controller.loadList();
+  const head = view.getElementById("orderHead").innerHTML;
+  const rows = view.getElementById("orderRows").innerHTML;
+  assert.doesNotMatch(head, /<th>订单<\/th>/);
+  assert.match(rows, /campaign-day-row/);
+  assert.match(rows, /campaign-list-index/);
+  assert.match(rows, /campaign-list-contract/);
+  assert.match(rows, /campaign-list-opened/);
+  assert.doesNotMatch(rows, /campaign-list-opened[^<]*\d{1,2}月\d{1,2}日/);
+  assert.match(rows, /campaign-list-pnl/);
+  assert.match(rows, /campaign-list-contract[^<]*<\/strong>\s*<span class="campaign-row-flags"/);
+  assert.match(rows, /-12\.50/);
+  assert.doesNotMatch(head, /R 值|净盈亏/);
+  assert.equal(controller.getState().campaign, "C-COMPACT-LIST");
+  assert.doesNotMatch(ordersHtml, /<p class="eyebrow">ORDERS<\/p>|<h2>订单复盘<\/h2>/);
+  assert.doesNotMatch(ordersHtml, /toggleOrderList/);
+  assert.doesNotMatch(ordersSource, /toggleOrderList|orderListCollapsed|is-order-list-collapsed/);
+  assert.match(ordersStyle, /\.orders-layout\s*\{[^}]*grid-template-columns:\s*minmax\(190px, 220px\)/s);
 });
 
 test("domestic futures order groups use the exchange trade date for night orders", () => {
@@ -364,11 +399,14 @@ test("removing a featured campaign requires confirmation", () => {
   assert.equal(shouldConfirmFeaturedRemoval({ is_featured: false }), false);
 });
 
-test("featured action is separated and rendered as a solid orange star", () => {
+test("featured action uses a circular icon and communicates its state with a yellow star", () => {
   assert.match(orderDetailSource, /featured-action/);
   assert.match(orderDetailSource, /detail-action-divider/);
   assert.match(orderDetailSource, /确认取消精选/);
+  assert.doesNotMatch(orderDetailSource, /featured-status-badge|已精选/);
   assert.match(ordersStyle, /\.detail-icon-action\.featured-action\.is-active/);
+  assert.match(ordersStyle, /\.detail-icon-action\.featured-action\.is-active svg\s*\{[^}]*fill:\s*currentColor/);
+  assert.match(ordersStyle, /\.detail-icon-action\s*\{[^}]*border-radius:\s*var\(--radius-circle\)/);
   assert.match(ordersStyle, /\.campaign-featured-mark svg[\s\S]*fill: currentColor/);
 });
 
@@ -392,8 +430,9 @@ test("campaign check-in toggles between create and cancel and refreshes the cale
   const { api, controller } = controllerWith(
     { search: "" },
     {
-      "/api/campaigns/C-1/checkin": { campaign_id: "C-1", checked_in: true },
-      "/api/campaigns/C-1/checkin?cancel=1": { campaign_id: "C-1", checked_in: false },
+      "/api/campaigns/C-1/checkin?platform=mt5": (_path, options) => options.method === "DELETE"
+        ? { campaign_id: "C-1", deleted: true, checked_in: false }
+        : { campaign_id: "C-1", created: true, checked_in: true },
       "/api/campaign-checkins?days=35&platform=mt5": { days: [] },
     },
     { campaigns: [selected], detail: { ...selected, positions: [] } },
@@ -406,7 +445,41 @@ test("campaign check-in toggles between create and cancel and refreshes the cale
   selected.checkin_checked_in_today = true;
   await controller.checkinCampaign(selected);
   assert.ok(api.methods.includes("DELETE"));
-  assert.ok(api.paths.some((path) => path === "/api/campaigns/C-1/checkin"));
+  assert.ok(api.paths.some((path) => path === "/api/campaigns/C-1/checkin?platform=mt5"));
+});
+
+test("campaign check-in updates the selected record without reloading or changing list selection", async () => {
+  const selected = campaign("C-DETAIL", { checkin_checked_in_today: false, checkin_count: 2 });
+  const first = campaign("C-FIRST");
+  const { api, controller, view } = controllerWith(
+    { search: "?campaign=C-DETAIL" },
+    {
+      "/api/campaigns/C-DETAIL/checkin?platform=mt5": { campaign_id: "C-DETAIL", created: true, checked_in: true },
+      "/api/campaign-checkins?days=35&platform=mt5": { today: { count: 1 }, days: [] },
+    },
+    { campaigns: [first], detail: { ...selected, positions: [] } },
+  );
+  const actionButton = view.getElementById("checkinCampaign");
+  const label = new FakeElement();
+  const count = new FakeElement();
+  actionButton.querySelector = (selector) => selector === ".detail-checkin-label"
+    ? label
+    : selector === ".detail-action-count"
+      ? count
+      : null;
+
+  await controller.checkinCampaign(selected);
+
+  assert.equal(selected.checkin_checked_in_today, true);
+  assert.equal(selected.checkin_count, 3);
+  assert.equal(label.textContent, "已打卡");
+  assert.equal(count.textContent, "3");
+  assert.equal(actionButton.getAttribute("aria-pressed"), "true");
+  assert.equal(controller.getState().campaign, "C-DETAIL");
+  assert.deepEqual(api.paths, [
+    "/api/campaigns/C-DETAIL/checkin?platform=mt5",
+    "/api/campaign-checkins?days=35&platform=mt5",
+  ]);
 });
 
 test("random featured campaign remains visible while its detail is loading", async () => {
@@ -550,6 +623,40 @@ test("?trade= opens the matching order detail instead of the campaign review", a
   assert.doesNotMatch(view.getElementById("orderDetail").innerHTML, /代表订单复盘/);
 });
 
+test("order review markup exposes shared glass and luminous visual hooks", async () => {
+  const selected = campaign("C-VISUAL", {
+    trade_type_tags: ["scene_follow"],
+    strategy_tags: ["strategy_breakout"],
+    mistake_tags: ["late_exit"],
+  });
+  const { view, controller } = controllerWith(
+    { search: "" },
+    {
+      "/api/classification-options?active_only=1": { classification_options: [
+        { id: "scene_follow", dimension: "trade_type", label: "跟随", color: "#48c9aa", active: true },
+        { id: "strategy_breakout", dimension: "strategy", label: "突破", color: "#e6ae65", active: true },
+      ] },
+      "/api/custom-fields?active_only=1": { custom_fields: [
+        { id: "mistakes", name: "犯错", field_type: "multi", options: [{ id: "late_exit", label: "晚平", color: "#ef8290" }] },
+      ] },
+      "/api/analysis-settings": { scratch_threshold_r: 0.15 },
+    },
+    { campaigns: [selected], detail: { ...selected, positions: [] } },
+  );
+  await controller.load();
+  const html = view.getElementById("orderDetail").innerHTML;
+  assert.match(html, /class="[^"]*screenshot-editor[^"]*glass-surface--clear/);
+  assert.match(html, /class="[^"]*detail-review-meta[^"]*floating-context-card/);
+  assert.match(html, /class="[^"]*glow-pill[^"]*" style="[^"]*--pill-color:#48c9aa/);
+  assert.match(html, /class="[^"]*glow-pill[^"]*" style="[^"]*--pill-color:#e6ae65/);
+  assert.match(html, /class="[^"]*glow-pill[^"]*" style="[^"]*--pill-color:#ef8290/);
+  assert.match(html, /data-tag-trigger="trade_type_tags"[^>]*aria-expanded="false"/);
+  assert.match(orderDetailSource, /glass-menu__option/);
+  for (const id of ["orderRows", "orderDetail", "checkinCalendar", "imageModal"]) {
+    assert.match(ordersHtml, new RegExp(`id="${id}"`));
+  }
+});
+
 test("?campaign= keeps the requested campaign selected", async () => {
   const { view, controller } = controllerWith(
     { search: "?campaign=C-2" },
@@ -643,6 +750,17 @@ test("deleted order filter is included in the campaigns query", () => {
   assert.match(ordersSource, /restoreSelectedTrade/);
 });
 
+test("order toolbar keeps only period, date range, and order status filters", () => {
+  assert.match(ordersHtml, /id="timePreset"/);
+  assert.match(ordersHtml, /id="startFilter"/);
+  assert.match(ordersHtml, /id="endFilter"/);
+  assert.match(ordersHtml, /id="deletedFilter"/);
+  for (const id of ["sideFilter", "tradeTypeFilter", "strategyFilter", "riskMissingOnly"]) {
+    assert.doesNotMatch(ordersHtml, new RegExp(`id="${id}"`));
+  }
+  assert.doesNotMatch(ordersSource, /toolbarSearch|data-shell-search/);
+});
+
 test("campaign list uses server-side pagination state", async () => {
   const { api, controller } = controllerWith({ search: "?page=3" }, {}, { campaigns: [campaign("C-1")] });
   await controller.loadList();
@@ -670,6 +788,18 @@ test("buildCampaignsQuery maps camelCase state to the snake_case contract", () =
   assert.equal(
     query,
     "q=XAU&side=long&trade_type=follow&strategy=breakout&start=2026-08-01&end=2026-08-31&r_missing=1&page=2&page_size=50",
+  );
+});
+
+test("order period presets resolve to Beijing date bounds for the campaigns API", () => {
+  const today = todayBeijing();
+  assert.equal(
+    buildCampaignsQuery({ preset: "7d", page: 1, pageSize: 50 }),
+    `start=${shiftDateKey(today, -6)}&end=${today}&page=1&page_size=50`,
+  );
+  assert.equal(
+    buildCampaignsQuery({ preset: "custom", start: "2026-08-01", end: "2026-08-31", page: 1, pageSize: 50 }),
+    "start=2026-08-01&end=2026-08-31&page=1&page_size=50",
   );
 });
 
@@ -709,7 +839,7 @@ test("combined campaign summary renders and saves campaign classification", asyn
 
 test("order table keeps scene and strategy out of the main-order index", () => {
   const renderSource = ordersSource.slice(ordersSource.indexOf("function renderCampaignPositionRow"), ordersSource.indexOf("function bindRowInteractions"));
-  assert.match(renderSource, /<tr><th>订单信息<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
+  assert.match(renderSource, /"orderHead",\s*""/);
   assert.doesNotMatch(renderSource, /<th>交易场景<\/th>|<th>交易策略<\/th>/);
 });
 
@@ -732,15 +862,17 @@ test("main-order rows group by Beijing date and restart their sequence per day",
 
   let html = view.getElementById("orderRows").innerHTML;
   assert.equal((html.match(/campaign-day-row/g) || []).length, 2);
-  assert.match(html, /10月8日 周四/);
-  assert.match(html, /10月7日 周三/);
+  assert.match(html, /10月8日/);
+  assert.match(html, /aria-label="星期四"/);
+  assert.match(html, /10月7日/);
+  assert.match(html, /aria-label="星期三"/);
   assert.match(html, /aria-expanded="true"/);
 
   assert.match(html, /data-day-sequence="1"/);
   assert.match(html, /data-day-sequence="2"/);
   assert.equal((html.match(/data-day-sequence="1"/g) || []).length, 2);
-  assert.match(html, /\+1\.20<\/td>/);
-  assert.doesNotMatch(html, /\+1\.20R/);
+  assert.match(html, /campaign-list-pnl profit-text/);
+  assert.doesNotMatch(html, /campaign-r-cell|<th>R 值/);
   assert.match(html, /2笔/);
 });
 
@@ -778,36 +910,56 @@ test("order actions use accessible Lucide icon buttons", () => {
   assert.match(orderDetailSource, /lucide\?\.createIcons/);
 });
 
-test("primary review fields sit before the featured action and the tag area only contains mistakes", () => {
+test("all primary review controls share one framed row below the screenshot", () => {
   const detailHeaderStart = orderDetailSource.indexOf('<header class="detail-title order-detail-title">');
   const detailHeaderEnd = orderDetailSource.indexOf("</header>", detailHeaderStart);
   const detailHeader = orderDetailSource.slice(detailHeaderStart, detailHeaderEnd);
-  const reviewFieldsStart = orderDetailSource.indexOf('<div class="detail-primary-review-fields"', detailHeaderStart);
+  const reviewFieldsStart = orderDetailSource.indexOf('<div class="detail-primary-review-fields"');
   const headingStart = orderDetailSource.indexOf('<div class="order-detail-heading">', detailHeaderStart);
   const actionBarStart = orderDetailSource.indexOf('<div class="detail-order-actions"', detailHeaderStart);
   const featuredAction = orderDetailSource.indexOf('<span class="detail-action-group" aria-label="订单状态">');
-  const mistakeAreaStart = orderDetailSource.indexOf('<section class="order-info-strip"');
-  const reviewEditorStart = orderDetailSource.indexOf('<section class="review-editor-panel">', mistakeAreaStart);
-  const mistakeArea = orderDetailSource.slice(mistakeAreaStart, reviewEditorStart);
+  const mistakeAreaStart = orderDetailSource.indexOf('renderTagPicker("mistake_tags"');
+  const executionStart = orderDetailSource.indexOf('<section class="execution-section');
+  const detailBody = orderDetailSource.slice(orderDetailSource.indexOf('<div class="detail-hero-grid">'), executionStart);
 
-  assert.ok(headingStart < reviewFieldsStart && reviewFieldsStart < actionBarStart);
-  assert.match(detailHeader, /<div class="order-detail-heading">[\s\S]*?<div class="detail-primary-review-fields"[\s\S]*?<div class="detail-order-actions"/);
+  assert.ok(headingStart < actionBarStart);
+  assert.ok(reviewFieldsStart < mistakeAreaStart);
+  assert.ok(executionStart > mistakeAreaStart);
+  assert.match(detailBody, /renderScreenshotEditor\(campaign\)[\s\S]*review-editor-panel/);
   assert.match(ordersStyle, /html\[data-platform\] \.order-detail-title\s*\{[^}]*display:\s*grid[^}]*align-items:\s*center/s);
-  assert.ok(reviewFieldsStart < featuredAction);
-  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /campaignInitialStop/);
-  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /renderTagPicker\("trade_type_tags"/);
-  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /renderTagPicker\("strategy_tags"/);
-  assert.match(mistakeArea, /renderTagPicker\("mistake_tags"/);
-  assert.match(orderDetailSource.slice(reviewFieldsStart, featuredAction), /id="saveState"/);
-  assert.doesNotMatch(mistakeArea, /campaignInitialStop|trade_type_tags|strategy_tags/);
+  assert.match(detailBody, /<section class="detail-review-meta[^"]*"[^>]*>[\s\S]*campaignInitialStop[\s\S]*renderTagPicker\("trade_type_tags"[\s\S]*renderTagPicker\("strategy_tags"[\s\S]*renderTagPicker\("mistake_tags"[\s\S]*<\/section>/);
+  assert.doesNotMatch(detailBody, /class="order-info-strip"/);
+  assert.match(detailBody, /id="saveState"/);
+  assert.match(orderDetailSource.slice(0, detailHeaderEnd), /主订单 <span class="detail-time">/);
+  assert.doesNotMatch(orderDetailSource.slice(0, detailHeaderEnd), /主订单 · \$\{escapeHtml\(formatBeijingDateTime/);
 });
 
-test("mistake tags size to their content and wrap without stretching or clipping", () => {
-  assert.match(ordersStyle, /html\[data-platform\] \.detail-primary-review-fields\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s);
-  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-column \.order-info-strip\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*100%/s);
-  assert.match(ordersStyle, /html\[data-platform\] \.order-info-strip \.campaign-tag-field\[data-tag-picker="mistake_tags"\]\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*100%/s);
-  assert.match(ordersStyle, /html\[data-platform\] \.order-info-strip \.campaign-tag-field\[data-tag-picker="mistake_tags"\] \.choice-cell-values\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s);
-  assert.match(ordersStyle, /html\[data-platform\] \.order-info-strip \.campaign-tag-field\[data-tag-picker="mistake_tags"\] \.choice-cell\.detail-choice\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
+test("narrow detail layouts place review notes beside the review metadata", () => {
+  assert.match(orderDetailSource, /<div class="detail-review-column">[\s\S]*detail-review-meta[\s\S]*review-editor-panel[\s\S]*<\/div>\s*<\/div>/);
+  assert.match(ordersStyle, /@container order-detail \(max-width: 1289px\)[\s\S]*\.detail-review-column\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)\s+minmax\(320px/);
+});
+
+test("initial stop and single classification controls use content-sized compact inputs", () => {
+  assert.match(orderDetailSource, /id="campaignInitialStop"[^>]*aria-label="初始止损价格"/);
+  assert.match(orderDetailSource, /choice-cell detail-choice glass-menu-trigger\$\{single \? " single-choice"/);
+  assert.match(orderDetailSource, /data-single-choice="true"/);
+  assert.match(orderDetailSource, /data-lucide="plus"/);
+  assert.match(ordersStyle, /\.detail-primary-review-fields \.stop-field \.numeric-cell-input\s*\{[^}]*width:\s*72px[^}]*border-radius:\s*var\(--radius-pill\)/s);
+  assert.match(ordersStyle, /\.detail-primary-review-fields \.campaign-tag-field\[data-single-choice="true"\]\s*\{[^}]*flex:\s*0 0 auto[^}]*width:\s*fit-content/);
+  assert.match(ordersStyle, /\.detail-primary-review-fields \.campaign-tag-field\[data-single-choice="true"\] \.choice-cell\.detail-choice\s*\{[^}]*width:\s*fit-content/);
+  assert.match(orderDetailSource, /is-unclassified/);
+  assert.match(ordersStyle, /\.stop-field\s*\{[^}]*display:\s*flex/);
+  assert.doesNotMatch(ordersStyle, /\.campaign-tag-field\.is-unclassified \.field-label\s*\{[^}]*display:\s*none/);
+  assert.match(orderDetailSource, /<div class="section-head"><h3>复盘记录<\/h3><span class="review-autosave-state"><span id="saveState"/);
+  assert.doesNotMatch(orderDetailSource, /<div class="order-info-save"><span id="saveState"/);
+});
+
+test("mistake picker uses a labeled plus control inside the primary review row", () => {
+  assert.match(orderDetailSource, /renderTagPicker\("mistake_tags", "犯错标签"/);
+  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-meta \.campaign-tag-field\[data-tag-picker="mistake_tags"\]\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*row/s);
+  assert.match(ordersStyle, /html\[data-platform\] \.detail-review-meta \.campaign-tag-field\[data-tag-picker="mistake_tags"\] \.choice-cell\.detail-choice\s*\{[^}]*width:\s*28px[^}]*height:\s*28px/s);
+  assert.match(orderDetailSource, /group === "mistake_tags"/);
+  assert.match(ordersStyle, /\.detail-review-meta\s*\{[^}]*border:\s*1px solid var\(--color-border\)[^}]*border-radius:\s*var\(--radius-panel\)/s);
 });
 
 test("check-in action is a labeled pill while preserving its accessible pressed state", () => {
@@ -816,9 +968,22 @@ test("check-in action is a labeled pill while preserving its accessible pressed 
   assert.match(ordersStyle, /html\[data-platform\] \.detail-icon-action\.detail-checkin-pill\s*\{[^}]*width:\s*auto[^}]*border-radius:\s*var\(--radius-pill\)/s);
 });
 
-test("daily order summaries use semantic profit and loss pills", () => {
-  assert.match(ordersSource, /class="\$\{profitClass\(groupPnl\)\} campaign-day-pnl-pill"/);
-  assert.match(ordersStyle, /html\[data-platform\] \.campaign-day-summary \.campaign-day-pnl-pill\s*\{[^}]*padding:[^}]*border-radius:\s*var\(--radius-pill\)/s);
+test("daily summaries show one-line dates with accessible weekday icons and plain numeric PnL", async () => {
+  const { view, controller } = controllerWith(
+    { search: "" },
+    {},
+    { campaigns: [campaign("C-DATE-GROUP", { opened_at_utc: "2026-10-20T03:00:00Z", net_pnl: 12.5 })] },
+  );
+
+  await controller.loadList();
+  const html = view.getElementById("orderRows").innerHTML;
+  assert.match(html, /campaign-day-date[^>]*>10月20日/);
+  assert.match(html, /campaign-day-weekday[^>]*aria-label="星期二"[^>]*>二<\/span>/);
+  assert.match(html, /campaign-day-pnl[^>]*profit-text[^>]*>12\.50<\/strong>/);
+  assert.doesNotMatch(html, /campaign-day-pnl-pill/);
+  assert.match(ordersStyle, /\.campaign-day-date\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.match(ordersStyle, /\.campaign-day-row td\s*\{[^}]*background:\s*#26323e !important/s);
+  assert.match(ordersStyle, /html\[data-platform\] \.campaign-day-date\s*\{[^}]*color:\s*#f4f6f8 !important/s);
 });
 
 test("orders workspace keeps shared light contrast and a full-width calendar grid", () => {
@@ -833,8 +998,18 @@ test("orders workspace keeps shared light contrast and a full-width calendar gri
 test("order list aligns amounts and keeps the three columns balanced", () => {
   assert.match(ordersStyle, /\.orders-table th:nth-child\(2\),\s*\.orders-table td:nth-child\(2\)\s*\{[\s\S]*?width:\s*4\.3rem[\s\S]*?text-align:\s*center/s);
   assert.match(ordersStyle, /\.orders-table th:nth-child\(3\),\s*\.orders-table td:nth-child\(3\)\s*\{[\s\S]*?width:\s*6rem[\s\S]*?text-align:\s*right/s);
-  assert.match(ordersStyle, /\.campaign-list-pnl,\s*\.campaign-day-summary strong:last-child\s*\{[\s\S]*?font-size:\s*12px[\s\S]*?font-variant-numeric:\s*tabular-nums/s);
-  assert.match(ordersStyle, /\.campaign-day-summary strong:last-child\s*\{[\s\S]*?background:\s*color-mix\(/s);
+  assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s);
+  assert.doesNotMatch(ordersStyle, /campaign-day-pnl-pill/);
+  assert.match(ordersStyle, /\.campaign-list-pnl\s*\{[^}]*text-align:\s*right[^}]*justify-self:\s*end|\.campaign-list-pnl\s*\{[^}]*justify-self:\s*end[^}]*text-align:\s*right/s);
+  assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[^}]*text-align:\s*right[^}]*justify-self:\s*end|\.campaign-day-pnl\s*\{[^}]*justify-self:\s*end[^}]*text-align:\s*right/s);
+});
+
+test("order workspace uses tighter module gaps and stronger group-row contrast", () => {
+  const finalLayer = ordersStyle.slice(ordersStyle.indexOf("/* Final responsive contract"));
+  assert.match(finalLayer, /\.orders-layout\s*\{[^}]*gap:\s*10px/s);
+  assert.match(finalLayer, /\.detail-body\.order-detail-workspace\s*\{[^}]*gap:\s*8px[^}]*padding:\s*10px/s);
+  assert.match(finalLayer, /\.detail-hero-grid,\s*\.detail-review-column\s*\{[^}]*gap:\s*8px/s);
+  assert.match(finalLayer, /\.campaign-day-row td\s*\{[^}]*background:/s);
 });
 
 test("scratch campaigns carry the legacy state styling and a compact PnL emphasis", async () => {

@@ -14,14 +14,14 @@
   </head>
   <body>
     <div data-app-shell>
-      <section class="panel settings-shell" aria-label="系统设置">
+      <section class="panel settings-shell glass-surface--clear" aria-label="系统设置">
         <div class="settings-tabs" role="tablist" aria-label="设置分类">
-          <button class="settings-tab is-active" type="button" role="tab" data-settings-tab="classifications" aria-selected="true">分类与字段</button>
-          <button class="settings-tab" type="button" role="tab" data-settings-tab="analysis" aria-selected="false">分析设置</button>
-          <button class="settings-tab" type="button" role="tab" data-settings-tab="data" aria-selected="false">数据与状态</button>
+          <button class="settings-tab glow-pill is-active" type="button" role="tab" data-settings-tab="classifications" aria-selected="true" style="--pill-color:var(--color-tag-scene)">分类与字段</button>
+          <button class="settings-tab glow-pill" type="button" role="tab" data-settings-tab="analysis" aria-selected="false" style="--pill-color:var(--color-tag-strategy)">分析设置</button>
+          <button class="settings-tab glow-pill" type="button" role="tab" data-settings-tab="data" aria-selected="false" style="--pill-color:var(--color-tag-warning)">数据与状态</button>
         </div>
 
-        <div class="settings-panel" data-settings-panel="classifications" role="tabpanel">
+        <div class="settings-panel glass-surface" data-settings-panel="classifications" role="tabpanel">
           <div class="settings-section">
             <div class="settings-section-head">
               <div>
@@ -53,7 +53,7 @@
           </div>
         </div>
 
-        <div class="settings-panel" data-settings-panel="analysis" role="tabpanel" hidden>
+        <div class="settings-panel glass-surface" data-settings-panel="analysis" role="tabpanel" hidden>
           <div class="settings-section">
             <div class="settings-section-head">
               <div>
@@ -70,7 +70,7 @@
           </div>
         </div>
 
-        <div class="settings-panel" data-settings-panel="data" role="tabpanel" hidden>
+        <div class="settings-panel glass-surface" data-settings-panel="data" role="tabpanel" hidden>
           <div class="settings-section">
             <div class="settings-section-head">
               <div>
@@ -92,7 +92,7 @@
             <div id="futuresImportHistory" class="futures-import-history"></div>
           </div>
 
-          <div class="settings-section settings-danger-zone">
+          <div class="settings-section settings-danger-zone glass-surface--fluid">
             <div class="settings-section-head">
               <div>
                 <p class="eyebrow">DATA CLEANUP</p>

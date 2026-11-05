@@ -31,9 +31,9 @@ test("shared Fluid Luminous tokens expose the visual contract", async () => {
     assert.match(tokens, new RegExp(`${token.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*:\\s*[^;]+;`), `missing concrete token ${token}`);
   }
 
-  assert.match(tokens, /--glass-base-fallback:\s*#171d26;/);
-  assert.match(tokens, /--glass-clear-fallback:\s*#202832;/);
-  assert.match(tokens, /--glass-fluid-fallback:\s*#26333f;/);
+  assert.match(tokens, /--glass-base-fallback:\s*#1e2d39;/);
+  assert.match(tokens, /--glass-clear-fallback:\s*#2c4351;/);
+  assert.match(tokens, /--glass-fluid-fallback:\s*#354f60;/);
   assert.match(tokens, /--motion-duration-expand:\s*220ms;/);
   assert.match(tokens, /--motion-duration-collapse:\s*160ms;/);
   assert.match(tokens, /--motion-distance-float:\s*4px;/);
@@ -75,4 +75,13 @@ test("shared components expose glass, menu, tag, state, and motion primitives", 
   assert.match(components, /\.glow-pill(?:\[aria-disabled="true"\]|\.is-disabled|:disabled)/);
   assert.match(components, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.floating-context-card\s*\{\s*animation:\s*none/);
   assert.match(shell, /app-page-bar__actions/);
+});
+
+test("glass surfaces expose a visible moving refraction layer", async () => {
+  const components = await readFile(join(cssDir, "components.css"), "utf8");
+  assert.match(components, /\.glass-surface::after[\s\S]*?\.glass-menu::after/);
+  assert.match(components, /background:\s*linear-gradient\(\s*105deg,[\s\S]*?rgba\(220, 247, 255, 0\.2\)/);
+  assert.match(components, /animation:\s*glass-surface-sheen\s+var\(--motion-duration-sheen\)/);
+  assert.match(components, /@keyframes\s+glass-surface-sheen[\s\S]*?transform:[\s\S]*?translate3d/);
+  assert.match(components, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.glass-surface::after[\s\S]*?animation:\s*none/);
 });

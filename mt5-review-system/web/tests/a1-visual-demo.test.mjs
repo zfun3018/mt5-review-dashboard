@@ -20,7 +20,7 @@ test("A1 visual demo is isolated from A page assets and business data", async ()
   assert.match(css, /--radius-pill:\s*999px/);
   assert.match(css, /--radius-circle:\s*50%/);
   assert.match(css, /--control-size:\s*42px/);
-  assert.match(css, /--glass-fill:\s*rgba\(18, 22, 29, 0\.58\)/);
+  assert.match(css, /--glass-fill:\s*rgba\(27, 43, 56, \.44\)/);
   assert.match(css, /--shadow-window:/);
   assert.match(css, /--shadow-panel:/);
   assert.match(css, /--shadow-float:/);

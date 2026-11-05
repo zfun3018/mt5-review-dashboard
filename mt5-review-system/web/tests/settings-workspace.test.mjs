@@ -8,6 +8,7 @@ import { createSettingsController } from "../settings/settings.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const settingsHtml = fs.readFileSync(path.join(__dirname, "..", "settings", "index.html"), "utf8");
+const settingsCss = fs.readFileSync(path.join(__dirname, "..", "settings", "settings.css"), "utf8");
 const settingsSource = fs.readFileSync(path.join(__dirname, "..", "settings", "settings.mjs"), "utf8");
 const classificationsSource = fs.readFileSync(path.join(__dirname, "..", "settings", "classifications.mjs"), "utf8");
 const schemaSource = fs.readFileSync(path.join(__dirname, "..", "settings", "custom-field-schema.mjs"), "utf8");
@@ -167,6 +168,18 @@ test("settings mounts the shared shell and activates the settings route", () => 
   assert.match(settingsHtml, /futuresImportIssues/);
   assert.match(settingsHtml, /futuresUnmatchedExecutions/);
   assert.match(settingsHtml, /downloadFuturesTemplate/);
+});
+
+test("settings uses the shared glass visual contract without changing its page structure", () => {
+  assert.match(settingsHtml, /class="panel settings-shell glass-surface--clear"/);
+  assert.match(settingsHtml, /class="settings-tab glow-pill is-active"/);
+  assert.match(settingsHtml, /class="settings-tab glow-pill"/);
+  assert.match(settingsHtml, /class="settings-panel glass-surface"/);
+  assert.match(settingsHtml, /class="[^"]*settings-danger-zone[^"]*glass-surface--fluid[^"]*"/);
+  assert.match(settingsCss, /\.settings-tab\.is-active[\s\S]*--pill-color/);
+  assert.match(settingsCss, /\.settings-panel[\s\S]*backdrop-filter/);
+  assert.match(settingsCss, /\.settings-danger-zone[\s\S]*var\(--color-negative\)/);
+  assert.match(settingsCss, /@media\s*\(max-width:\s*720px\)/);
 });
 
 test("data import view renders a trading-date calendar and batch history", async () => {

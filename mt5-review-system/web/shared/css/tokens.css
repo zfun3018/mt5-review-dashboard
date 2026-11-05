@@ -1,19 +1,19 @@
 :root {
   color-scheme: dark;
   --font-family-ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", sans-serif;
-  --color-bg: #080a0e;
-  --color-bg-atmosphere: radial-gradient(ellipse at 12% 14%, rgba(66, 133, 164, 0.48), transparent 31%), radial-gradient(ellipse at 82% 11%, rgba(55, 95, 124, 0.4), transparent 27%), radial-gradient(ellipse at 73% 79%, rgba(24, 119, 97, 0.34), transparent 30%), radial-gradient(ellipse at 28% 78%, rgba(125, 81, 37, 0.22), transparent 28%), #080a0e;
+  --color-bg: #000000;
+  --color-bg-atmosphere: #000000;
   --glass-atmosphere: var(--color-bg-atmosphere);
-  --glass-base: rgba(18, 22, 29, 0.58);
-  --glass-base-fallback: #171d26;
-  --glass-clear: rgba(25, 31, 40, 0.72);
-  --glass-clear-fallback: #202832;
-  --glass-fluid: linear-gradient(145deg, rgba(46, 63, 77, 0.82), rgba(16, 22, 31, 0.72));
-  --glass-fluid-fallback: #26333f;
-  --color-surface: rgba(18, 22, 29, 0.58);
-  --color-surface-raised: rgba(25, 31, 40, 0.72);
+  --glass-base: rgba(19, 20, 23, 0.56);
+  --glass-base-fallback: #1e2d39;
+  --glass-clear: rgba(31, 33, 38, 0.62);
+  --glass-clear-fallback: #2c4351;
+  --glass-fluid: linear-gradient(145deg, rgba(44, 48, 54, 0.72), rgba(12, 13, 16, 0.62));
+  --glass-fluid-fallback: #354f60;
+  --color-surface: var(--glass-base);
+  --color-surface-raised: var(--glass-clear);
   --color-surface-muted: rgba(255, 255, 255, 0.045);
-  --color-border: rgba(255, 255, 255, 0.18);
+  --color-border: rgba(198, 233, 245, 0.22);
   --color-text: #f7f8fa;
   --color-muted: #8d96a3;
   --color-accent: #79c8d5;
@@ -71,6 +71,9 @@
   --glass-float-blur: 42px;
   --glass-window-saturation: 165%;
   --glass-saturation: 175%;
+  --motion-duration-atmosphere: 24s;
+  --motion-duration-float: 20s;
+  --motion-duration-sheen: 11s;
   --motion-duration-expand: 220ms;
   --motion-duration-collapse: 160ms;
   --motion-duration-hover: 160ms;
@@ -78,12 +81,12 @@
   --motion-easing-fluid: cubic-bezier(0.22, 0.75, 0.22, 1);
   --focus-ring-color: rgba(121, 200, 213, 0.72);
   --focus-ring-shadow: 0 0 0 3px rgba(121, 200, 213, 0.26), 0 0 24px rgba(121, 200, 213, 0.16);
-  --glass-highlight: rgba(255, 255, 255, 0.16);
-  --shadow-contact: 0 5px 16px rgba(0, 0, 0, 0.28);
-  --shadow-ambient: 0 32px 84px rgba(0, 0, 0, 0.52);
+  --glass-highlight: rgba(220, 247, 255, 0.24);
+  --shadow-contact: 0 5px 16px rgba(0, 0, 0, 0.24);
+  --shadow-ambient: 0 32px 84px rgba(0, 0, 0, 0.42), 0 0 42px rgba(61, 156, 190, 0.1);
   --shadow-window: 0 48px 130px rgba(0, 0, 0, 0.65), 0 12px 34px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  --shadow-panel: 0 32px 84px rgba(0, 0, 0, 0.52), 0 5px 16px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  --shadow-float: 0 34px 92px rgba(0, 0, 0, 0.72), 0 8px 25px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --shadow-panel: 0 32px 84px rgba(0, 0, 0, 0.42), 0 5px 16px rgba(0, 0, 0, 0.24), 0 0 28px rgba(63, 164, 197, 0.12), inset 0 1px 0 rgba(220, 247, 255, 0.18);
+  --shadow-float: 0 34px 92px rgba(0, 0, 0, 0.56), 0 8px 25px rgba(0, 0, 0, 0.32), 0 0 38px rgba(73, 174, 207, 0.2), inset 0 1px 0 rgba(220, 247, 255, 0.22);
   --shadow-raised: var(--shadow-ambient), var(--shadow-contact), inset 0 1px 0 var(--glass-highlight);
   --transition-fast: 160ms ease;
 }

@@ -99,13 +99,25 @@ test.describe("workspaces — desktop", () => {
     expect(appearance.overflow).toBe(true);
   });
 
-  test("orders filter persists across reload via query string", async ({ page, syntheticServer }) => {
+  test("order toolbar keeps the requested compact filters and persists their state", async ({ page, syntheticServer }) => {
     const errors = attachConsoleAssertions(page);
-    await page.goto(`${syntheticServer.baseURL}/orders/?q=XAU&side=BUY`);
-    await expect(page).toHaveURL(/q=XAU/);
-    await expect(page).toHaveURL(/side=BUY/);
+    await page.goto(`${syntheticServer.baseURL}/orders/`);
+    const filters = page.locator(".app-page-bar__filters");
+    await expect(filters).toBeVisible();
+    for (const id of ["timePreset", "startFilter", "endFilter", "deletedFilter"]) {
+      await expect(filters.locator(`#${id}`)).toBeVisible();
+    }
+    for (const id of ["sideFilter", "tradeTypeFilter", "strategyFilter", "riskMissingOnly"]) {
+      await expect(page.locator(`#${id}`)).toHaveCount(0);
+    }
+    await expect(page.locator(".app-page-bar__search")).toHaveCount(0);
+    await page.locator("#timePreset").selectOption("7d");
+    await expect(page).toHaveURL(/preset=7d/);
+    await page.locator("#deletedFilter").selectOption("deleted");
+    await expect(page).toHaveURL(/deleted=deleted/);
     await page.reload();
-    await expect(page).toHaveURL(/q=XAU/);
+    await expect(page.locator("#timePreset")).toHaveValue("7d");
+    await expect(page.locator("#deletedFilter")).toHaveValue("deleted");
     await assertNoOverflow(page);
     await expectNoErrors(page, errors);
   });
@@ -159,6 +171,23 @@ test.describe("workspaces — 390px mobile", () => {
   }) => {
     const errors = attachConsoleAssertions(page);
     await page.goto(`${syntheticServer.baseURL}/dashboard/`);
+    const dashboardFilters = page.locator(".app-page-bar__filters");
+    await expect(dashboardFilters).toBeVisible();
+    await expect(dashboardFilters.locator("#timePreset")).toBeVisible();
+    await expect(dashboardFilters.locator("#startDateFilter")).toBeVisible();
+    await expect(dashboardFilters.locator("#endDateFilter")).toBeVisible();
+    await expect(page.locator(".app-page-bar__search")).toHaveCount(0);
+    await page.locator("#timePreset").selectOption("30d");
+    await expect(page).toHaveURL(/preset=30d/);
+
+    await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=domestic_futures`);
+    const futuresFilters = page.locator(".app-page-bar__filters");
+    await expect(futuresFilters.locator('[data-domestic-preset="all"]')).toBeVisible();
+    await expect(futuresFilters.locator("#domesticStartDate")).toBeHidden();
+    await futuresFilters.locator('[data-domestic-preset="custom"]').click();
+    await expect(futuresFilters.locator("#domesticStartDate")).toBeVisible();
+    await expect(futuresFilters.locator("#domesticEndDate")).toBeVisible();
+
     const menuButton = page.getByRole("button", { name: "打开导航" });
     await expect(menuButton).toBeVisible();
 

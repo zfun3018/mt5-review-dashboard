@@ -26,16 +26,15 @@
           <div><p class="domestic-kicker">ACCOUNT REVIEW WORKSPACE</p><p>围绕账户结果、成本压力与复盘质量组织数据，逐笔交易请前往订单复盘。</p></div>
           <a class="domestic-layout-link" data-dashboard-layout-link href="./index.html?platform=domestic_futures&amp;layout=edit" aria-label="打开仪表盘布局编辑器"><i data-lucide="layout-grid"></i><span>调整布局</span></a>
         </header>
-        <section class="domestic-filter-bar" data-domestic-filter aria-label="国内期货分析范围">
-          <div class="domestic-filter-group"><span class="domestic-filter-label">分析范围</span><div class="domestic-range" role="tablist" aria-label="分析范围">
+        <section class="domestic-filter-bar" data-domestic-filter aria-label="分析范围">
+          <div class="domestic-filter-group"><div class="domestic-range" role="tablist" aria-label="分析范围">
             <button type="button" role="tab" data-domestic-preset="all">全部时间</button>
             <button type="button" role="tab" data-domestic-preset="today">今日</button>
             <button type="button" role="tab" data-domestic-preset="7d">近 7 天</button>
             <button type="button" role="tab" data-domestic-preset="30d">本月</button>
             <button type="button" role="tab" data-domestic-preset="custom">自定义</button>
           </div></div>
-          <div class="domestic-custom-dates" data-domestic-custom-dates hidden><label for="domesticStartDate">开始日期</label><input id="domesticStartDate" type="date" /><label for="domesticEndDate">结束日期</label><input id="domesticEndDate" type="date" /></div>
-          <p id="domesticDashboardStatus" class="domestic-filter-note">固定周期指标不受上方范围影响</p>
+          <div class="domestic-custom-dates" data-domestic-custom-dates hidden><label class="toolbar-date-control" for="domesticStartDate"><span>开始</span><input id="domesticStartDate" type="date" aria-label="开始日期" /></label><label class="toolbar-date-control" for="domesticEndDate"><span>结束</span><input id="domesticEndDate" type="date" aria-label="结束日期" /></label></div>
         </section>
         <div class="domestic-cost-note"><strong>成本口径已启用</strong><span>净盈亏 = 交易盈亏 + 手续费（含 commission、swap、fee）</span></div>
         <div class="domestic-dashboard-stage">
@@ -66,8 +65,8 @@
 
       <section class="filter-bar" aria-label="分析范围">
         <div class="filter-bar__group">
-          <label for="timePreset">时间范围</label>
-          <select id="timePreset">
+          <label class="sr-only" for="timePreset">时间范围</label>
+          <select id="timePreset" aria-label="时间范围">
             <option value="all">全部时间</option>
             <option value="today">今天</option>
             <option value="7d">近 7 天</option>
@@ -75,16 +74,10 @@
             <option value="custom">自定义</option>
           </select>
         </div>
-        <div class="filter-bar__group">
-          <label for="startDateFilter">开始日期</label>
-          <input id="startDateFilter" type="date" title="开始日期" />
-        </div>
-        <div class="filter-bar__group">
-          <label for="endDateFilter">结束日期</label>
-          <input id="endDateFilter" type="date" title="结束日期" />
-        </div>
-        <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./index.html?platform=mt5&amp;layout=edit" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
+        <label class="toolbar-date-control" for="startDateFilter"><span>开始</span><input id="startDateFilter" type="date" aria-label="开始日期" /></label>
+        <label class="toolbar-date-control" for="endDateFilter"><span>结束</span><input id="endDateFilter" type="date" aria-label="结束日期" /></label>
       </section>
+      <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./index.html?platform=mt5&amp;layout=edit" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
 
       <div class="mt5-dashboard-layout grid-stack" id="mt5DashboardLayout">
       <section class="panel r-metric-panel" aria-label="R 指标概览" data-layout-module="r-metrics">
@@ -173,10 +166,10 @@
             <div>
               <p class="eyebrow">TRADING SYSTEM EVALUATION</p>
               <h2 data-layout-title>交易系统评估</h2>
-              <p class="layout-subtitle" data-layout-subtitle>六项指标各自比较四个周期，保留实际数值与独立刻度</p>
+              <p class="layout-subtitle" data-layout-subtitle>四个周期各一张卡，展示六项核心指标</p>
             </div>
           </div>
-          <div id="systemEvaluationChart" class="period-overview-chart" role="img" aria-label="按昨日、近7天、近30天和近365天比较六项交易系统指标的小图组"></div>
+          <div id="systemEvaluationCards" class="system-evaluation-cards" aria-label="四个周期卡片分别展示六项交易系统指标"></div>
         </article>
 
         <article class="panel evaluation-panel daily-evaluation-panel" data-layout-module="daily-evaluation">

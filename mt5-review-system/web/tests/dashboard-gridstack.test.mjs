@@ -69,7 +69,7 @@ test("MT5 calendar defaults to a compact footprint with a smaller editable minim
   assert.deepEqual({x: previousMinimum.x, w: previousMinimum.w, h: previousMinimum.h}, {x: 5, w: 6, h: 8});
 });
 
-test("MT5 evaluation modules separate period chart from a scrollable daily table", async () => {
+test("MT5 evaluation cards stay separate from the scrollable daily table", async () => {
   const {getModuleDefinitions} = await import(moduleUrl("dashboard/dashboard-layout.mjs"));
   const definitions = getModuleDefinitions("mt5");
   const period = definitions.find((item) => item.id === "period-overview");
@@ -77,7 +77,8 @@ test("MT5 evaluation modules separate period chart from a scrollable daily table
 
   assert.ok(period);
   assert.ok(daily);
-  assert.equal(period.kind, "chart");
+  assert.equal(period.kind, "metrics");
+  assert.equal(period.fit, "flow");
   assert.equal(daily.fit, "scroll");
   assert.ok(daily.minH >= 6);
   assert.deepEqual({w: period.w, h: period.h, minW: period.minW, minH: period.minH}, {w: 8, h: 9, minW: 8, minH: 8});
@@ -87,6 +88,7 @@ test("MT5 evaluation modules separate period chart from a scrollable daily table
     {id: "daily-evaluation", title: "我的每日汇总"},
   ]});
   assert.equal(migrated.items.find((item) => item.id === "period-overview").title, "交易系统评估");
-  assert.equal(migrated.items.find((item) => item.id === "period-overview").subtitle, "六项指标分别比较四个周期，保留各自刻度和实际数值");
+  assert.equal(migrated.items.find((item) => item.id === "period-overview").subtitle, "四个周期各一张卡，展示六项核心指标");
+  assert.equal(migrated.items.find((item) => item.id === "period-overview").kind, "metrics");
   assert.equal(migrated.items.find((item) => item.id === "daily-evaluation").title, "我的每日汇总");
 });

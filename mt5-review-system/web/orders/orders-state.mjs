@@ -1,4 +1,5 @@
 import { readQuery, replaceQuery } from "../shared/js/url-state.mjs";
+import { resolveDateRange } from "../shared/js/date-range.mjs";
 
 export const PAGE_SIZES = Object.freeze([12, 24, 50]);
 export const DEFAULT_PAGE_SIZE = 12;
@@ -7,6 +8,7 @@ export const DEFAULT_PAGE_SIZE = 12;
 // JavaScript state object and the URL so that read/write round-trips are exact;
 // buildCampaignsQuery translates them into the server's snake_case contract.
 const SCHEMA = {
+  preset: { type: "string", default: "all", values: ["all", "today", "7d", "30d", "custom"] },
   q: { type: "string", default: "" },
   side: { type: "string", default: "all", values: ["all", "long", "short"] },
   tradeType: { type: "string", default: "all" },
@@ -23,7 +25,10 @@ const SCHEMA = {
 };
 
 export function readOrdersState(search) {
-  return readQuery(SCHEMA, search);
+  const state = readQuery(SCHEMA, search);
+  const params = new URLSearchParams(String(search || "").replace(/^\?/, ""));
+  if (!params.has("preset") && (state.start || state.end)) state.preset = "custom";
+  return state;
 }
 
 export function writeOrdersState(state, environment) {
@@ -43,8 +48,9 @@ export function buildCampaignsQuery(state) {
   if (state.side && state.side !== "all") params.set("side", state.side);
   if (state.tradeType && state.tradeType !== "all") params.set("trade_type", state.tradeType);
   if (state.strategy && state.strategy !== "all") params.set("strategy", state.strategy);
-  if (state.start) params.set("start", state.start);
-  if (state.end) params.set("end", state.end);
+  const range = resolveDateRange(state.preset || "custom", state.start, state.end);
+  if (range.start) params.set("start", range.start);
+  if (range.end) params.set("end", range.end);
   if (state.rMissing) params.set("r_missing", "1");
   if (state.listView === "featured") params.set("featured", "1");
   if (state.deleted && state.deleted !== "active") params.set("deleted", state.deleted);

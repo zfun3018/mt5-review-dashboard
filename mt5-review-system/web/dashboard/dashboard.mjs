@@ -24,6 +24,7 @@ import {loadLayout} from "./dashboard-layout.mjs";
 import {createDashboardGrid} from "./dashboard-grid.mjs";
 import {mountDashboardLayoutEditorMode} from "./dashboard-layout-editor-mode.mjs";
 import {createMt5DashboardCharts} from "./mt5-dashboard-charts.mjs";
+import {buildMt5SystemEvaluationCards} from "./mt5-system-evaluation.mjs";
 import {MT5_DASHBOARD_MODULES} from "./dashboard-module-registry.mjs";
 import {renderDashboardModules, setDashboardModulesError, setDashboardModulesLoading} from "./dashboard-module-runtime.mjs";
 
@@ -489,6 +490,20 @@ export function createDashboardController({
     );
   }
 
+  function renderSystemEvaluationCards() {
+    const root = view.getElementById("systemEvaluationCards");
+    if (!root) return;
+    const {cards, stateLabel} = buildMt5SystemEvaluationCards(payload || {});
+    root.innerHTML = `${stateLabel ? `<p class="system-evaluation-state">${escapeHtml(stateLabel)}</p>` : ""}${cards.map((card) => `
+      <article class="system-period-card">
+        <header><strong>${escapeHtml(card.label)}</strong></header>
+        <dl class="system-period-metrics">${card.values.map((item) => `
+          <div class="system-period-metric"><dt>${escapeHtml(item.label)} <span>${escapeHtml(item.unit)}</span></dt><dd class="tone-${item.tone}">${escapeHtml(item.value)}</dd></div>
+        `).join("")}</dl>
+      </article>
+    `).join("")}`;
+  }
+
   function renderAll() {
     applyWorkspaceVisibility();
     renderLatestImportSummary();
@@ -503,7 +518,7 @@ export function createDashboardController({
       "monthly-pnl": () => chartController?.updateModule("monthlyPnl", payload || {}),
       heatmap: () => chartController?.updateModule("heatmap", payload || {}),
       sessions: renderSessions,
-      "period-overview": () => chartController?.updateModule("systemEvaluation", payload || {}),
+      "period-overview": renderSystemEvaluationCards,
       "daily-evaluation": renderSystemEvaluation,
       "mode-evaluation": renderModeEvaluation,
     };
@@ -704,7 +719,12 @@ export function createDashboardController({
     applyWorkspaceVisibility();
     renderLatestImportSummary();
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh, refreshLabel: workspace.actionLabel, refreshIcon: workspace.actionIcon, refreshErrorMessage: workspace.showMarketClock ? "刷新数据失败" : "打开数据导入失败", share: true })
+      ? mountShell({
+        activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh,
+        refreshLabel: workspace.actionLabel, refreshIcon: workspace.actionIcon,
+        refreshErrorMessage: workspace.showMarketClock ? "刷新数据失败" : "打开数据导入失败", share: true,
+        toolbarFilters: view.querySelector?.("#legacyDashboard .filter-bar"),
+      })
       : null;
     applyDashboardLayout();
     chartController = createMt5DashboardCharts({view});

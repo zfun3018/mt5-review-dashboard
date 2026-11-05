@@ -146,67 +146,41 @@ test("MT5 monthly chart uses a zero-centered positive and negative bar axis", as
   assert.equal(option.series[0].type, "bar");
 });
 
-test("MT5 trading system evaluation uses six independent ECharts small multiples with readable period values", async () => {
-  const {buildMt5SystemEvaluationOption} = await import(moduleUrl("dashboard/mt5-dashboard-charts.mjs"));
-  const option = buildMt5SystemEvaluationOption({periods: {
+test("MT5 trading system evaluation builds one period card with six metrics per period", async () => {
+  const {buildMt5SystemEvaluationCards} = await import(moduleUrl("dashboard/mt5-system-evaluation.mjs"));
+  const result = buildMt5SystemEvaluationCards({periods: {
     yesterday: {net_pnl: -40, order_count: 3, payoff_ratio: 0.8, r_metrics: {complete_count: 3, decisive_win_rate: 1 / 3, expectancy_r: -0.2, sqn: null, sqn_status: "insufficient_sample"}},
     last_7_days: {net_pnl: 120, order_count: 8, payoff_ratio: 1.8, r_metrics: {complete_count: 8, decisive_win_rate: 0.625, expectancy_r: 0.4, sqn: null, sqn_status: "insufficient_sample"}},
     last_30_days: {net_pnl: 80, order_count: 20, payoff_ratio: 1.2, r_metrics: {complete_count: 20, decisive_win_rate: 0.55, expectancy_r: 0.15, sqn: null, sqn_status: "insufficient_sample"}},
     last_365_days: {net_pnl: -250, order_count: 140, payoff_ratio: 0.9, r_metrics: {complete_count: 140, decisive_win_rate: 0.48, expectancy_r: -0.05, sqn: 1.12, sqn_status: "available"}},
   }});
 
-  const labels = ["总盈亏", "交易笔数", "净盈亏比", "净胜率", "数学期望", "收益稳定度"];
+  const metrics = ["总盈亏", "交易笔数", "净盈亏比", "净胜率", "数学期望", "收益稳定度"];
   const periods = ["昨日", "近 7 天", "近 30 天", "近 365 天"];
-  assert.equal(option.grid.length, 6);
-  assert.equal(option.title.length, 6);
-  assert.deepEqual(option.title.map((item) => item.text), labels);
-  assert.equal(option.xAxis.length, 6);
-  assert.equal(option.yAxis.length, 6);
-  assert.equal(option.series.length, 6);
-  for (const [index, series] of option.series.entries()) {
-    assert.equal(series.type, "bar");
-    assert.equal(series.xAxisIndex, index);
-    assert.equal(series.yAxisIndex, index);
-    assert.equal(series.data.length, 4);
-    assert.deepEqual(series.data.map((item) => item.periodLabel), periods);
-    assert.ok(series.data.every((item) => item.label));
-  }
-  const pnl = option.series[0];
-  assert.ok(option.xAxis[0].min < 0 && option.xAxis[0].max > 0);
-  assert.equal(pnl.data.find((item) => item.periodKey === "last_7_days").label, "$120.00");
-  const count = option.series[1].data.find((item) => item.periodKey === "last_7_days");
-  assert.equal(count.label, "8");
-  assert.equal(count.itemStyle.color, "rgba(118, 178, 255, 0.72)");
-  assert.equal(option.series[2].markLine.data[0].xAxis, 1);
-  assert.equal(option.series[3].data.find((item) => item.periodKey === "last_7_days").label, "63%");
-  assert.equal(option.series[4].data.find((item) => item.periodKey === "last_7_days").label, "+0.40R");
-  const insufficientSqn = option.series[5].data.find((item) => item.periodKey === "last_7_days");
-  assert.equal(insufficientSqn.label, "样本不足");
-  assert.equal(insufficientSqn.value, 0);
-  assert.equal(insufficientSqn.itemStyle.opacity, 0);
-  const narrowOption = buildMt5SystemEvaluationOption({periods: {
-    yesterday: {net_pnl: -40, order_count: 3, payoff_ratio: 0.8, r_metrics: {complete_count: 3, decisive_win_rate: 1 / 3, expectancy_r: -0.2, sqn_status: "insufficient_sample"}},
-    last_7_days: {net_pnl: 120, order_count: 8, payoff_ratio: 1.8, r_metrics: {complete_count: 8, decisive_win_rate: 0.625, expectancy_r: 0.4, sqn_status: "insufficient_sample"}},
-    last_30_days: {net_pnl: 80, order_count: 20, payoff_ratio: 1.2, r_metrics: {complete_count: 20, decisive_win_rate: 0.55, expectancy_r: 0.15, sqn_status: "insufficient_sample"}},
-    last_365_days: {net_pnl: -250, order_count: 140, payoff_ratio: 0.9, r_metrics: {complete_count: 140, decisive_win_rate: 0.48, expectancy_r: -0.05, sqn: 1.12, sqn_status: "available"}},
-  }}, 390);
-  assert.ok(narrowOption.grid.every((grid) => grid.left === "0%"));
-  assert.ok(Number.parseFloat(narrowOption.grid[1].top) > Number.parseFloat(narrowOption.grid[0].top));
-  const tooltip = option.tooltip.formatter({data: option.series[5].data.find((item) => item.periodKey === "last_365_days")});
-  assert.match(tooltip, /近 365 天/);
-  assert.match(tooltip, /收益稳定度/);
-  assert.match(tooltip, /SQN；至少需要 30 个有效 R 样本/);
-  assert.match(tooltip, /1\.12/);
+  assert.equal(result.cards.length, 4);
+  assert.deepEqual(result.cards.map((card) => card.label), periods);
+  for (const card of result.cards) assert.deepEqual(card.values.map((item) => item.label), metrics);
+  const week = result.cards.find((card) => card.key === "last_7_days");
+  const pnl = week.values.find((item) => item.key === "net_pnl");
+  assert.equal(pnl.value, "$120.00");
+  assert.equal(pnl.tone, "positive");
+  const count = week.values.find((item) => item.key === "trade_count");
+  assert.equal(count.value, "8");
+  assert.equal(count.tone, "neutral");
+  assert.equal(week.values.find((item) => item.key === "net_win_rate").value, "63%");
+  assert.equal(week.values.find((item) => item.key === "expectancy_r").value, "+0.40R");
+  assert.equal(week.values.find((item) => item.key === "sqn").value, "样本不足");
+  assert.equal(week.values.find((item) => item.key === "sqn").available, false);
 });
 
 test("MT5 trading system evaluation marks an unavailable period payload instead of showing fake zeros", async () => {
-  const {buildMt5SystemEvaluationOption} = await import(moduleUrl("dashboard/mt5-dashboard-charts.mjs"));
-  const option = buildMt5SystemEvaluationOption({periods: {today: {}, week: {}, month: {}, year: {}}});
+  const {buildMt5SystemEvaluationCards} = await import(moduleUrl("dashboard/mt5-system-evaluation.mjs"));
+  const result = buildMt5SystemEvaluationCards({periods: {today: {}, week: {}, month: {}, year: {}}});
 
-  assert.equal(option.series.length, 6);
-  assert.ok(option.series.every((series) => series.data.length === 4));
-  assert.ok(option.series.every((series) => series.data.every((item) => item.label === "—" && item.available === false && item.itemStyle.opacity === 0)));
-  assert.match(option.graphic[0].style.text, /周期数据尚未加载/);
+  assert.equal(result.cards.length, 4);
+  assert.ok(result.cards.every((card) => card.values.length === 6));
+  assert.ok(result.cards.every((card) => card.values.every((item) => item.value === "—" && item.available === false)));
+  assert.match(result.stateLabel, /周期数据尚未加载/);
 });
 
 test("MT5 calendar is rendered by ECharts and preserves the full monthly day range", async () => {

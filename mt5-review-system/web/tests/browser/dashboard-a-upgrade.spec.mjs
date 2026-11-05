@@ -1,6 +1,6 @@
 import {test, expect} from "./fixtures.mjs";
 
-test("MT5 dashboard keeps every existing module, chart, and non-overlapping desktop layout", async ({page, syntheticServer}, testInfo) => {
+test("MT5 dashboard keeps its modules, evaluation cards, and non-overlapping desktop layout", async ({page, syntheticServer}, testInfo) => {
   const errors = [];
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   page.on("pageerror", (error) => errors.push(error.message));
@@ -8,7 +8,7 @@ test("MT5 dashboard keeps every existing module, chart, and non-overlapping desk
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=mt5`);
   await expect(page.locator("#mt5DashboardLayout > .grid-stack-item")).toHaveCount(9);
   await expect(page.locator("#equityChart canvas")).toHaveCount(1);
-  await expect(page.locator("#systemEvaluationChart canvas")).toHaveCount(1);
+  await expect(page.locator("#systemEvaluationCards .system-period-card")).toHaveCount(4);
   await expect(page.locator("#monthlyPnlChart canvas")).toHaveCount(1);
   await expect(page.locator("#heatmapChart canvas")).toHaveCount(1);
   const moduleFitRulesApply = await page.locator("#mt5DashboardLayout > .grid-stack-item").evaluateAll((items) => items.every((item) => {
@@ -20,7 +20,7 @@ test("MT5 dashboard keeps every existing module, chart, and non-overlapping desk
       || ((fit === "scroll" || fit === "flow") && ["auto", "scroll"].includes(overflow));
   }));
   expect(moduleFitRulesApply).toBe(true);
-  const chartCanvasBounds = await page.evaluate(() => ["equityChart", "systemEvaluationChart", "calendarChart", "monthlyPnlChart", "heatmapChart"].map((id) => {
+  const chartCanvasBounds = await page.evaluate(() => ["equityChart", "calendarChart", "monthlyPnlChart", "heatmapChart"].map((id) => {
     const host = document.getElementById(id);
     const canvas = host?.querySelector("canvas");
     const parent = host?.closest(".panel");
@@ -86,7 +86,7 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
   }}));
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=mt5`);
   await expect(page.locator("#calendarChart canvas")).toHaveCount(1);
-  await expect(page.locator("#systemEvaluationChart canvas")).toHaveCount(1);
+  await expect(page.locator("#systemEvaluationCards .system-period-card")).toHaveCount(4);
   await expect(page.locator('[data-layout-module="period-overview"] h2')).toHaveText("交易系统评估");
 
   const visual = await page.evaluate(() => {
@@ -175,24 +175,19 @@ test("MT5 calendar labels break onto lines and evaluation headers stay legible w
   }}));
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=mt5`);
   await expect(page.locator("#calendarChart canvas")).toHaveCount(1);
-  await expect(page.locator("#systemEvaluationChart canvas")).toHaveCount(1);
+  await expect(page.locator("#systemEvaluationCards .system-period-card")).toHaveCount(4);
   await expect(page.locator(".evaluation-table tbody tr")).toHaveCount(40);
   await expect(page.locator("#systemEvaluationPagination")).toContainText("最近 30 个交易日在前");
-  const systemOption = await page.evaluate(() => globalThis.echarts.getInstanceByDom(document.querySelector("#systemEvaluationChart")).getOption());
-  expect(systemOption.title.map((title) => title.text)).toEqual(["总盈亏", "交易笔数", "净盈亏比", "净胜率", "数学期望", "收益稳定度"]);
-  expect(systemOption.grid).toHaveLength(6);
-  expect(systemOption.series).toHaveLength(6);
-  expect(systemOption.series.every((series) => series.type === "bar" && series.data.length === 4)).toBe(true);
-  expect(systemOption.series[1].data[1].label).toBe("8");
-  const gridColumns = systemOption.grid.map((grid) => grid.left);
-  if (testInfo.project.name === "mobile-390") {
-    expect(new Set(gridColumns).size).toBe(1);
-  } else {
-    expect(gridColumns[0]).not.toBe(gridColumns[1]);
-  }
-  await page.evaluate(() => globalThis.echarts.getInstanceByDom(document.querySelector("#systemEvaluationChart")).dispatchAction({type: "showTip", seriesIndex: 1, dataIndex: 1}));
-  await expect(page.locator("body")).toContainText("近 7 天 · 交易笔数");
-  await expect(page.locator("body")).toContainText("数值：8");
+  await expect(page.locator("#systemEvaluationCards .system-period-card > header strong")).toHaveText(["昨日", "近 7 天", "近 30 天", "近 365 天"]);
+  await expect(page.locator("#systemEvaluationCards .system-period-metric")).toHaveCount(24);
+  await expect(page.locator("#systemEvaluationCards .system-period-card").nth(1)).toContainText("交易笔数");
+  await expect(page.locator("#systemEvaluationCards .system-period-card").nth(1)).toContainText("8");
+  const metricLayout = await page.locator("#systemEvaluationCards").evaluate((root) => ({
+    columns: getComputedStyle(root).gridTemplateColumns.split(" ").length,
+    overflow: root.scrollWidth > root.clientWidth,
+  }));
+  expect(metricLayout.overflow).toBe(false);
+  if (testInfo.project.name === "mobile-390") expect(metricLayout.columns).toBe(1);
   await page.evaluate(() => {
     const calendar = document.querySelector("#calendarChart");
     globalThis.echarts.getInstanceByDom(calendar).dispatchAction({type: "showTip", seriesIndex: 0, dataIndex: 0});

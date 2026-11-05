@@ -214,3 +214,30 @@
   .domestic-r-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .domestic-heatmap { min-width: 560px; }
 }
+
+.app-page-bar__filters .domestic-filter-bar {
+  flex-direction: row;
+  align-items: center;
+  overflow: visible;
+}
+
+.app-page-bar__filters .domestic-filter-group {
+  flex: 0 0 auto;
+}
+
+.app-page-bar__filters .domestic-range {
+  display: inline-flex;
+  flex: 0 0 auto;
+  grid-template-columns: none;
+}
+
+.app-page-bar__filters .domestic-range button {
+  min-height: 27px;
+  padding: 0 8px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.app-page-bar__filters .domestic-custom-dates {
+  flex-wrap: nowrap;
+}

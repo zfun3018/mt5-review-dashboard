@@ -16,15 +16,15 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-raised);
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .settings-tab {
   min-height: var(--control-height);
   padding: 0 var(--space-4);
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  background: transparent;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.025);
   color: var(--color-muted);
   cursor: pointer;
 }
@@ -34,15 +34,18 @@
 }
 
 .settings-tab.is-active {
-  border-color: rgba(201, 250, 252, 0.65);
-  background: linear-gradient(145deg, #b0e8ed, #69bdca);
-  box-shadow: 0 5px 16px rgba(66, 164, 180, 0.29), inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  color: #0d1518;
+  border-color: color-mix(in srgb, var(--pill-color, var(--color-accent)) 72%, transparent);
+  background: color-mix(in srgb, var(--pill-color, var(--color-accent)) 18%, rgba(0, 0, 0, 0.48));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pill-color, var(--color-accent)) 26%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: var(--color-text);
   font-weight: 720;
 }
 
 .settings-panel {
+  min-width: 0;
   padding: var(--space-6);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
 }
 
 .settings-panel[hidden] {
@@ -121,7 +124,8 @@
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  background: var(--color-surface);
+  background: rgba(0, 0, 0, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .classification-option-row.archived {
@@ -183,7 +187,7 @@
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  background: var(--color-surface);
+  background: rgba(0, 0, 0, 0.26);
 }
 
 .settings-field-create {
@@ -283,7 +287,8 @@
 }
 
 .settings-danger-zone {
-  border-color: color-mix(in srgb, var(--color-danger, #d64545) 35%, var(--color-border));
+  border-color: color-mix(in srgb, var(--color-negative) 42%, var(--color-border));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-negative) 10%, transparent), var(--shadow-panel);
 }
 
 .settings-import-result {
@@ -592,9 +597,61 @@
   text-align: center;
 }
 
+.settings-shell {
+  overflow: hidden;
+}
+
+.settings-panel,
+.classification-option-row,
+.custom-field-card,
+.option-editor,
+.import-history-item,
+.import-summary-grid > div,
+.import-issue-row,
+.import-unmatched-row,
+.status-item,
+.backup-item {
+  position: relative;
+  z-index: 0;
+}
+
+.settings-panel::after,
+.classification-option-row::after,
+.custom-field-card::after,
+.option-editor::after,
+.import-history-item::after,
+.import-summary-grid > div::after,
+.import-issue-row::after,
+.import-unmatched-row::after,
+.status-item::after,
+.backup-item::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 20%, rgba(220, 247, 255, 0.035) 48%, transparent 72%);
+  content: "";
+  pointer-events: none;
+}
+
+.settings-import-result[aria-live="polite"] {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-inner);
+  background: rgba(255, 255, 255, 0.035);
+}
+
 @media (max-width: 720px) {
   .settings-panel {
     padding: var(--space-4);
+  }
+
+  .settings-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .settings-tab {
+    flex: 0 0 auto;
   }
 
   .classification-option-row {

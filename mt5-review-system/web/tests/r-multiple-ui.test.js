@@ -103,7 +103,7 @@ test("dashboard exposes accessible shared metric explanation", () => {
   assert.match(app, /净胜率（剔除打平）/);
   assert.match(app, /有效胜率/);
   assert.match(app, /交易笔数/);
-  assert.match(html, /六项指标各自比较四个周期，保留实际数值与独立刻度/);
+  assert.match(html, /四个周期各一张卡，展示六项核心指标/);
   assert.match(app, /净盈亏比/);
   assert.match(app, /\["z_score", "Z 分数"/);
   assert.match(html, /净盈亏比/);
@@ -116,14 +116,16 @@ test("dashboard exposes accessible shared metric explanation", () => {
 });
 
 test("order flow renders a compact merged-campaign index", () => {
-  assert.match(ordersSource, /<tr><th>订单信息<\/th><th>R 值<\/th><th>净盈亏<\/th><\/tr>/);
+  assert.doesNotMatch(ordersSource, /<tr><th>订单<\/th><\/tr>/);
+  assert.match(ordersSource, /campaign-list-contract/);
+  assert.match(ordersSource, /campaign-list-pnl/);
   assert.match(ordersSource, /class="campaign-kind-mark"/);
   assert.match(ordersSource, />组<\/span>/);
   assert.match(ordersSource, /初始止损未完整填写/);
   assert.match(ordersSource, /class="campaign-risk-mark"/);
   assert.match(ordersCss, /\.orders-table th,[\s\r\n]+\.orders-table td\s*\{[\s\S]*font-size:\s*11px/);
-  assert.match(ordersCss, /grid-template-columns:\s*minmax\(260px, 320px\)/);
-  assert.match(ordersCss, /\.app-page\s*\{[\s\S]*height:\s*calc\(100dvh - 60px\)/);
+  assert.match(ordersCss, /grid-template-columns:\s*minmax\(190px, 220px\)/);
+  assert.match(ordersCss, /\.orders-index-column \.trades-panel\s*\{[\s\S]*max-height:\s*calc\(100dvh - 168px\)/);
 });
 
 test("order flow keeps source positions out of the main order index", () => {

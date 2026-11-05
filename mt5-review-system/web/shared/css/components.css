@@ -3,7 +3,11 @@
 .glass-surface--fluid,
 .modal-surface,
 .floating-context-card,
-.glass-menu {
+.glass-menu,
+.panel,
+.market-card,
+.domestic-module,
+.settings-panel {
   position: relative;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
@@ -38,7 +42,7 @@
 }
 
 .floating-context-card {
-  animation: fluid-float var(--motion-duration-expand) ease-out both;
+  animation: floating-context-drift var(--motion-duration-float) var(--motion-easing-fluid) infinite;
   padding: var(--space-4);
 }
 
@@ -49,18 +53,19 @@
   align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--pill-color) 58%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pill-color) 72%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--pill-color) 16%, transparent);
+  background: color-mix(in srgb, var(--pill-color) 22%, transparent);
   color: var(--color-text);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--pill-color) 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--pill-color) 35%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   white-space: nowrap;
 }
 
 .glow-pill[data-selected="true"],
 .glow-pill.is-selected {
   border-color: var(--pill-color);
-  background: color-mix(in srgb, var(--pill-color) 28%, transparent);
+  background: color-mix(in srgb, var(--pill-color) 34%, transparent);
+  box-shadow: 0 0 30px color-mix(in srgb, var(--pill-color) 45%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
 .glow-pill[aria-disabled="true"],
@@ -90,6 +95,59 @@
   padding: var(--space-2);
   background: var(--glass-clear);
   box-shadow: var(--shadow-float);
+}
+
+/* A moving refraction band gives each glass object a visible surface response.
+   It stays on a pointer-free pseudo-element so text, controls, and menus remain
+   fully interactive while only transform and opacity are animated. */
+.glass-surface,
+.glass-surface--clear,
+.glass-surface--fluid,
+.modal-surface,
+.floating-context-card,
+.glass-menu {
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.glass-surface::after,
+.glass-surface--clear::after,
+.glass-surface--fluid::after,
+.modal-surface::after,
+.floating-context-card::after,
+.glass-menu::after,
+.panel::after,
+.market-card::after,
+.domestic-module::after,
+.settings-panel::after {
+  position: absolute;
+  z-index: 0;
+  top: -62%;
+  bottom: -62%;
+  left: -44%;
+  width: 34%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(220, 247, 255, 0.04) 31%,
+    rgba(220, 247, 255, 0.2) 48%,
+    rgba(121, 200, 213, 0.12) 56%,
+    transparent 74%
+  );
+  filter: blur(9px);
+  opacity: 0.7;
+  transform: translate3d(-155%, 0, 0) rotate(18deg);
+  animation: glass-surface-sheen var(--motion-duration-sheen) var(--motion-easing-fluid) infinite;
+  content: "";
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+@keyframes glass-surface-sheen {
+  0%, 12% { opacity: 0; transform: translate3d(-155%, 0, 0) rotate(18deg); }
+  24% { opacity: 0.72; }
+  52% { opacity: 0.42; }
+  76%, 100% { opacity: 0; transform: translate3d(420%, 0, 0) rotate(18deg); }
 }
 
 .glass-menu__option {
@@ -203,7 +261,7 @@ a[aria-disabled="true"] {
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  background: linear-gradient(145deg, rgba(34, 42, 53, 0.56), rgba(13, 17, 24, 0.47));
+  background: var(--glass-clear);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
@@ -301,7 +359,7 @@ a[aria-disabled="true"] {
   position: relative;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-panel);
-  background: linear-gradient(145deg, rgba(34, 42, 53, 0.56), rgba(13, 17, 24, 0.47));
+  background: var(--glass-base);
   box-shadow: var(--shadow-panel);
   backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
@@ -442,9 +500,9 @@ th {
   }
 }
 
-@keyframes fluid-float {
-  from { opacity: 0; transform: translateY(var(--motion-distance-float)); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes floating-context-drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--motion-distance-float) / 2)); }
 }
 
 @supports not (backdrop-filter: blur(1px)) {
@@ -463,5 +521,22 @@ th {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .floating-context-card { animation: none; transform: none; }
+  .floating-context-card {
+    animation: none;
+    transform: none;
+  }
+
+  .glass-surface::after,
+  .glass-surface--clear::after,
+  .glass-surface--fluid::after,
+  .modal-surface::after,
+  .floating-context-card::after,
+  .glass-menu::after,
+  .panel::after,
+  .market-card::after,
+  .domestic-module::after,
+  .settings-panel::after {
+    animation: none;
+    transform: none;
+  }
 }

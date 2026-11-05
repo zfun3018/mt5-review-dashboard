@@ -52,8 +52,8 @@ export function createClassificationsModule({
       const rows = getOptions(dimension)
         .map(
           (option) => `
-            <div class="classification-option-row ${option.active ? "" : "archived"}" data-classification-row="${escapeAttr(option.id)}">
-              <span class="classification-color" style="--option-color:${escapeAttr(option.color || DEFAULT_CLASSIFICATION_COLOR)}"></span>
+            <div class="classification-option-row glass-surface ${option.active ? "" : "archived"}" data-classification-row="${escapeAttr(option.id)}" style="--pill-color:${escapeAttr(option.color || DEFAULT_CLASSIFICATION_COLOR)}">
+              <span class="classification-color" style="--option-color:${escapeAttr(option.color || DEFAULT_CLASSIFICATION_COLOR)}" aria-hidden="true"></span>
               <input type="color" value="${escapeAttr(option.color || DEFAULT_CLASSIFICATION_COLOR)}" data-classification-color="${escapeAttr(option.id)}" title="颜色" aria-label="${escapeAttr(option.label)}颜色" />
               <input type="text" value="${escapeAttr(option.label)}" data-classification-label="${escapeAttr(option.id)}" />
               <span class="classification-state">${option.active ? "使用中" : "已停用"}</span>

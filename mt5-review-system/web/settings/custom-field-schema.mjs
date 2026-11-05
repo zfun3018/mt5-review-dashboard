@@ -45,7 +45,7 @@ export function createCustomFieldSchemaModule({
 
   function renderOptionRow(fieldId, option = {}) {
     return `
-      <div class="option-row" data-option-row="${fieldId}" data-option-id="${escapeAttr(option.id || "")}">
+      <div class="option-row glass-surface" data-option-row="${fieldId}" data-option-id="${escapeAttr(option.id || "")}">
         <input type="color" value="${escapeAttr(option.color || choiceColor(0))}" data-option-color title="颜色" />
         <input type="text" value="${escapeAttr(option.label || "")}" data-option-label placeholder="选项名称" />
         <button class="button-danger" data-option-delete type="button">删除</button>
@@ -59,7 +59,7 @@ export function createCustomFieldSchemaModule({
       .join("");
     const options = (field.options || []).map((option) => renderOptionRow(field.id, option)).join("");
     return `
-      <div class="custom-field-card" data-custom-field-row="${field.id}">
+      <div class="custom-field-card glass-surface" data-custom-field-row="${field.id}">
         <div class="field-row custom-field-main">
           <span>${field.sort_order}</span>
           <input type="text" value="${escapeAttr(field.name)}" data-custom-field-name="${field.id}" />
@@ -68,7 +68,7 @@ export function createCustomFieldSchemaModule({
           ${field.active ? `<button class="button" data-custom-field-delete="${field.id}">停用</button>` : `<button class="button" data-custom-field-restore="${field.id}">恢复</button>`}
           <button class="button-danger" data-custom-field-purge="${field.id}">删除字段</button>
         </div>
-        <div class="option-editor ${field.field_type === "text" ? "hidden" : ""}" data-option-editor="${field.id}">
+        <div class="option-editor glass-surface--clear ${field.field_type === "text" ? "hidden" : ""}" data-option-editor="${field.id}">
           <div class="option-list" data-option-list="${field.id}">
             ${options || `<div class="detail-empty">暂无选项，可在订单表格里创建，也可以点下面新增</div>`}
           </div>

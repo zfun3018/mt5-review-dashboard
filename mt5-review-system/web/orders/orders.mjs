@@ -94,14 +94,16 @@ export function renderCheckinCalendarMarkup(payload = {}) {
 function campaignDateInfo(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return { key: String(value || "unknown"), label: "日期未知", time: "--:--" };
+    return { key: String(value || "unknown"), label: "日期未知", weekday: "星期未知", time: "--:--" };
   }
   const dayParts = Object.fromEntries(
     campaignDayLabelFormatter.formatToParts(date).map((part) => [part.type, part.value]),
   );
   return {
     key: campaignDayKeyFormatter.format(date),
-    label: `${dayParts.month}月${dayParts.day}日 ${dayParts.weekday}`,
+    label: `${dayParts.month}月${dayParts.day}日`,
+    weekday: `星期${dayParts.weekday.replace("周", "")}`,
+    weekdaySymbol: dayParts.weekday.replace("周", ""),
     time: campaignTimeFormatter.format(date),
   };
 }
@@ -110,14 +112,16 @@ function campaignTradeDateInfo(value) {
   const text = String(value || "");
   const date = new Date(text + "T00:00:00+08:00");
   if (Number.isNaN(date.getTime())) {
-    return { key: text || "unknown", label: "日期未知", time: "--:--" };
+    return { key: text || "unknown", label: "日期未知", weekday: "星期未知", time: "--:--" };
   }
   const dayParts = Object.fromEntries(
     campaignDayLabelFormatter.formatToParts(date).map((part) => [part.type, part.value]),
   );
   return {
     key: text,
-    label: dayParts.month + "月" + dayParts.day + "日 " + dayParts.weekday,
+    label: dayParts.month + "月" + dayParts.day + "日",
+    weekday: "星期" + dayParts.weekday.replace("周", ""),
+    weekdaySymbol: dayParts.weekday.replace("周", ""),
     time: "",
   };
 }
@@ -519,22 +523,21 @@ export function createOrdersController({
   function renderCampaignRows() {
     setHtml(
       "orderHead",
-      `
-        <tr><th>订单信息</th><th>R 值</th><th>净盈亏</th></tr>
-      `,
+      "",
     );
     const rows = groupCampaignsByDay(page.campaigns, platform).map((group) => {
       const groupPnl = group.campaigns.reduce((total, campaign) => total + Number(campaign.net_pnl || 0), 0);
       const expanded = !collapsedDayKeys.has(group.key);
       const summary = `
         <tr class="campaign-day-row" data-day-key="${escapeAttr(group.key)}">
-          <td colspan="3">
+          <td>
             <button class="campaign-day-toggle" type="button" data-day-toggle="${escapeAttr(group.key)}" aria-expanded="${expanded}">
               <span class="campaign-day-chevron" aria-hidden="true">${expanded ? "−" : "+"}</span>
               <span class="campaign-day-summary">
-              <strong>${escapeHtml(group.label)}</strong>
-              <span>${group.campaigns.length}笔</span>
-              <strong class="${profitClass(groupPnl)} campaign-day-pnl-pill">${formatOrderListPnl(groupPnl)}</strong>
+              <strong class="campaign-day-date">${escapeHtml(group.label)}</strong>
+              <span class="campaign-day-weekday" title="${escapeAttr(group.weekday)}" aria-label="${escapeAttr(group.weekday)}">${escapeHtml(group.weekdaySymbol || "?")}</span>
+              <span class="campaign-day-count">${group.campaigns.length}笔</span>
+              <strong class="campaign-day-pnl ${profitClass(groupPnl)}">${formatOrderListPnl(groupPnl)}</strong>
               </span>
             </button>
           </td>
@@ -542,7 +545,6 @@ export function createOrdersController({
       `;
       const campaignRows = group.campaigns.map((campaign, dayIndex) => {
         const active = campaign.id === selectedCampaignId ? "active" : "";
-        const riskClass = campaign.risk_status === "complete" ? "risk-complete" : `risk-${campaign.risk_status || "missing"}`;
         const positions = campaignPositionSummaries(campaign);
         const scratch = isScratchCampaign(campaign);
         const combinedMark = positions.length > 1 || Number(campaign.scale_in_count || 0) > 0
@@ -559,26 +561,28 @@ export function createOrdersController({
           : "";
         const timeInfo = campaignDateInfo(campaign.opened_at_utc);
         const contractDisplay = campaignContractDisplay(campaign);
+        const orderCell = `<td data-label="订单" class="campaign-order-cell">
+          <div class="campaign-list-order${active ? " glass-surface--fluid order-list-selected" : ""}">
+            <div class="campaign-list-meta">
+              <span class="campaign-list-index" aria-label="当日第 ${dayIndex + 1} 笔">${dayIndex + 1}</span>
+            </div>
+            <div class="campaign-list-main">
+              <strong class="campaign-list-contract" title="${escapeAttr(contractDisplay.name)}">${escapeHtml(contractDisplay.name)}</strong>
+              <span class="campaign-row-flags">${featuredMark}${scratchMark}${combinedMark}${missingStop}</span>
+              <span class="campaign-list-opened">${timeInfo.time ? escapeHtml(timeInfo.time) : ""}</span>
+            </div>
+            <strong class="campaign-list-pnl ${profitClass(campaign.net_pnl)}">${formatOrderListPnl(campaign.net_pnl)}</strong>
+          </div>
+        </td>`;
         return `
-          <tr class="campaign-row ${active} ${scratch ? "scratch" : ""} ${campaign.risk_status === "complete" ? "" : "has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}" data-day-sequence="${dayIndex + 1}">
-            <td data-label="订单信息" class="campaign-order-cell">
-              <div class="campaign-list-order">
-                <div class="campaign-list-meta">
-                <span class="campaign-list-index" aria-label="当日第 ${dayIndex + 1} 笔">${dayIndex + 1}</span>
-                <span class="campaign-row-flags">${featuredMark}${scratchMark}${combinedMark}${missingStop}</span>
-                </div>
-                <strong class="campaign-list-contract" title="${escapeAttr(contractDisplay.name)}">${escapeHtml(contractDisplay.name)}</strong>
-                <span class="campaign-list-opened">${escapeHtml(timeInfo.time)}</span>
-              </div>
-            </td>
-            <td data-label="R 值" class="campaign-r-cell ${riskClass}">${escapeHtml(campaignRLabel(campaign))}</td>
-            <td data-label="净盈亏" class="campaign-pnl-cell ${profitClass(campaign.net_pnl)}"><strong class="campaign-list-pnl ${profitClass(campaign.net_pnl)}">${formatOrderListPnl(campaign.net_pnl)}</strong></td>
+          <tr class="campaign-row${active ? ` ${active}` : ""}${scratch ? " scratch" : ""}${campaign.risk_status === "complete" ? "" : " has-risk-gap"}" data-campaign-id="${escapeAttr(campaign.id)}" data-day-sequence="${dayIndex + 1}">
+            ${orderCell}
           </tr>
         `;
       }).join("");
       return summary + (expanded ? campaignRows : "");
     }).join("");
-    setHtml("orderRows", rows || `<tr><td colspan="3">没有匹配的主订单</td></tr>`);
+    setHtml("orderRows", rows || `<tr><td colspan="1">没有匹配的主订单</td></tr>`);
     applyListPanelHeight();
     globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
     bindDayToggles();
@@ -761,16 +765,26 @@ export function createOrdersController({
     button.setAttribute("aria-pressed", String(featured));
     button.classList?.toggle?.("is-active", featured);
 
-    const group = button.parentElement;
-    const badge = group?.querySelector?.(".featured-status-badge");
-    if (featured && !badge && typeof view.createElement === "function") {
-      const nextBadge = view.createElement("span");
-      nextBadge.className = "featured-status-badge";
-      nextBadge.innerHTML = '<i data-lucide="star" aria-hidden="true"></i>已精选';
-      group.appendChild(nextBadge);
-    } else if (!featured) {
-      badge?.remove?.();
-    }
+    globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
+  }
+
+  function syncCheckinAction(campaign) {
+    const button = getElement("checkinCampaign");
+    if (!button || String(selectedCampaignId || "") !== String(campaign?.id || "")) return;
+    const checkedIn = Boolean(campaign.checkin_checked_in_today);
+    const label = checkedIn ? "已打卡" : "今日打卡";
+    const actionLabel = checkedIn ? "取消今日打卡" : "今日打卡";
+    const count = Math.max(0, Number(campaign.checkin_count) || 0);
+    button.setAttribute("title", `${actionLabel} · 累计 ${count} 次`);
+    button.setAttribute("aria-label", actionLabel);
+    button.setAttribute("aria-pressed", String(checkedIn));
+    button.classList?.toggle?.("is-active", checkedIn);
+    const text = button.querySelector?.(".detail-checkin-label");
+    const counter = button.querySelector?.(".detail-action-count");
+    const icon = button.querySelector?.("[data-lucide]");
+    if (text) text.textContent = label;
+    if (counter) counter.textContent = String(count);
+    if (icon) icon.setAttribute("data-lucide", checkedIn ? "undo-2" : "check-circle");
     globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
   }
 
@@ -1199,10 +1213,21 @@ export function createOrdersController({
   async function checkinCampaign(campaign) {
     if (!campaign?.id) return null;
     const checkedIn = Boolean(campaign.checkin_checked_in_today);
-    const result = await api.requestJson(`/api/campaigns/${encodeURIComponent(campaign.id)}/checkin`, checkedIn
+    const result = await api.requestJson(platformApiPath(`/api/campaigns/${encodeURIComponent(campaign.id)}/checkin`), checkedIn
       ? { method: "DELETE" }
       : { method: "POST", body: {} });
-    await afterMutation();
+    const nextCheckedIn = Boolean(result?.checked_in ?? !checkedIn);
+    const countDelta = checkedIn
+      ? (result?.deleted ? -1 : 0)
+      : (result?.created ? 1 : 0);
+    const records = new Set([campaign, campaignDetail, ...page.campaigns]);
+    for (const record of records) {
+      if (!record || String(record.id || "") !== String(campaign.id)) continue;
+      record.checkin_checked_in_today = nextCheckedIn;
+      record.checkin_count = Math.max(0, Number(record.checkin_count ?? campaign.checkin_count ?? 0) + countDelta);
+    }
+    syncCheckinAction(campaign);
+    await loadCheckinCalendar();
     toast(checkedIn ? "已取消今日打卡" : "打卡成功", { tone: "success" });
     return result;
   }
@@ -1298,66 +1323,48 @@ export function createOrdersController({
 
   function init() {
     const cleanup = typeof mountShell === "function"
-      ? mountShell({ activeRoute: "/orders/", title: "订单复盘", onRefresh, share: true })
+      ? mountShell({
+        activeRoute: "/orders/", title: "订单复盘", onRefresh, share: true,
+        toolbarFilters: view.querySelector?.(".order-filters"),
+      })
       : null;
 
-    const searchInput = getElement("searchInput");
-    const sideFilter = getElement("sideFilter");
-    const tradeTypeFilter = getElement("tradeTypeFilter");
-    const strategyFilter = getElement("strategyFilter");
+    const timePreset = getElement("timePreset");
     const startFilter = getElement("startFilter");
     const endFilter = getElement("endFilter");
-    const riskMissingOnly = getElement("riskMissingOnly");
     const deletedFilter = getElement("deletedFilter");
     const imageClose = getElement("imageClose");
     bindListViewTabs();
     bindListScroll();
     loadCheckinCalendar();
 
-    if (searchInput) {
-      searchInput.value = state.q || "";
-      searchInput.addEventListener("input", (event) => {
-        commitState({ q: event.target.value, page: 1 });
-        loadList();
-      });
-    }
-    if (sideFilter) {
-      sideFilter.value = state.side || "all";
-      sideFilter.addEventListener("change", (event) => {
-        commitState({ side: event.target.value, page: 1 });
-        loadList();
-      });
-    }
-    if (tradeTypeFilter) {
-      tradeTypeFilter.addEventListener("change", (event) => {
-        commitState({ tradeType: event.target.value, page: 1 });
-        loadList();
-      });
-    }
-    if (strategyFilter) {
-      strategyFilter.addEventListener("change", (event) => {
-        commitState({ strategy: event.target.value, page: 1 });
+    if (timePreset) {
+      timePreset.value = state.preset || "all";
+      timePreset.addEventListener("change", (event) => {
+        const preset = event.target.value;
+        if (preset !== "custom") {
+          if (startFilter) startFilter.value = "";
+          if (endFilter) endFilter.value = "";
+          commitState({ preset, start: "", end: "", page: 1 });
+        } else {
+          commitState({ preset, page: 1 });
+        }
         loadList();
       });
     }
     if (startFilter) {
       startFilter.value = state.start || "";
       startFilter.addEventListener("change", (event) => {
-        commitState({ start: event.target.value, page: 1 });
+        if (timePreset) timePreset.value = "custom";
+        commitState({ preset: "custom", start: event.target.value, page: 1 });
         loadList();
       });
     }
     if (endFilter) {
       endFilter.value = state.end || "";
       endFilter.addEventListener("change", (event) => {
-        commitState({ end: event.target.value, page: 1 });
-        loadList();
-      });
-    }
-    if (riskMissingOnly) {
-      riskMissingOnly.checked = Boolean(state.rMissing);
-      riskMissingOnly.addEventListener("change", (event) => {
-        commitState({ rMissing: event.target.checked, page: 1 });
+        if (timePreset) timePreset.value = "custom";
+        commitState({ preset: "custom", end: event.target.value, page: 1 });
         loadList();
       });
     }

@@ -327,7 +327,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
     const legacy = view.getElementById("legacyDashboard");
     if (legacy) legacy.hidden = true;
     root?.removeAttribute("hidden");
-    mountShell({activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh, refreshLabel: platform === "domestic_futures" ? "导入数据" : "刷新数据", refreshIcon: platform === "domestic_futures" ? "upload" : "refresh-cw", refreshErrorMessage: platform === "domestic_futures" ? "打开数据导入失败" : "刷新数据失败", share: true, location});
+    mountShell({activeRoute: "/dashboard/", title: "复盘仪表盘", onRefresh, refreshLabel: platform === "domestic_futures" ? "导入数据" : "刷新数据", refreshIcon: platform === "domestic_futures" ? "upload" : "refresh-cw", refreshErrorMessage: platform === "domestic_futures" ? "打开数据导入失败" : "刷新数据失败", share: true, location, toolbarFilters: view.querySelector?.("[data-domestic-filter]")});
     bindFilters();
   }
 

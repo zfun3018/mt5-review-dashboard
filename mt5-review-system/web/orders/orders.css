@@ -1521,6 +1521,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .campaign-list-order {
   display: grid;
+  width: 100%;
   min-width: 0;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1561,7 +1562,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 }
 
 .campaign-list-pnl,
-.campaign-day-summary strong:last-child {
+.campaign-day-pnl {
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -1573,7 +1574,9 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .campaign-list-pnl {
   display: inline-block;
   min-width: 0;
+  justify-self: end;
   letter-spacing: 0;
+  text-align: right;
 }
 
 .campaign-day-row td {
@@ -1630,12 +1633,9 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   font-weight: 650;
 }
 
-.campaign-day-summary strong:last-child {
-  min-width: 6rem;
-  padding: 2px 6px;
-  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-  border-radius: 4px;
-  background: color-mix(in srgb, currentColor 9%, transparent);
+.campaign-day-pnl {
+  min-width: 0;
+  justify-self: end;
   text-align: right;
 }
 
@@ -1745,6 +1745,32 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 0.7em;
   font-weight: 500;
+}
+
+.detail-title-pnl {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 9px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.72em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.2;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.detail-title-pnl.profit-text {
+  color: var(--color-positive);
+  background: color-mix(in srgb, var(--color-positive) 12%, transparent);
+}
+
+.detail-title-pnl.loss-text {
+  color: var(--color-negative);
+  background: color-mix(in srgb, var(--color-negative) 12%, transparent);
 }
 
 .order-info-strip {
@@ -1897,6 +1923,14 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   border-top: 1px solid var(--color-border);
   border-radius: 0;
   background: transparent;
+}
+
+.import-source-section:not(.is-secondary) {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: rgba(17, 36, 53, 0.38);
 }
 
 .import-source-section.is-secondary .section-head {
@@ -2552,28 +2586,11 @@ html[data-platform="domestic_futures"] .detail-panel select {
 
 .detail-icon-action.featured-action.is-active {
   border-color: #f3bf70;
-  color: #df8618;
+  color: #f1c66e;
   background: #fff4df;
 }
 
 .detail-icon-action.featured-action.is-active svg {
-  fill: currentColor;
-  stroke: currentColor;
-}
-
-.featured-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: #c87512;
-  font-size: 10px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.featured-status-badge svg {
-  width: 12px;
-  height: 12px;
   fill: currentColor;
   stroke: currentColor;
 }
@@ -3126,28 +3143,6 @@ html[data-platform] .detail-checkin-pill .detail-action-count {
   font-size: 10px;
 }
 
-html[data-platform] .campaign-day-summary .campaign-day-pnl-pill {
-  display: inline-flex;
-  min-width: 6rem;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, currentColor 11%, transparent);
-  line-height: 1.2;
-  text-align: right;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-html[data-platform] .campaign-day-summary .campaign-day-pnl-pill.profit-text {
-  color: var(--color-positive);
-}
-
-html[data-platform] .campaign-day-summary .campaign-day-pnl-pill.loss-text {
-  color: var(--color-negative);
-}
-
 @media (max-width: 560px) {
   html[data-platform] .order-info-main {
     grid-template-columns: minmax(0, 1fr);
@@ -3158,18 +3153,247 @@ html[data-platform] .campaign-day-summary .campaign-day-pnl-pill.loss-text {
   }
 }
 
+html[data-platform] .order-detail-title {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields {
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 680px) {
+  html[data-platform] .order-detail-title {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  html[data-platform] .detail-review-meta .detail-primary-review-fields {
+    flex-wrap: wrap;
+  }
+}
+
+/* Final responsive contract for the review workspace. The index is a compact
+   one-field rail; the screenshot keeps the primary width and the review
+   metadata moves below it before the execution ledger when space is tight. */
+.orders-layout {
+  grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.detail-body.order-detail-workspace {
+  gap: 8px;
+  padding: 10px;
+}
+
+.detail-hero-grid,
+.detail-review-column {
+  gap: 8px;
+}
+
+html[data-platform] .campaign-day-row td {
+  border-bottom-color: #485965;
+  background: #26323e !important;
+  color: #e7edf2 !important;
+}
+
+html[data-platform] .campaign-day-summary {
+  grid-template-columns: auto 16px auto minmax(0, 1fr);
+  gap: 5px;
+  color: #d5dfe6 !important;
+}
+
+html[data-platform] .campaign-day-date {
+  color: #f4f6f8 !important;
+  white-space: nowrap;
+}
+
+html[data-platform] .campaign-day-weekday {
+  display: inline-grid;
+  width: 18px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid #758694;
+  border-radius: 4px;
+  background: #35414d;
+  color: #f4f6f8;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+html[data-platform] .campaign-day-pnl.profit-text {
+  color: #59d2a2;
+}
+
+html[data-platform] .campaign-day-pnl.loss-text {
+  color: #ff7b83;
+}
+
+.orders-table th,
+.orders-table td {
+  width: 100%;
+}
+
+.campaign-list-order {
+  grid-template-columns: auto minmax(0, 1fr) minmax(4.4rem, auto);
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+}
+
+.campaign-list-main {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 4px;
+}
+
+.campaign-list-contract {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaign-list-main .campaign-row-flags {
+  grid-column: 2;
+  grid-row: 1;
+  white-space: nowrap;
+}
+
+.campaign-list-opened {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.campaign-list-pnl {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  align-self: center;
+  text-align: right;
+}
+
+.campaign-day-summary {
+  grid-template-columns: minmax(0, 1fr) auto minmax(5rem, auto);
+}
+
+.detail-review-meta {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.detail-review-column > .detail-review-meta {
+  width: 100%;
+}
+
+.detail-review-meta .detail-primary-review-fields {
+  display: flex;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.detail-review-meta .detail-primary-review-fields > .order-info-field,
+.detail-review-meta .detail-primary-review-fields > .campaign-tag-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.detail-review-meta .detail-primary-review-fields .choice-cell.detail-choice,
+.detail-review-meta .detail-primary-review-fields .numeric-cell-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.detail-review-meta .order-info-strip {
+  width: 100%;
+}
+
+.detail-hero-grid {
+  grid-template-columns: minmax(520px, 1fr) minmax(280px, 0.42fr);
+}
+
+.detail-hero-grid > .screenshot-editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.detail-hero-grid > .screenshot-editor .screenshot-preview {
+  width: 100%;
+  min-width: 0;
+}
+
+.detail-hero-grid > .review-editor-panel {
+  min-width: 0;
+}
+
+.order-detail-title {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+@media (max-width: 1180px) {
+  .orders-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .orders-index-column .trades-panel {
+    max-height: none;
+  }
+
+  .detail-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .campaign-list-order {
+    grid-template-columns: auto minmax(0, 1fr) minmax(4.2rem, auto);
+  }
+
+  .detail-review-meta .detail-primary-review-fields {
+    flex-wrap: wrap;
+  }
+
+  .detail-review-meta .detail-primary-review-fields > .order-info-field,
+  .detail-review-meta .detail-primary-review-fields > .campaign-tag-field {
+    flex: 1 1 130px;
+  }
+
+  .detail-review-meta .detail-primary-review-fields .order-info-save {
+    flex: 1 0 100%;
+  }
+}
+
 /* Keep the three primary review decisions next to the order actions. The
    multi-value mistake picker remains content-sized in the chart-side column. */
 html[data-platform] .order-detail-title {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 12px;
   row-gap: 10px;
+  min-height: 52px;
+  padding-block: 4px;
 }
 
 html[data-platform] .order-detail-heading {
   min-width: 0;
+}
+
+html[data-platform] .order-detail-heading .eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+html[data-platform] .order-detail-heading .detail-time {
+  display: inline;
+  margin: 0;
+  font-size: 10px;
 }
 
 html[data-platform] .detail-order-actions {
@@ -3179,7 +3403,31 @@ html[data-platform] .detail-order-actions {
   min-width: 0;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
+  justify-self: end;
+  gap: 8px;
+}
+
+html[data-platform] .detail-order-actions .detail-icon-action {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  flex: 0 0 34px;
+  border-radius: var(--radius-circle);
+}
+
+html[data-platform] .detail-order-actions .detail-icon-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+html[data-platform] .detail-order-actions .detail-checkin-pill {
+  min-width: 108px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding-inline: 9px;
+  border-radius: var(--radius-pill);
 }
 
 html[data-platform] .detail-primary-review-fields {
@@ -3207,7 +3455,13 @@ html[data-platform] .detail-primary-review-fields .campaign-tag-field {
 }
 
 html[data-platform] .detail-primary-review-fields .stop-field {
-  flex-basis: 94px;
+  flex: 0 0 auto;
+  width: fit-content;
+}
+
+html[data-platform] .detail-primary-review-fields .stop-field .numeric-cell-input {
+  width: 5ch;
+  max-width: 5ch;
 }
 
 html[data-platform] .detail-primary-review-fields .field-label-row,
@@ -3242,6 +3496,42 @@ html[data-platform] .detail-primary-review-fields .choice-cell.detail-choice {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: rgba(8, 10, 14, 0.52) !important;
+}
+
+html[data-platform] .detail-primary-review-fields .campaign-tag-field[data-single-choice="true"] {
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+}
+
+html[data-platform] .detail-primary-review-fields .campaign-tag-field[data-single-choice="true"] .choice-cell.detail-choice {
+  display: inline-flex;
+  width: fit-content;
+  min-width: 34px;
+  max-width: min(100%, 220px);
+  min-height: 28px;
+  justify-content: flex-start;
+  padding: 2px;
+  border: 0;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+html[data-platform] .detail-primary-review-fields .choice-cell.single-choice .choice-cell-values {
+  display: inline-flex;
+  width: auto;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-platform] .detail-primary-review-fields .choice-cell.single-choice .choice-value-pill {
+  max-width: 180px;
+}
+
+html[data-platform] .detail-primary-review-fields .choice-cell.single-choice [data-lucide="plus"] {
+  width: 14px;
+  height: 14px;
 }
 
 html[data-platform] .detail-primary-review-fields .choice-cell-values {
@@ -3379,7 +3669,516 @@ html[data-platform] .detail-review-column > .detail-custom-fields {
     flex: 1 1 130px;
   }
 
-  html[data-platform] .detail-primary-review-fields .stop-field {
-    flex: 0 1 100px;
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: end;
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields > .order-info-field,
+html[data-platform] .detail-review-meta .detail-primary-review-fields > .campaign-tag-field {
+  width: fit-content;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields > .order-info-save {
+  flex: 1 0 100%;
+}
+
+@media (max-width: 1080px) {
+  html[data-platform] .detail-review-meta .detail-primary-review-fields {
+    flex-wrap: wrap;
+  }
+}
+
+.app-page-bar__filters .order-filters {
+  align-items: center;
+}
+
+.app-page-bar__filters .order-filters .filter-bar__group {
+  flex: 0 0 auto;
+}
+
+html[data-platform] .detail-primary-review-fields .stop-field {
+  display: flex;
+  width: fit-content;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+html[data-platform] .detail-primary-review-fields .stop-field label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-primary-review-fields .stop-field .numeric-cell-input {
+  width: 72px !important;
+  min-width: 72px;
+  max-width: 72px;
+  height: 30px;
+  min-height: 30px;
+  flex: 0 0 72px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(8, 10, 14, 0.52);
+  color: var(--color-text);
+}
+
+html[data-platform] .detail-primary-review-fields .campaign-tag-field[data-single-choice="true"] {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-platform] .detail-primary-review-fields .campaign-tag-field.is-unclassified .choice-cell.detail-choice {
+  width: 26px;
+  height: 28px;
+  min-width: 26px;
+  justify-content: center;
+}
+
+html[data-platform] .detail-review-meta {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  background: rgba(17, 36, 53, 0.38);
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px 14px;
+}
+
+html[data-platform] .detail-review-meta .detail-primary-review-fields > .order-info-field,
+html[data-platform] .detail-review-meta .detail-primary-review-fields > .campaign-tag-field {
+  width: auto;
+  max-width: 100%;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-single-choice="true"] {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-single-choice="true"] .field-label {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-single-choice="true"] .field-label small {
+  display: none;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] {
+  display: flex;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .field-label {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .field-label small {
+  display: none;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-cell.detail-choice {
+  display: flex;
+  width: max-content;
+  min-width: 28px;
+  max-width: 100%;
+  min-height: 28px;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 2px;
+  border: 0;
+  background: transparent !important;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-cell-values {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] .choice-value-pill {
+  max-width: 150px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+/* The order index remains a fixed left rail. Only the detail workspace adapts
+   to the available width, keeping the screenshot at its usable minimum. */
+html:has(.orders-layout) {
+  overflow-x: visible;
+}
+
+.orders-layout {
+  display: grid;
+  min-width: 1220px;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+body:has(.orders-layout) .app-shell {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+body:has(.orders-layout) .app-shell[data-navigation-collapsed="true"] {
+  min-width: calc(var(--sidebar-collapsed-width) + 1276px + 24px);
+}
+
+body:has(.orders-layout) .app-shell__main {
+  min-width: 1276px;
+}
+
+.orders-index-column {
+  min-width: 0;
+}
+
+.orders-layout > .detail-panel {
+  min-width: 0;
+  overflow: visible;
+  container-name: order-detail;
+  container-type: inline-size;
+}
+
+.detail-panel > .detail-host {
+  min-width: 1000px;
+}
+
+.detail-hero-grid {
+  grid-template-columns: minmax(1000px, 1fr) minmax(280px, 0.42fr);
+}
+
+.orders-layout + .checkin-calendar-panel {
+  width: 100%;
+  margin-top: 10px;
+}
+
+@container order-detail (max-width: 1289px) {
+  .detail-hero-grid {
+    grid-template-columns: minmax(1000px, 1fr);
+  }
+
+  .detail-review-column {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 1080px) {
+  .orders-index-column .trades-panel {
+    max-height: calc(100dvh - 168px) !important;
+    overflow: hidden;
+  }
+
+  .trades-panel .table-wrap {
+    overflow-y: auto;
+  }
+}
+
+html[data-platform] .review-autosave-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-positive);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+html[data-platform] .review-autosave-state::before {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+html[data-platform] .order-detail-title {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+html[data-platform] .detail-order-actions {
+  width: max-content;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  justify-self: end;
+  margin-left: auto;
+}
+
+html[data-platform] .detail-order-actions .featured-action.is-active {
+  border-color: #f3bf70;
+  background: #fff4df;
+  color: #f1c66e;
+}
+
+html[data-platform] .detail-order-actions .featured-action.is-active svg {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+/* Fluid Luminous order review: keep both workspaces bounded and independently scrollable. */
+html:has(.orders-layout) {
+  overflow-x: clip;
+}
+
+body:has(.orders-layout) .app-shell,
+body:has(.orders-layout) .app-shell[data-navigation-collapsed="true"],
+body:has(.orders-layout) .app-shell__main {
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.orders-layout {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
+}
+
+.orders-layout > .detail-panel {
+  max-height: calc(100dvh - 150px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.detail-panel > .detail-host {
+  min-width: 0;
+}
+
+html[data-platform] .detail-body.order-detail-workspace.glass-surface--clear,
+html[data-platform] .order-detail-stage.glass-surface--clear {
+  background: var(--glass-clear) !important;
+}
+
+@container order-detail (max-width: 1289px) {
+  .detail-hero-grid {
+    grid-template-columns: minmax(0, 1.5fr) minmax(270px, 1fr);
+  }
+  .detail-review-column {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+html[data-platform] .order-list-selected.glass-surface--fluid,
+html[data-platform] .detail-review-meta.glass-surface--fluid {
+  background: var(--glass-fluid) !important;
+  box-shadow: var(--shadow-float);
+}
+
+.campaign-row.active .order-list-selected {
+  border-color: rgba(var(--color-accent-rgb), 0.55);
+  border-radius: var(--radius-control);
+}
+
+html[data-platform] .order-screenshot-stage.glass-surface--clear {
+  background: var(--glass-clear) !important;
+  border-color: var(--glass-highlight);
+}
+
+html[data-platform] .choice-value-pill.glow-pill {
+  min-height: 25px;
+  max-width: min(180px, 100%);
+  border-color: color-mix(in srgb, var(--pill-color) 58%, transparent);
+  background: color-mix(in srgb, var(--pill-color) 16%, transparent) !important;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--pill-color) 18%, transparent);
+}
+
+html[data-platform] .detail-review-meta .choice-cell-values {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+html[data-platform] .choice-popover.glass-menu {
+  background: var(--glass-clear) !important;
+}
+
+html[data-platform] .choice-option.glass-menu__option {
+  background: transparent !important;
+}
+
+html[data-platform] .choice-option.glass-menu__option:hover,
+html[data-platform] .choice-option.glass-menu__option.selected {
+  border-color: color-mix(in srgb, var(--pill-color, var(--color-accent)) 45%, transparent);
+  background: color-mix(in srgb, var(--pill-color, var(--color-accent)) 14%, transparent) !important;
+}
+
+html[data-platform] .detail-review-meta.floating-context-card {
+  animation: none;
+  padding: 8px 10px;
+}
+
+.review-editor-panel .review-editor {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.order-secondary-context {
+  background: var(--glass-clear);
+}
+
+.order-image-glass {
+  backdrop-filter: blur(var(--glass-panel-blur));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur));
+}
+
+.order-image-glass img {
+  width: auto;
+  height: auto;
+  max-width: min(1280px, calc(100vw - 32px));
+  max-height: calc(100dvh - 56px);
+  object-fit: contain;
+  background: var(--glass-clear);
+  box-shadow: var(--shadow-float);
+}
+
+@media (max-width: 1080px) {
+  .orders-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .orders-layout > .detail-panel {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .orders-index-column .trades-panel {
+    max-height: 300px !important;
+  }
+
+  .detail-hero-grid,
+  .detail-review-column {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  body:has(.orders-layout) .app-shell__main,
+  body:has(.orders-layout) .app-page-bar,
+  body:has(.orders-layout) .app-page-bar__title,
+  body:has(.orders-layout) .app-page-bar__filters {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body:has(.orders-layout) .app-page-bar__filters {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .order-filters {
+    max-width: 100%;
+    flex-wrap: wrap;
+    overflow-x: hidden;
+  }
+
+  .orders-layout,
+  .orders-index-column,
+  .detail-hero-grid,
+  .detail-review-column {
+    min-width: 0;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .orders-index-column .trades-panel {
+    max-height: 230px !important;
+  }
+
+  .detail-hero-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-hero-grid > .order-screenshot-stage {
+    order: 0;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .detail-hero-grid > .detail-review-column {
+    order: 1;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .screenshot-overlay-controls {
+    position: static;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-top: 8px;
+    pointer-events: auto;
+  }
+
+  .screenshot-overlay-controls .screenshot-status {
+    max-width: 100%;
+    flex: 1 1 100%;
+    white-space: normal;
+  }
+
+  html[data-platform] .detail-review-meta .detail-primary-review-fields {
+    flex-wrap: wrap;
+  }
+
+  html[data-platform] .detail-review-meta .campaign-tag-field[data-tag-picker="mistake_tags"] {
+    flex-wrap: wrap;
+  }
+
+  html[data-platform] .detail-order-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-self: stretch;
+    margin-left: 0;
+  }
+
+  .detail-title-pnl {
+    margin-top: 4px;
+  }
+
+  .execution-table-wrap {
+    max-width: 100%;
   }
 }

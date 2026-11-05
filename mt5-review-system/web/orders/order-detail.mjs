@@ -46,6 +46,13 @@ function tagValues(group, value, fallback = []) {
   return isSingleTagGroup(group) ? values.slice(0, 1) : values;
 }
 
+function visibleTagValues(options, values) {
+  return values.filter((value) => {
+    if (value === "unclassified" || value === "strategy_unclassified") return false;
+    return options.find((option) => String(option.id) === value)?.label !== "未分类";
+  });
+}
+
 function campaignStop(detail) {
   const positions = detail?.positions || [];
   const stops = positions
@@ -58,8 +65,8 @@ function campaignStop(detail) {
 
 export function renderImportSourcesMarkup(sources = []) {
   const items = Array.isArray(sources) ? sources : [];
-  if (!items.length) return '<div class="import-source-empty">来源信息不可用（可能是历史导入数据）</div>';
-  return `<section class="import-source-section is-secondary" aria-label="导入来源">
+  if (!items.length) return '<section class="import-source-section is-secondary order-secondary-context" aria-label="导入来源"><div class="section-head"><h3>导入来源</h3></div><div class="import-source-empty">来源信息不可用（可能是历史导入数据）</div></section>';
+  return `<section class="import-source-section is-secondary order-secondary-context" aria-label="导入来源">
     <div class="section-head"><h3>导入来源</h3><span>${items.length} 个批次</span></div>
     <div class="import-source-list">${items.map((source) => `
       <article class="import-source-item">
@@ -196,7 +203,7 @@ export function createOrderDetailModule({
       ? `<button class="shot-btn snapshot compact-snapshot" id="detailShot" data-shot="${escapeAttr(campaign.screenshot_url)}" title="放大截图"><img id="detailScreenshotImage" src="${escapeAttr(campaign.screenshot_url)}" alt="交易组合截图" /></button>`
       : `<div class="screenshot-empty">暂无交易截图</div>`;
     return `
-      <div class="screenshot-editor" id="screenshotEditor" tabindex="0" aria-label="交易截图">
+      <div class="screenshot-editor glass-surface--clear order-screenshot-stage" id="screenshotEditor" tabindex="0" aria-label="交易截图">
         <div class="screenshot-preview">${preview}</div>
         <div class="screenshot-overlay-controls">
           <span class="screenshot-status">${campaign?.screenshot_url ? "已绑定组合截图" : "支持粘贴、拖入或选择"}</span>
@@ -210,13 +217,25 @@ export function createOrderDetailModule({
 
   function renderTagPicker(group, label, options, selected) {
     const values = tagValues(group, selected);
-    const selectionHint = isSingleTagGroup(group) ? "单选" : "可多选";
+    const single = isSingleTagGroup(group);
+    const compact = single || group === "mistake_tags";
+    const displayValues = single ? visibleTagValues(options, values) : values;
+    const unclassified = single && displayValues.length === 0;
+    const selectionHint = compact ? "" : "可多选";
+    const pickerValues = single ? displayValues : values;
+    const triggerLabel = label + "：" + (pickerValues.length
+      ? pickerValues.map((value) => options.find((option) => String(option.id) === value)?.label || value).join("、")
+      : "添加");
     return `
-      <div class="campaign-tag-field" data-tag-picker="${escapeAttr(group)}">
-        <span class="field-label">${escapeHtml(label)} <small>${selectionHint}</small></span>
-        <button class="choice-cell detail-choice" type="button" data-tag-trigger="${escapeAttr(group)}" aria-haspopup="listbox" aria-expanded="false">
-          <span class="choice-cell-values">${renderTagPills(options, values) || '<span class="choice-placeholder">点击选择</span>'}</span>
-          <span class="cell-caret" aria-hidden="true">v</span>
+      <div class="campaign-tag-field${unclassified ? " is-unclassified" : ""}" data-tag-picker="${escapeAttr(group)}"${single ? ' data-single-choice="true"' : ""}>
+        <span class="field-label">${escapeHtml(label)}${selectionHint ? ` <small>${selectionHint}</small>` : ""}</span>
+        <button class="choice-cell detail-choice glass-menu-trigger${single ? " single-choice" : compact ? " compact-choice" : ""}" type="button" data-tag-trigger="${escapeAttr(group)}" aria-haspopup="listbox" aria-controls="campaignChoicePopover" aria-expanded="false"${compact ? ` aria-label="${escapeAttr(triggerLabel)}"` : ""}>
+          <span class="choice-cell-values">${single
+            ? `${renderTagPills(options, displayValues)}<i data-lucide="plus" aria-hidden="true"></i>`
+            : group === "mistake_tags"
+              ? `${renderTagPills(options, values)}<i data-lucide="plus" aria-hidden="true"></i>`
+              : renderTagPills(options, values) || '<span class="choice-placeholder">点击选择</span>'}</span>
+          ${compact ? "" : '<span class="cell-caret" aria-hidden="true">v</span>'}
         </button>
       </div>
     `;
@@ -225,7 +244,7 @@ export function createOrderDetailModule({
   function renderTagPills(options, selected) {
     return uniqueTags(selected).map((value) => {
       const option = options.find((item) => String(item.id) === value);
-      return `<span class="choice-value-pill" style="--choice:${escapeAttr(option?.color || "#64b5ff")};">${escapeHtml(option?.label || value)}</span>`;
+      return `<span class="choice-value-pill glow-pill" style="--choice:${escapeAttr(option?.color || "#64b5ff")};--pill-color:${escapeAttr(option?.color || "#64b5ff")};">${escapeHtml(option?.label || value)}</span>`;
     }).join("");
   }
 
@@ -233,7 +252,25 @@ export function createOrderDetailModule({
     const picker = Array.from(view.querySelectorAll?.("[data-tag-picker]") || [])
       .find((node) => node.dataset?.tagPicker === group);
     const values = picker?.querySelector?.(".choice-cell-values");
-    if (values) values.innerHTML = renderTagPills(options, selected) || '<span class="choice-placeholder">点击选择</span>';
+    if (values) {
+      const single = isSingleTagGroup(group);
+      const compact = single || group === "mistake_tags";
+      const tags = renderTagPills(options, selected);
+      const displayTags = single ? renderTagPills(options, visibleTagValues(options, selected || [])) : tags;
+      picker.classList?.toggle?.("is-unclassified", single && !displayTags);
+      values.innerHTML = single
+        ? `${displayTags}<i data-lucide="plus" aria-hidden="true"></i>`
+        : group === "mistake_tags"
+          ? `${tags}<i data-lucide="plus" aria-hidden="true"></i>`
+        : tags || '<span class="choice-placeholder">点击选择</span>';
+      if (compact) {
+        const trigger = picker.querySelector?.("[data-tag-trigger]");
+        const selectedValues = single ? visibleTagValues(options, selected || []) : uniqueTags(selected);
+        const labels = selectedValues.map((value) => options.find((item) => String(item.id) === String(value))?.label || value);
+        trigger?.setAttribute?.("aria-label", `${group === "trade_type_tags" ? "交易场景" : group === "strategy_tags" ? "交易策略" : "犯错标签"}：${labels.join("、") || "添加"}`);
+      }
+      globalThis.window?.lucide?.createIcons?.({ attrs: { "stroke-width": 1.8 } });
+    }
   }
 
   function choicePopover() {
@@ -241,7 +278,7 @@ export function createOrderDetailModule({
     if (!node && typeof view.createElement === "function") {
       node = view.createElement("div");
       node.id = "campaignChoicePopover";
-      node.className = "choice-popover hidden";
+      node.className = "choice-popover glass-menu hidden";
       node.addEventListener("click", (event) => event.stopPropagation());
       view.body?.appendChild?.(node);
     }
@@ -263,9 +300,9 @@ export function createOrderDetailModule({
       <div class="choice-popover-title"><strong>${escapeHtml(label)}</strong><span>${single ? "单选" : "可多选"}</span></div>
       <input class="choice-search" data-campaign-choice-search type="search" placeholder="查找选项" />
       <div class="choice-options" data-campaign-choice-options>
-        <button class="choice-option muted-choice" type="button" data-campaign-choice-clear>清空</button>
+        <button class="choice-option glass-menu__option muted-choice" type="button" data-campaign-choice-clear>清空</button>
         ${options.map((option) => `
-          <button class="choice-option ${selected.includes(String(option.id)) ? "selected" : ""}" type="button" data-campaign-choice-option="${escapeAttr(option.id)}" style="--choice:${escapeAttr(option.color || "#64b5ff")};">
+          <button class="choice-option glass-menu__option ${selected.includes(String(option.id)) ? "selected" : ""}" type="button" data-campaign-choice-option="${escapeAttr(option.id)}" aria-selected="${selected.includes(String(option.id))}" style="--choice:${escapeAttr(option.color || "#64b5ff")};--pill-color:${escapeAttr(option.color || "#64b5ff")};">
             <span class="choice-option-dot"></span><span>${escapeHtml(option.label)}</span>
           </button>
         `).join("")}
@@ -690,26 +727,15 @@ export function createOrderDetailModule({
     const checkinCount = Math.max(0, Number(campaign.checkin_count) || 0);
     const contractDisplay = campaignContractDisplay(campaign);
     node.innerHTML = `
-      <div class="detail-body order-detail-workspace">
+      <div class="detail-body order-detail-workspace glass-surface--clear">
         <header class="detail-title order-detail-title">
           <div class="order-detail-heading">
-            <p class="eyebrow">主订单 · ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))}</p>
-            <h2><span class="detail-contract-name">${escapeHtml(contractDisplay.name)}</span>${contractDisplay.code ? ` <span class="detail-contract-code">${escapeHtml(contractDisplay.code)}</span>` : ""} · ${campaign.side === "long" ? "多单" : "空单"}</h2>
-            <span class="detail-time">开仓 ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} · ${formatVolume(campaign.entry_volume)} 手 · ${escapeHtml(rMultipleLabel(campaign))}</span>
-          </div>
-          <div class="detail-primary-review-fields" aria-label="订单风险与分类">
-            <div class="order-info-field stop-field ${stop ? "" : "missing"}">
-              <div class="field-label-row"><label for="campaignInitialStop">初始止损</label><span>${stop ? "已填写" : "待填写"}</span></div>
-              <input id="campaignInitialStop" class="numeric-cell-input" type="number" step="any" inputmode="decimal" value="${escapeAttr(stop)}" placeholder="请输入初始止损" />
-            </div>
-            ${renderTagPicker("trade_type_tags", "交易场景", sceneOptions, campaign.trade_type_tags || (campaign.trade_type ? [campaign.trade_type] : []))}
-            ${renderTagPicker("strategy_tags", "交易策略", strategyOptions, campaign.strategy_tags || (campaign.strategy ? [campaign.strategy] : []))}
-            <div class="order-info-save"><span id="saveState" aria-live="polite">自动保存已开启</span></div>
+            <p class="eyebrow">主订单 <span class="detail-time">开仓 ${escapeHtml(formatBeijingDateTime(campaign.opened_at_utc))} · ${formatVolume(campaign.entry_volume)} 手 · ${escapeHtml(rMultipleLabel(campaign))}</span></p>
+            <h2><span class="detail-contract-name">${escapeHtml(contractDisplay.name)}</span>${contractDisplay.code ? ` <span class="detail-contract-code">${escapeHtml(contractDisplay.code)}</span>` : ""} · ${campaign.side === "long" ? "多单" : "空单"}<span class="detail-title-pnl ${profitClass(campaign.net_pnl)}" aria-label="净盈亏 ${escapeAttr(formatMoney(campaign.net_pnl))}">${escapeHtml(formatMoney(campaign.net_pnl))}</span></h2>
           </div>
           <div class="detail-order-actions" aria-label="订单操作">
             <span class="detail-action-group" aria-label="订单状态">
               <button id="featureCampaign" class="app-icon-button detail-icon-action featured-action${campaign.is_featured ? " is-active" : ""}" type="button" title="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-label="${campaign.is_featured ? "取消精选" : "加入精选"}" aria-pressed="${Boolean(campaign.is_featured)}"><i data-lucide="star" aria-hidden="true"></i></button>
-              ${campaign.is_featured ? '<span class="featured-status-badge"><i data-lucide="star" aria-hidden="true"></i>已精选</span>' : ""}
             </span>
             <span class="detail-action-divider" aria-hidden="true"></span>
             <span class="detail-action-group" aria-label="浏览操作">
@@ -722,19 +748,25 @@ export function createOrderDetailModule({
         <div class="detail-hero-grid">
           ${renderScreenshotEditor(campaign)}
           <div class="detail-review-column">
-            <section class="order-info-strip" aria-label="犯错标签">
-              <div class="order-info-main">
+            <section class="detail-review-meta glass-surface--fluid floating-context-card" aria-label="订单风险与分类">
+              <div class="detail-primary-review-fields">
+                <div class="order-info-field stop-field ${stop ? "" : "missing"}">
+                  <label for="campaignInitialStop">初始止损</label>
+                  <input id="campaignInitialStop" class="numeric-cell-input" type="number" step="any" inputmode="decimal" value="${escapeAttr(stop)}" placeholder="—" aria-label="初始止损价格" />
+                </div>
+                ${renderTagPicker("trade_type_tags", "交易场景", sceneOptions, campaign.trade_type_tags || (campaign.trade_type ? [campaign.trade_type] : []))}
+                ${renderTagPicker("strategy_tags", "交易策略", strategyOptions, campaign.strategy_tags || (campaign.strategy ? [campaign.strategy] : []))}
                 ${renderTagPicker("mistake_tags", "犯错标签", mistakes, campaign.mistake_tags)}
               </div>
             </section>
-            ${customFieldInputs ? `<div class="field-grid detail-custom-fields">${customFieldInputs}</div>` : ""}
-            <section class="review-editor-panel">
-              <div class="section-head"><h3>复盘记录</h3><span id="reviewCount">${String(campaign.review_text || "").length} / 10000</span></div>
+            <section class="review-editor-panel order-secondary-context">
+              <div class="section-head"><h3>复盘记录</h3><span class="review-autosave-state"><span id="saveState" aria-live="polite">自动保存已开启</span></span><span id="reviewCount">${String(campaign.review_text || "").length} / 10000</span></div>
               <textarea id="detailReview" class="review-editor" maxlength="10000" placeholder="记录入场依据、执行过程、风险控制与改进计划">${escapeHtml(campaign.review_text || "")}</textarea>
             </section>
           </div>
         </div>
-        <section class="execution-section" aria-label="成交流水">
+        ${customFieldInputs ? `<div class="field-grid detail-custom-fields">${customFieldInputs}</div>` : ""}
+        <section class="execution-section order-secondary-context" aria-label="成交流水">
           <div class="section-head"><h3>成交流水</h3><span>组合订单共 ${records.length} 条执行记录</span></div>
           <div class="execution-table-wrap">
             <table class="execution-table">
