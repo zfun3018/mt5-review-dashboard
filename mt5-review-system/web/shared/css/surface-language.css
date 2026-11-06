@@ -1,0 +1,622 @@
+/* Global surface language.
+   L1 cards share one plane. L2 controls sit on the card as local raised
+   surfaces. L3/L4 surfaces are reserved for content that actually overlays. */
+
+:is(
+  .glass-surface,
+  .glass-surface--clear,
+  .glass-surface--fluid,
+  .panel,
+  .market-card,
+  .domestic-module,
+  .settings-panel,
+  .album-card,
+  .album-checkin-panel,
+  .album-random,
+  .glass-panel
+) {
+  position: relative;
+  z-index: var(--glass-level-card);
+  border-color: var(--glass-card-rim);
+  box-shadow: var(--glass-card-shadow);
+  transform: none;
+}
+
+:is(.glass-surface, .glass-surface--clear, .panel, .market-card, .domestic-module, .settings-panel, .album-card, .album-checkin-panel, .album-random, .glass-panel, .campaign-day-card) {
+  background: var(--glass-card-fill);
+}
+
+:is(.glass-surface--clear, .settings-panel) {
+  background: var(--glass-clear);
+}
+
+:is(.glass-surface--fluid, .album-random) {
+  background: var(--glass-fluid);
+}
+
+:is(.glass-surface, .glass-surface--clear, .glass-surface--fluid, .panel, .market-card, .domestic-module, .settings-panel, .album-card, .album-checkin-panel, .album-random, .glass-panel, .campaign-day-card):hover {
+  border-color: var(--glass-card-rim);
+  box-shadow: var(--glass-card-shadow);
+  transform: none;
+}
+
+:is(
+  .app-icon-button,
+  .button,
+  .button-primary,
+  .button-danger,
+  .glow-pill,
+  .view-tab,
+  .settings-tab,
+  .status-pill,
+  .metric-info-btn,
+  .dashboard-layout-link,
+  .domestic-layout-link,
+  .album-random-button,
+  .album-archive-toggle,
+  .choice-cell,
+  .choice-value-pill,
+  .app-filter-preset,
+  .domestic-range button,
+  .detail-icon-action,
+  .ghost-btn,
+  .shot-btn,
+  .pill-button,
+  .circle-button,
+  .segmented button,
+  .tag,
+  .module-status
+) {
+  position: relative;
+  z-index: var(--glass-level-control);
+  border-color: var(--glass-control-rim);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+  isolation: isolate;
+}
+
+:is(
+  .button-primary,
+  .dashboard-layout-link,
+  .domestic-layout-link
+) {
+  border-color: rgba(201, 250, 252, 0.7);
+  color: #081316;
+  background: linear-gradient(145deg, rgba(180, 237, 240, 0.95), rgba(102, 186, 199, 0.82));
+  box-shadow: 0 10px 28px rgba(53, 155, 171, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+:is(.button-danger) {
+  border-color: color-mix(in srgb, var(--color-negative) 78%, white 22%);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--color-negative) 72%, white 8%), color-mix(in srgb, var(--color-negative) 60%, black 30%));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--color-negative) 20%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+}
+
+:is(.glow-pill, .choice-value-pill) {
+  border-color: color-mix(in srgb, var(--pill-color, var(--choice, var(--color-accent))) 72%, transparent);
+  background: color-mix(in srgb, var(--pill-color, var(--choice, var(--color-accent))) 22%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--pill-color, var(--choice, var(--color-accent))) 24%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+:is(.view-tab.active, .settings-tab.is-active, .app-filter-preset.is-active, .domestic-range button.is-active, .choice-option.selected, [aria-selected="true"].glass-menu__option, [aria-pressed="true"].detail-icon-action, .is-selected.glass-control, .glass-control--selected) {
+  border-color: var(--pill-color, var(--color-accent));
+  background: var(--glass-control-fill-selected);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pill-color, var(--color-accent)) 30%, transparent), var(--glass-control-shadow);
+  color: var(--color-text);
+}
+
+:is(.app-icon-button:hover, .button:hover, .button-primary:hover, .button-danger:hover, .glow-pill:hover, .view-tab:hover, .settings-tab:hover, .choice-cell:hover, .choice-value-pill:hover, .app-filter-preset:hover, .domestic-range button:hover, .detail-icon-action:hover, .ghost-btn:hover, .shot-btn:hover) {
+  border-color: color-mix(in srgb, var(--pill-color, var(--color-accent)) 78%, white 22%);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--pill-color, var(--color-accent)) 24%, transparent), var(--glass-control-shadow);
+  transform: translateY(-1px);
+}
+
+:is(.app-icon-button:disabled, .button:disabled, .button-primary:disabled, .button-danger:disabled, .glow-pill:disabled, [aria-disabled="true"].glass-control) {
+  box-shadow: none;
+  transform: none;
+}
+
+:is(.glass-menu, .popover, .menu, .choice-popover, .metric-explanation-popover) {
+  z-index: var(--glass-level-overlay);
+  border-color: rgba(232, 250, 255, 0.42);
+  background: var(--glass-clear);
+  box-shadow: var(--glass-overlay-shadow);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
+}
+
+:is(.glass-overlay, .modal-surface, .image-modal) {
+  z-index: var(--glass-level-overlay);
+  box-shadow: var(--glass-overlay-shadow);
+}
+
+:is(.glass-menu__option, .choice-option, .menu button, .menu a) {
+  position: relative;
+  z-index: var(--glass-level-control);
+  border-color: transparent;
+  background: transparent;
+}
+
+:is(.glass-menu__option:hover, .glass-menu__option[data-active="true"], .glass-menu__option[aria-selected="true"], .choice-option:hover, .choice-option.selected, .menu button:hover, .menu a:hover) {
+  border-color: color-mix(in srgb, var(--pill-color, var(--color-accent)) 58%, transparent);
+  background: color-mix(in srgb, var(--pill-color, var(--color-accent)) 18%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 16px color-mix(in srgb, var(--pill-color, var(--color-accent)) 16%, transparent);
+}
+
+/* Order-specific selected rows are local raised controls, not white cards. */
+html[data-platform] :is(.campaign-card-order.active .campaign-list-order, .order-list-selected, .view-tab.active) {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill-selected) !important;
+  box-shadow: 0 0 22px rgba(var(--color-accent-rgb), 0.2), var(--glass-control-shadow) !important;
+}
+
+html[data-platform] :is(.orders-table tbody tr.active, .campaign-detail-row.active, .campaign-row.scratch.active) {
+  background: var(--glass-control-fill-selected) !important;
+  box-shadow: inset 3px 0 0 var(--color-accent), inset 0 0 0 1px var(--glass-control-rim), 0 0 18px rgba(var(--color-accent-rgb), 0.12) !important;
+}
+
+/* The order index is an open stack of small glass cards. Keep the dark
+   canvas visible and concentrate colored reflection at the card edge. */
+html[data-platform] .orders-index-column .campaign-day-card {
+  z-index: var(--glass-level-card);
+  border-radius: var(--glass-refraction-radius) !important;
+  border-color: var(--glass-refraction-rim) !important;
+  background-color: transparent !important;
+  background-image:
+    radial-gradient(115% 72% at 50% 0%, rgba(172, 230, 247, 0.105), transparent 62%),
+    var(--glass-refraction-fill) !important;
+  box-shadow: var(--glass-refraction-card-shadow), 0 0 24px rgba(68, 190, 224, 0.08) !important;
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(155%) !important;
+}
+
+html[data-platform] .orders-index-column .campaign-day-card::before {
+  inset: -1px;
+  padding: 1px;
+  border: 0;
+  border-radius: inherit;
+  background: var(--glass-refraction-edge);
+  opacity: 0.96;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+html[data-platform] .orders-index-column .campaign-day-card::after {
+  background:
+    linear-gradient(132deg, rgba(238, 252, 255, 0.14), transparent 18% 68%, rgba(255, 219, 155, 0.07)),
+    linear-gradient(180deg, transparent 60%, rgba(1, 5, 8, 0.24));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.5),
+    inset 0 0 26px rgba(122, 206, 235, 0.065);
+  opacity: 0.96;
+}
+
+html[data-platform] .orders-index-column .campaign-day-header {
+  border-bottom-color: rgba(207, 234, 243, 0.19);
+  background: linear-gradient(180deg, rgba(229, 246, 252, 0.065), rgba(17, 25, 32, 0.075)) !important;
+  box-shadow: inset 0 1px 0 rgba(248, 253, 255, 0.12);
+}
+
+html[data-platform] .orders-index-column .campaign-card-order.active .campaign-list-order {
+  position: relative;
+  border-color: var(--glass-refraction-selected-rim) !important;
+  background:
+    radial-gradient(90% 160% at 8% 0%, rgba(167, 242, 255, 0.12), transparent 54%),
+    var(--glass-refraction-selected-fill) !important;
+  box-shadow:
+    var(--glass-refraction-selected-glow),
+    0 8px 16px rgba(0, 0, 0, 0.34),
+    var(--glass-refraction-selected-bevel) !important;
+  backdrop-filter: blur(var(--glass-refraction-selected-blur)) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(var(--glass-refraction-selected-blur)) saturate(165%) !important;
+}
+
+html[data-platform] .orders-index-column .campaign-card-order.active .campaign-list-order::after {
+  border-color: rgba(244, 254, 255, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+html[data-platform] .orders-index-column .campaign-card-order.active .campaign-list-contract {
+  color: #e8fcff !important;
+  text-shadow: var(--glass-refraction-text-glow);
+}
+
+html[data-platform] .orders-index-column .campaign-card-order.active .campaign-list-order .campaign-list-opened {
+  color: rgba(213, 245, 250, 0.82) !important;
+  text-shadow: 0 0 2px rgba(183, 242, 252, 0.2);
+}
+
+html[data-platform] body:has(.orders-layout) :is(
+  .order-detail-title,
+  .detail-review-meta,
+  .review-editor-panel,
+  .execution-section,
+  .import-source-section.is-secondary,
+  .checkin-calendar-panel
+) {
+  position: relative;
+  border: 1px solid var(--glass-refraction-rim) !important;
+  border-radius: var(--glass-refraction-radius) !important;
+  background: var(--glass-refraction-fill) !important;
+  box-shadow: var(--glass-refraction-card-shadow) !important;
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(155%) !important;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage {
+  border-color: var(--glass-refraction-rim) !important;
+  border-radius: var(--glass-refraction-radius) !important;
+  box-shadow: var(--glass-refraction-card-shadow) !important;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+:is(.glass-surface, .glass-surface--clear, .glass-surface--fluid, .panel, .market-card, .domestic-module, .settings-panel, .album-card, .album-checkin-panel, .album-random, .glass-panel, .campaign-day-card) {
+    background: var(--glass-base-fallback);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  :is(.glass-menu, .popover, .menu, .choice-popover, .metric-explanation-popover, .glass-overlay, .modal-surface, .image-modal) {
+    background: var(--glass-clear-fallback);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.glass-card, .glass-surface, .glass-surface--clear, .glass-surface--fluid, .panel, .market-card, .domestic-module, .settings-panel, .album-card, .album-checkin-panel, .album-random, .campaign-day-card, .glass-control, .glass-overlay) {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* The visual test bench uses a dedicated class instead of .panel. Keep it
+   on the same card contract so the reference surface and real workspaces
+   cannot drift apart. */
+.glass-panel {
+  border-color: var(--glass-card-rim);
+  background: var(--glass-card-fill);
+  box-shadow: var(--glass-card-shadow);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+.pill-button,
+.circle-button,
+.segmented button,
+.tag,
+.module-status {
+  border-color: var(--glass-control-rim);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+}
+
+/* Screenshot editor: one refraction glass shell with a darker nested preview.
+   The preview remains a stable image/drop surface while actions float above it
+   as small control pills. */
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--order-list-surface-rim) !important;
+  border-radius: var(--order-list-surface-radius) !important;
+  background: var(--order-list-surface-fill) !important;
+  box-shadow: var(--order-list-surface-shadow), 0 0 24px rgba(68, 190, 224, 0.08) !important;
+  backdrop-filter: blur(var(--order-list-surface-blur)) saturate(var(--order-list-surface-saturation)) !important;
+  -webkit-backdrop-filter: blur(var(--order-list-surface-blur)) saturate(var(--order-list-surface-saturation)) !important;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage::before {
+  position: absolute;
+  z-index: 0;
+  inset: -1px;
+  padding: 1px;
+  border: 0;
+  border-radius: inherit;
+  background: var(--order-list-surface-edge);
+  opacity: 0.88;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  content: "";
+  pointer-events: none;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    linear-gradient(132deg, var(--order-list-surface-highlight), transparent 18% 68%, rgba(255, 219, 155, 0.07)),
+    linear-gradient(180deg, transparent 60%, var(--order-list-surface-shade));
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.5),
+    inset 0 0 26px rgba(122, 206, 235, 0.065);
+  opacity: 0.96;
+  content: "";
+  pointer-events: none;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-preview {
+  border: 0 !important;
+  background: var(--glass-nested) !important;
+  box-shadow: inset 0 1px 0 rgba(232, 250, 255, 0.1), inset 0 -4px 0 rgba(0, 0, 0, 0.42);
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-empty {
+  border: 1px dashed rgba(232, 250, 255, 0.24) !important;
+  border-radius: var(--radius-inner);
+  background: var(--glass-nested-fluid) !important;
+  color: var(--order-list-muted);
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls .screenshot-status,
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls .ghost-btn {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill) !important;
+  box-shadow: var(--glass-control-shadow) !important;
+  backdrop-filter: blur(12px) saturate(155%);
+  -webkit-backdrop-filter: blur(12px) saturate(155%);
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls {
+  z-index: 2;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls .screenshot-status {
+  border-radius: var(--radius-pill);
+  color: rgba(233, 240, 245, 0.78);
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls .ghost-btn {
+  border-radius: var(--radius-pill);
+  color: var(--order-list-muted);
+  transition: background var(--order-list-transition), border-color var(--order-list-transition), box-shadow var(--order-list-transition), color var(--order-list-transition);
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls .ghost-btn:hover,
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage .screenshot-overlay-controls .ghost-btn:focus-visible {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill-selected) !important;
+  color: var(--order-list-text);
+  box-shadow: var(--glass-control-shadow), 0 0 16px rgba(var(--color-accent-rgb), 0.16) !important;
+  transform: none;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage.drag-over {
+  border-color: var(--order-list-selected-rim) !important;
+  background: var(--order-list-selected-fill) !important;
+  box-shadow: var(--order-list-selected-shadow) !important;
+}
+
+html[data-platform] body:has(.orders-layout) .order-screenshot-stage:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring-shadow), var(--order-list-surface-shadow) !important;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  html[data-platform] body:has(.orders-layout) .order-screenshot-stage {
+    background: var(--glass-fluid-fallback) !important;
+  }
+}
+
+/* Application navigation: the rail is a card-level glass shell and each
+   route is a local control surface. The collapsed rail keeps the same recipe
+   while reducing the links to circular icon controls. */
+html[data-platform] .app-navigation {
+  position: fixed;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 0 !important;
+  border: 1px solid var(--glass-card-rim) !important;
+  border-radius: var(--radius-window) !important;
+  background: var(--glass-card-fill) !important;
+  box-shadow: var(--glass-card-shadow), var(--shadow-float), 0 0 28px rgba(68, 190, 224, 0.08) !important;
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation)) !important;
+}
+
+html[data-platform] .app-navigation::before {
+  position: absolute;
+  z-index: 0;
+  inset: -1px;
+  padding: 1px;
+  border: 0;
+  border-radius: inherit;
+  background: var(--glass-spectrum-edge);
+  opacity: 0.82;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  content: "";
+  pointer-events: none;
+}
+
+html[data-platform] .app-navigation::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background:
+    linear-gradient(150deg, rgba(238, 252, 255, 0.13), transparent 24% 68%, rgba(255, 219, 155, 0.05)),
+    linear-gradient(180deg, transparent 62%, rgba(1, 5, 8, 0.3));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset -1px 0 0 rgba(185, 229, 243, 0.1);
+  opacity: 0.9;
+  content: "";
+  pointer-events: none;
+}
+
+html[data-platform] .app-navigation > * {
+  position: relative;
+  z-index: 1;
+}
+
+html[data-platform] .app-navigation__brand {
+  min-height: 58px;
+  justify-content: flex-start;
+  padding: 10px 14px;
+  border-bottom-color: rgba(216, 239, 247, 0.16);
+}
+
+html[data-platform] .app-navigation__mark {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill-selected) !important;
+  color: var(--order-list-text) !important;
+  box-shadow: var(--glass-control-shadow) !important;
+}
+
+html[data-platform] .app-navigation__link,
+html[data-platform] .app-navigation__meta-link {
+  box-sizing: border-box;
+  width: auto;
+  min-width: 0;
+  height: 48px;
+  min-height: 48px;
+  justify-content: flex-start;
+  gap: 11px;
+  margin: 0;
+  padding: 5px 9px;
+  border-color: rgba(216, 239, 247, 0.2) !important;
+  background: rgba(8, 13, 18, 0.28) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  transition: background var(--order-list-transition), border-color var(--order-list-transition), box-shadow var(--order-list-transition), color var(--order-list-transition), transform var(--order-list-transition);
+}
+
+html[data-platform] .app-navigation__links {
+  justify-items: stretch;
+  gap: 10px;
+  padding: 12px 8px;
+}
+
+html[data-platform] .app-navigation__link:hover,
+html[data-platform] .app-navigation__meta-link:hover,
+html[data-platform] .app-navigation__link:focus-visible,
+html[data-platform] .app-navigation__meta-link:focus-visible {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill) !important;
+  box-shadow: var(--glass-control-shadow) !important;
+  color: var(--order-list-text) !important;
+  transform: translateY(-1px);
+}
+
+html[data-platform] .app-navigation__link[aria-current="page"] {
+  border-color: var(--glass-refraction-selected-rim) !important;
+  background: var(--glass-refraction-selected-fill) !important;
+  box-shadow: var(--order-list-selected-shadow), var(--glass-control-shadow) !important;
+  color: var(--order-list-text) !important;
+}
+
+html[data-platform] .app-navigation__link > svg,
+html[data-platform] .app-navigation__meta-link > svg {
+  border-color: rgba(232, 250, 255, 0.24) !important;
+  background: var(--glass-control-fill) !important;
+  background-color: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+}
+
+html[data-platform] .app-navigation__link[aria-current="page"] > svg {
+  border-color: var(--glass-refraction-selected-rim) !important;
+  background: var(--glass-control-fill-selected) !important;
+  background-color: rgba(var(--color-accent-rgb), 0.14) !important;
+  color: var(--order-list-accent) !important;
+  box-shadow: 0 0 16px rgba(var(--color-accent-rgb), 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+
+html[data-platform] .app-navigation__footer {
+  padding: 10px 8px;
+  border-top-color: rgba(216, 239, 247, 0.18) !important;
+}
+
+html[data-platform] .app-icon-button.app-navigation__collapse {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill) !important;
+  box-shadow: var(--glass-control-shadow) !important;
+}
+
+html[data-platform] .app-icon-button.app-navigation__collapse:hover,
+html[data-platform] .app-icon-button.app-navigation__collapse:focus-visible {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill-selected) !important;
+  box-shadow: var(--glass-control-shadow), 0 0 16px rgba(var(--color-accent-rgb), 0.16) !important;
+  transform: none;
+}
+
+@media (min-width: 721px) {
+  html[data-platform] .app-navigation {
+    top: 12px !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 12px !important;
+    width: var(--sidebar-expanded-width) !important;
+    height: calc(100dvh - 24px) !important;
+    margin: 0 !important;
+    z-index: 40 !important;
+  }
+
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation {
+    width: var(--sidebar-collapsed-width) !important;
+  }
+
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__brand {
+    justify-content: center;
+    padding-inline: 6px;
+  }
+
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__links {
+    padding-inline: 7px;
+  }
+
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__link,
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__meta-link {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px;
+    min-height: 40px;
+    justify-content: center;
+    gap: 0;
+    margin-inline: auto;
+    padding: 0;
+    border-radius: var(--radius-circle);
+  }
+
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__link > svg,
+  html[data-platform] .app-shell[data-navigation-collapsed="true"] .app-navigation__meta-link > svg {
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+}
+
+@media (max-width: 720px), (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
+  html[data-platform] .app-navigation {
+    top: 8px !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: 8px !important;
+    width: min(var(--sidebar-width), calc(100vw - 48px)) !important;
+    height: calc(100dvh - 16px) !important;
+    margin: 0 !important;
+    z-index: 40 !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  html[data-platform] .app-navigation {
+    background: var(--glass-fluid-fallback) !important;
+  }
+}

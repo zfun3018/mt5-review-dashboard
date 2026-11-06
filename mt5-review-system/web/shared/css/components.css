@@ -73,7 +73,7 @@
 .settings-panel:hover {
   border-color: rgba(232, 250, 255, 0.42);
   box-shadow: var(--shadow-float);
-  transform: translate3d(0, -2px, 0);
+  transform: none;
 }
 
 .floating-context-card {
@@ -563,4 +563,41 @@ th {
     animation: none;
     transform: none;
   }
+}
+
+/* Shared surface language: sibling cards stay on one plane; controls and
+   overlays are the only elements that opt into a raised visual layer. */
+.glass-card {
+  position: relative;
+  z-index: var(--glass-level-card);
+  border: 1px solid var(--glass-card-rim);
+  background: var(--glass-card-fill);
+  box-shadow: var(--glass-card-shadow);
+  backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-panel-blur)) saturate(var(--glass-saturation));
+}
+
+.glass-control {
+  position: relative;
+  z-index: var(--glass-level-control);
+  border: 1px solid var(--glass-control-rim);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+  isolation: isolate;
+}
+
+.glass-control--selected {
+  border-color: var(--pill-color, var(--color-accent));
+  background: var(--glass-control-fill-selected);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pill-color, var(--color-accent)) 28%, transparent), var(--glass-control-shadow);
+}
+
+.glass-overlay {
+  position: relative;
+  z-index: var(--glass-level-overlay);
+  border: 1px solid rgba(232, 250, 255, 0.42);
+  background: var(--glass-clear);
+  box-shadow: var(--glass-overlay-shadow);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(185%);
 }

@@ -123,7 +123,7 @@ test("order flow renders a compact merged-campaign index", () => {
   assert.match(ordersSource, />组<\/span>/);
   assert.match(ordersSource, /初始止损未完整填写/);
   assert.match(ordersSource, /class="campaign-risk-mark"/);
-  assert.match(ordersCss, /\.orders-table th,[\s\r\n]+\.orders-table td\s*\{[\s\S]*font-size:\s*11px/);
+  assert.match(ordersCss, /\.orders-table th,[\s\r\n]+\.orders-table td\s*\{[\s\S]*font-size:\s*var\(--font-size-readable-min\)/);
   assert.match(ordersCss, /grid-template-columns:\s*minmax\(190px, 220px\)/);
   assert.match(ordersCss, /\.orders-index-column \.trades-panel\s*\{[\s\S]*max-height:\s*calc\(100dvh - 168px\)/);
 });

@@ -40,7 +40,7 @@ test("isolated A1 visual demo demonstrates the glass component contract", async 
   expect(styles.overflow).toBe(false);
   expect(styles.windowRadius).toBe(styles.viewportWidth <= 760 ? "0px" : "28px");
   expect(styles.panelRadius).toBe("24px");
-  expect(styles.panelShadow).toContain("32px 84px");
+  expect(styles.panelShadow).toContain("24px 64px");
   expect(styles.panelBlur).toContain("blur(32px)");
   expect(styles.pillRadius).toBe("999px");
   expect(new Set(styles.circles.map(({width, height, radius}) => `${width}/${height}/${radius}`)).size).toBe(1);

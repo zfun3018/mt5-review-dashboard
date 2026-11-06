@@ -208,7 +208,7 @@
 .option-row.is-inactive::after {
   content: "已停用，历史填写仍保留";
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-secondary);
 }
 
 .custom-field-type-label {
@@ -425,7 +425,7 @@
 
 .import-calendar-cell em {
   color: var(--color-warning, #b7791f);
-  font-size: 0.68rem;
+  font-size: var(--font-size-secondary);
   font-style: normal;
   line-height: 1.2;
   overflow-wrap: anywhere;

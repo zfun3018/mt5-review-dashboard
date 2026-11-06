@@ -380,7 +380,8 @@ test("order list stays in the compact one-field format without changing the sele
   assert.doesNotMatch(ordersHtml, /<p class="eyebrow">ORDERS<\/p>|<h2>订单复盘<\/h2>/);
   assert.doesNotMatch(ordersHtml, /toggleOrderList/);
   assert.doesNotMatch(ordersSource, /toggleOrderList|orderListCollapsed|is-order-list-collapsed/);
-  assert.match(ordersStyle, /\.orders-layout\s*\{[^}]*grid-template-columns:\s*minmax\(360px, 400px\)/s);
+  const finalLayer = ordersStyle.slice(ordersStyle.lastIndexOf("/* Final alignment pass"));
+  assert.match(finalLayer, /\.orders-layout\s*\{[^}]*grid-template-columns:\s*minmax\(220px, 280px\)\s+minmax\(1020px, 1fr\) !important/s);
 });
 
 test("domestic futures order groups use the exchange trade date for night orders", () => {
@@ -754,13 +755,21 @@ test("deleted order filter is included in the campaigns query", () => {
 
 test("order toolbar keeps only period, date range, and order status filters", () => {
   assert.match(ordersHtml, /id="timePreset"/);
-  assert.match(ordersHtml, /id="startFilter"/);
-  assert.match(ordersHtml, /id="endFilter"/);
   assert.match(ordersHtml, /id="deletedFilter"/);
+  assert.doesNotMatch(ordersHtml, /id="startFilter"|id="endFilter"|toolbar-date-control/);
+  assert.doesNotMatch(ordersSource, /getElement\("startFilter"\)|getElement\("endFilter"\)/);
   for (const id of ["sideFilter", "tradeTypeFilter", "strategyFilter", "riskMissingOnly"]) {
     assert.doesNotMatch(ordersHtml, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(ordersSource, /toolbarSearch|data-shell-search/);
+});
+
+test("order page removes the shared outer shell and main background frames", () => {
+  const finalLayer = ordersStyle.slice(ordersStyle.lastIndexOf("/* Final alignment pass"));
+  assert.match(finalLayer, /body:has\(\.orders-layout\) \.app-shell\s*\{[\s\S]*border:\s*0 !important[\s\S]*background:\s*transparent !important[\s\S]*box-shadow:\s*none !important/s);
+  assert.match(finalLayer, /body:has\(\.orders-layout\) \.app-shell::after\s*\{[\s\S]*display:\s*none !important/s);
+  assert.match(finalLayer, /body:has\(\.orders-layout\) \.app-shell__main\s*\{[\s\S]*background:\s*transparent !important/s);
+  assert.match(finalLayer, /body:has\(\.orders-layout\) \.app-page-bar\s*\{[\s\S]*background:\s*transparent !important[\s\S]*box-shadow:\s*none !important/s);
 });
 
 test("campaign list uses server-side pagination state", async () => {
@@ -998,6 +1007,7 @@ test("order list aligns amounts and keeps the three columns balanced", () => {
   assert.match(ordersStyle, /\.campaign-list-opened\s*\{[\s\S]*flex:\s*0 0 3\.05rem/);
   assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s);
   assert.doesNotMatch(ordersStyle, /campaign-day-pnl-pill/);
+  assert.match(ordersStyle, /\.campaign-list-main\s*\{[\s\S]*flex:\s*1 1 auto/);
   assert.match(ordersStyle, /\.campaign-list-pnl\s*\{[\s\S]*margin-left:\s*auto/);
   assert.match(ordersStyle, /\.campaign-day-pnl\s*\{[\s\S]*justify-self:\s*end/);
 });
@@ -1008,6 +1018,20 @@ test("order workspace uses tighter module gaps and stronger group-row contrast",
   assert.match(finalLayer, /\.detail-body\.order-detail-workspace\s*\{[^}]*gap:\s*8px[^}]*padding:\s*10px/s);
   assert.match(finalLayer, /\.detail-hero-grid,\s*\.detail-review-column\s*\{[^}]*gap:\s*8px/s);
   assert.match(finalLayer, /\.campaign-day-card\s*\{[\s\S]*background:/s);
+});
+
+test("order list removes the redundant outer glass frame and keeps day summaries content-sized", () => {
+  const finalLayer = ordersStyle.slice(ordersStyle.lastIndexOf("/* Final alignment pass"));
+  assert.match(finalLayer, /\.orders-layout\s*\{[^}]*grid-template-columns:\s*minmax\(220px, 280px\)\s+minmax\(1020px, 1fr\) !important/s);
+  assert.match(finalLayer, /html\[data-platform\]\s+\.orders-index-column\s*>\s*\.trades-panel\s*\{[\s\S]*border:\s*0 !important[\s\S]*background:\s*transparent !important[\s\S]*box-shadow:\s*none !important/s);
+  assert.match(finalLayer, /html\[data-platform\]\s+\.orders-index-column\s*>\s*\.trades-panel::before,[\s\S]*display:\s*none !important/s);
+  assert.match(finalLayer, /\.campaign-day-summary\s*\{[^}]*grid-template-columns:\s*auto auto auto auto/s);
+});
+
+test("order list height follows the space before the check-in calendar", () => {
+  assert.match(ordersSource, /const calendarPanel = view\.querySelector\?\.\("\.checkin-calendar-panel"\)/);
+  assert.match(ordersSource, /calendarPanel\.getBoundingClientRect\(\)/);
+  assert.match(ordersSource, /calendarTop - panelTop/);
 });
 
 test("scratch campaigns carry the legacy state styling and a compact PnL emphasis", async () => {
@@ -1026,6 +1050,12 @@ test("scratch campaigns carry the legacy state styling and a compact PnL emphasi
 
 test("the main-order list keeps the aligned panel height and scrolls continuously", () => {
   assert.match(ordersStyle, /\.order-card-list\s*\{[\s\S]*overflow-y:\s*auto/);
+  const finalLayer = ordersStyle.slice(ordersStyle.lastIndexOf("/* Final alignment pass"));
+  assert.match(finalLayer, /\.orders-index-column\s*>\s*\.trades-panel\s*\{[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\) !important/s);
+  assert.match(finalLayer, /\.trades-panel \.table-wrap\s*\{[\s\S]*height:\s*100%[\s\S]*overflow:\s*hidden !important/s);
+  assert.match(finalLayer, /\.order-card-list\s*\{[\s\S]*height:\s*100%[\s\S]*max-height:\s*none !important/s);
+  assert.match(finalLayer, /\.order-card-list\s*\{[\s\S]*align-content:\s*start/s);
+  assert.match(finalLayer, /\.order-card-list\s*\{[\s\S]*grid-auto-rows:\s*max-content/s);
   assert.doesNotMatch(ordersHtml, /orderPrev|orderNext|orderPage/);
   assert.match(ordersSource, /applyListPanelHeight/);
   assert.match(ordersSource, /loadMore/);

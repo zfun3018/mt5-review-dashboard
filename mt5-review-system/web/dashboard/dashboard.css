@@ -553,7 +553,7 @@
 }
 
 .heatmap-total span {
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
 }
 
 .heatmap-cell {
@@ -563,7 +563,7 @@
   height: 22px;
   border-radius: 2px;
   background: transparent;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
 }
 
 .heatmap-cell strong {
@@ -785,7 +785,7 @@ html[data-platform="mt5"] .evaluation-table thead th {
   border-radius: 50%;
   background: var(--color-surface-raised);
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   line-height: 1;
   cursor: pointer;
 }
@@ -793,7 +793,7 @@ html[data-platform="mt5"] .evaluation-table thead th {
 .metric-quality {
   padding: 1px var(--space-1);
   border-radius: 999px;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   font-style: normal;
   white-space: nowrap;
 }

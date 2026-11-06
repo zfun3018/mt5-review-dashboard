@@ -104,10 +104,9 @@ test.describe("workspaces — desktop", () => {
     await page.goto(`${syntheticServer.baseURL}/orders/`);
     const filters = page.locator(".app-page-bar__filters");
     await expect(filters).toBeVisible();
-    for (const id of ["timePreset", "startFilter", "endFilter", "deletedFilter"]) {
-      if (id === "timePreset") await expect(filters.locator(`#${id}`)).toBeHidden();
-      else await expect(filters.locator(`#${id}`)).toBeVisible();
-    }
+    await expect(filters.locator("#timePreset")).toBeHidden();
+    await expect(filters.locator("#startFilter, #endFilter")).toHaveCount(0);
+    await expect(filters.locator("#deletedFilter")).toBeVisible();
     await expect(filters.locator(".app-filter-presets")).toBeVisible();
     for (const id of ["sideFilter", "tradeTypeFilter", "strategyFilter", "riskMissingOnly"]) {
       await expect(page.locator(`#${id}`)).toHaveCount(0);

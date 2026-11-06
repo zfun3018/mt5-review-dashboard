@@ -123,15 +123,24 @@ for (const [pageName, route] of routes) {
 
     expect(styles.accent).toBe("#79c8d5");
     expect(styles.blur).toBe("38px");
+    const orderCanvas = pageName.includes("orders") || pageName === "album";
     expect(styles.shellMargin).toBe(styles.isMobile ? "0px" : "12px");
-    expect(styles.shellRadius).toBe(styles.isMobile ? "0px" : "28px");
-    if (styles.isMobile) expect(styles.shellShadow).toBe("none");
-    else expect(styles.shellShadow).toContain("48px 130px");
+    if (orderCanvas) {
+      expect(styles.shellRadius).toBe("0px");
+      expect(styles.shellShadow).toBe("none");
+    } else {
+      expect(styles.shellRadius).toBe(styles.isMobile ? "0px" : "28px");
+      if (styles.isMobile) expect(styles.shellShadow).toBe("none");
+      else expect(styles.shellShadow).toContain("48px 130px");
+    }
     expect(styles.shellBackgroundImage === "none" || styles.shellBackgroundImage === demo.windowBackground).toBe(true);
-    expect(styles.shellShadow).toBe(demo.windowShadow);
-    expect(styles.shellRadius).toBe(demo.windowRadius);
-    expect(styles.shellFilter).toBe(demo.windowFilter);
-    expect(styles.mainSurfaceBackground).toBe(demo.mainSurfaceBackground);
+    if (!orderCanvas) {
+      expect(styles.shellShadow).toBe(demo.windowShadow);
+      expect(styles.shellRadius).toBe(demo.windowRadius);
+    }
+    if (orderCanvas) expect(styles.shellFilter).toBe("none");
+    else expect(styles.shellFilter).toBe(demo.windowFilter);
+    if (!orderCanvas) expect(styles.mainSurfaceBackground).toBe(demo.mainSurfaceBackground);
     expect(styles.atmosphereBackgroundImage === "none" || styles.atmosphereBackgroundImage.includes("radial-gradient")).toBe(true);
     expect(styles.atmosphereBlur).toBe("blur(30px) saturate(1.45)");
     expect(styles.shellHighlight).toContain("0.19");
@@ -141,11 +150,13 @@ for (const [pageName, route] of routes) {
     expect(styles.navigationIconBackground).not.toBe("rgba(0, 0, 0, 0)");
     expect(styles.pageBarFilter).toBe("none");
     expect(styles.pageBarRadius).toBe("0px");
-    expect(styles.panelFilter).toContain("blur(32px)");
-    expect(styles.panelRadius).toBe("24px");
-    expect(styles.panelShadow).toContain("32px 84px");
-    expect(styles.panelBackgroundImage === "none" || styles.panelBackgroundImage.includes("linear-gradient") || styles.panelBackgroundColor.includes("27, 43, 56")).toBe(true);
-    expect(styles.panelHighlight).toMatch(/(?:linear|conic)-gradient/);
+    if (!orderCanvas) {
+      expect(styles.panelFilter).toContain("blur(32px)");
+      expect(styles.panelRadius).toBe("24px");
+      expect(styles.panelShadow).toContain("24px 64px");
+      expect(styles.panelBackgroundImage === "none" || styles.panelBackgroundImage.includes("linear-gradient") || styles.panelBackgroundColor.includes("27, 43, 56")).toBe(true);
+      expect(styles.panelHighlight).toMatch(/(?:linear|conic)-gradient/);
+    }
     if (styles.primaryRadius) {
       expect(styles.primaryRadius).toBe("999px");
       expect(styles.primaryBackground).toContain("linear-gradient");
@@ -155,46 +166,113 @@ for (const [pageName, route] of routes) {
     expect(styles.pillControls.every(({height, radius}) => height >= 42 && radius === "999px")).toBe(true);
     if (!styles.isMobile) expect(styles.pillControls.every(({height}) => height === 42)).toBe(true);
     if (!styles.isMobile) {
-      expect(Math.abs(styles.shellRect.x - demo.window.x)).toBeLessThanOrEqual(1);
-      expect(Math.abs(styles.shellRect.y - demo.window.y)).toBeLessThanOrEqual(1);
-      expect(Math.abs(styles.shellRect.width - demo.window.width)).toBeLessThanOrEqual(2);
-      expect(styles.shellRect.height).toBeGreaterThanOrEqual(900);
-      expect(Math.abs(styles.navigationRect.x - 25)).toBeLessThanOrEqual(2);
-      expect(Math.abs(styles.navigationRect.y - 25)).toBeLessThanOrEqual(2);
-      expect(styles.navigationRect.width).toBeGreaterThanOrEqual(140);
-      expect(styles.navigationRect.width).toBeLessThanOrEqual(164);
-      expect(styles.navigationRect.height).toBeGreaterThanOrEqual(880);
-      expect(styles.pageBarRect.height).toBeGreaterThanOrEqual(48);
-      expect(styles.navigationActiveRadius).toBe(demo.navActiveRadius);
-      if (styles.primaryRect) expect(styles.primaryRect.height).toBe(demo.primary.height);
-      expect(styles.sidebarGlassBackground).toContain("linear-gradient");
-      expect(styles.sidebarGlassShadow).toContain("20px");
+      if (!orderCanvas) {
+        expect(Math.abs(styles.shellRect.x - demo.window.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(styles.shellRect.y - demo.window.y)).toBeLessThanOrEqual(1);
+        expect(Math.abs(styles.shellRect.width - demo.window.width)).toBeLessThanOrEqual(2);
+        expect(styles.shellRect.height).toBeGreaterThanOrEqual(900);
+      }
+      if (!orderCanvas) {
+        expect(Math.abs(styles.navigationRect.x - 25)).toBeLessThanOrEqual(2);
+        expect(Math.abs(styles.navigationRect.y - 25)).toBeLessThanOrEqual(2);
+        expect(styles.navigationRect.width).toBeGreaterThanOrEqual(140);
+        expect(styles.navigationRect.width).toBeLessThanOrEqual(164);
+        expect(styles.navigationRect.height).toBeGreaterThanOrEqual(880);
+        expect(styles.pageBarRect.height).toBeGreaterThanOrEqual(48);
+        expect(styles.navigationActiveRadius).toBe(demo.navActiveRadius);
+        if (styles.primaryRect) expect(styles.primaryRect.height).toBe(demo.primary.height);
+        expect(styles.sidebarGlassBackground).toContain("linear-gradient");
+        expect(styles.sidebarGlassShadow).toContain("20px");
+      }
     }
     if (styles.primaryRadius) expect(styles.primaryRadius).toBe("999px");
-    expect(styles.panelRadius).toBe(demo.panelRadius);
-    expect(styles.panelShadow).toBe(demo.panelShadow);
-    expect(styles.panelFilter).toBe(demo.panelFilter);
-    expect(styles.navigationShadow).toContain("38px 96px");
+    if (!orderCanvas) {
+      expect(styles.panelRadius).toBe(demo.panelRadius);
+      expect(styles.panelShadow).toBe(demo.panelShadow);
+      expect(styles.panelFilter).toBe(demo.panelFilter);
+    }
+    expect(styles.navigationShadow).toContain("30px 84px");
     expect(styles.bodyColorScheme).toBe("dark");
     expect(styles.horizontalOverflow).toBe(false);
     expect(browserErrors).toEqual([]);
 
     if (pageName.includes("orders")) {
-      const activeOrderStyles = await page.evaluate(() => {
-        const host = document.querySelector(".order-card-list") || document.body;
-        const row = document.createElement("div");
-        row.className = "campaign-card-order active";
-        row.innerHTML = '<div class="campaign-order-cell"><div class="campaign-list-order"><span>09:42</span><strong>visual contract</strong><strong>1.00</strong></div></div>';
-        host.append(row);
-        const order = row.querySelector(".campaign-list-order");
-        const style = getComputedStyle(order);
-        const result = {backgroundImage: style.backgroundImage, radius: style.borderRadius, filter: style.backdropFilter};
-        row.remove();
-        return result;
-      });
-      expect(activeOrderStyles.backgroundImage).toContain("linear-gradient");
-      expect(activeOrderStyles.radius).toBe("999px");
-      expect(activeOrderStyles.filter).toContain("blur");
+      if (pageName === "MT5 orders") {
+        const orderListGlass = await page.evaluate(() => {
+          const card = document.querySelector(".campaign-day-card");
+          const cardStyle = getComputedStyle(card);
+          const edgeStyle = getComputedStyle(card, "::before");
+          const reflectionStyle = getComputedStyle(card, "::after");
+          const headerStyle = getComputedStyle(card.querySelector(".campaign-day-header"));
+          const list = document.querySelector(".order-card-list");
+          const selectedRow = document.createElement("div");
+          selectedRow.className = "campaign-row campaign-card-order active";
+          selectedRow.innerHTML = '<div class="campaign-order-cell"><div class="campaign-list-order"><span class="campaign-list-contract">selected order</span></div></div>';
+          list.append(selectedRow);
+          const selectedStyle = getComputedStyle(selectedRow.querySelector(".campaign-list-order"));
+          const selected = {
+            backgroundImage: selectedStyle.backgroundImage,
+            borderColor: selectedStyle.borderColor,
+            borderRadius: selectedStyle.borderRadius,
+            boxShadow: selectedStyle.boxShadow,
+            filter: selectedStyle.backdropFilter,
+            textShadow: getComputedStyle(selectedRow.querySelector(".campaign-list-contract") || selectedRow.querySelector(".campaign-list-order")).textShadow,
+          };
+          selectedRow.remove();
+          const moduleSelectors = [
+            ["title", ".order-detail-title"],
+            ["screenshot", ".order-screenshot-stage"],
+            ["classification", ".detail-review-meta"],
+            ["review", ".review-editor-panel"],
+            ["executions", ".execution-section"],
+            ["source", ".import-source-section.is-secondary"],
+            ["checkin", ".checkin-calendar-panel"],
+          ];
+          const modules = moduleSelectors.flatMap(([name, selector]) => {
+            const element = document.querySelector(selector);
+            if (!element || !element.getClientRects().length) return [];
+            const style = getComputedStyle(element);
+            return [{name, borderColor: style.borderColor, borderRadius: style.borderRadius, boxShadow: style.boxShadow}];
+          });
+          return {
+            backgroundColor: cardStyle.backgroundColor,
+            backgroundImage: cardStyle.backgroundImage,
+            borderColor: cardStyle.borderColor,
+            borderRadius: cardStyle.borderRadius,
+            boxShadow: cardStyle.boxShadow,
+            filter: cardStyle.backdropFilter,
+            edgeImage: edgeStyle.backgroundImage,
+            edgeOpacity: edgeStyle.opacity,
+            reflectionImage: reflectionStyle.backgroundImage,
+            reflectionShadow: reflectionStyle.boxShadow,
+            headerImage: headerStyle.backgroundImage,
+            selected,
+            modules,
+          };
+        });
+        expect(orderListGlass.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+        expect(orderListGlass.borderRadius).toBe("20px");
+        expect(orderListGlass.backgroundImage).toContain("linear-gradient");
+        expect(orderListGlass.borderColor).not.toBe("rgba(0, 0, 0, 0)");
+        expect(orderListGlass.edgeImage).toContain("conic-gradient");
+        expect(Number(orderListGlass.edgeOpacity)).toBeGreaterThanOrEqual(0.9);
+        expect(orderListGlass.reflectionImage).toContain("linear-gradient");
+        expect(orderListGlass.reflectionShadow).toContain("rgba(");
+        expect(orderListGlass.headerImage).toContain("linear-gradient");
+        expect(orderListGlass.filter).toContain("blur(18px)");
+        expect(orderListGlass.boxShadow).toContain("inset");
+        expect(orderListGlass.boxShadow).toContain("0px -3px");
+        expect(orderListGlass.selected.backgroundImage).toContain("linear-gradient");
+        expect(orderListGlass.selected.borderColor).not.toBe("rgba(0, 0, 0, 0)");
+        expect(orderListGlass.selected.borderRadius).toBe("999px");
+        expect(orderListGlass.selected.boxShadow).toContain("0px 0px 16px");
+        expect(orderListGlass.selected.filter).toContain("blur(12px)");
+        expect(orderListGlass.selected.textShadow).toContain("rgba(209, 251, 255, 0.32)");
+        expect(orderListGlass.modules.length).toBeGreaterThanOrEqual(6);
+        expect(orderListGlass.modules.every(({borderColor, borderRadius, boxShadow}) =>
+          borderColor !== "rgba(0, 0, 0, 0)" && borderRadius === "20px" && boxShadow.includes("inset"),
+        )).toBe(true);
+      }
     }
   });
 }

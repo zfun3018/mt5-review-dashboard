@@ -149,7 +149,7 @@
   border-radius: 5px;
   background: var(--color-surface-muted);
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   text-align: center;
 }
 
@@ -165,7 +165,7 @@
 }
 
 .checkin-day strong {
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .orders-table {
@@ -202,7 +202,7 @@
   display: block;
   margin-top: 2px;
   color: var(--faint);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
   font-weight: 400;
   line-height: 1.15;
 }
@@ -337,7 +337,7 @@ th.custom-col {
 .time-stack span,
 .muted-mini {
   color: var(--color-muted);
-  font-size: 10.5px;
+  font-size: var(--font-size-secondary);
 }
 
 .symbol-cell {
@@ -353,7 +353,7 @@ th.custom-col {
   justify-content: center;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .side.long {
@@ -390,7 +390,7 @@ th.custom-col {
   min-width: 0;
   color: var(--color-muted);
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   line-height: 1.25;
   white-space: nowrap;
 }
@@ -405,14 +405,14 @@ th.custom-col {
   width: 1.1em;
   color: var(--faint);
   font-family: var(--font-family-ui);
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   font-weight: 500;
 }
 
 .trade-metrics-cell i {
   color: var(--faint);
   font-style: normal;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
 }
 
 /* Campaign rows */
@@ -541,7 +541,7 @@ th.custom-col {
   gap: 4px;
   min-width: 0;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .stop-summary.missing {
@@ -556,7 +556,7 @@ th.custom-col {
   border-radius: 4px;
   color: var(--color-muted);
   font-family: var(--font-family-ui);
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   font-weight: 600;
   vertical-align: 1px;
 }
@@ -585,7 +585,7 @@ th.custom-col {
 .child-label,
 .child-volume {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .child-order-cell {
@@ -617,7 +617,7 @@ th.custom-col {
   border-radius: 4px;
   color: #f2d18b;
   background: rgba(242, 184, 75, 0.13);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 800;
   line-height: 1;
 }
@@ -804,7 +804,7 @@ th.custom-col {
 .campaign-position-head span,
 .position-risk-note {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   line-height: 1.45;
 }
 
@@ -838,7 +838,7 @@ th.custom-col {
 .position-plan-risk span,
 .position-plan-risk small {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .position-plan-risk strong {
@@ -864,7 +864,7 @@ th.custom-col {
   justify-content: space-between;
   gap: var(--space-2);
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .position-exits strong {
@@ -974,7 +974,7 @@ th.custom-col {
 
 .screenshot-status {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .snapshot {
@@ -1142,7 +1142,7 @@ th.custom-col {
 .choice-cell.table-choice .choice-value-pill {
   max-width: calc(var(--custom-column-width) - 1.7rem);
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .choice-cell.table-choice .choice-placeholder {
@@ -1154,7 +1154,7 @@ th.custom-col {
 }
 
 .choice-cell.table-choice .cell-caret {
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   line-height: 1;
 }
 
@@ -1167,7 +1167,7 @@ th.custom-col {
   background: color-mix(in srgb, var(--classification-color) 13%, var(--color-surface-raised));
   color: var(--color-text);
   padding: 3px 24px 3px 7px;
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   cursor: pointer;
 }
 
@@ -1352,7 +1352,7 @@ th.custom-col {
     content: attr(data-label);
     flex: 0 0 88px;
     color: var(--color-muted);
-    font-size: 11px;
+    font-size: var(--font-size-readable-min);
   }
 
   .orders-table tr.campaign-day-row {
@@ -1485,7 +1485,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .orders-table td {
   height: 44px;
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .orders-table th:nth-child(1),
@@ -1539,7 +1539,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   min-width: 0;
   overflow: hidden;
   color: var(--color-text);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1551,7 +1551,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   overflow: hidden;
   color: var(--color-muted);
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1593,7 +1593,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   align-items: center;
   gap: 5px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
 }
 
 .campaign-day-toggle {
@@ -1629,7 +1629,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .campaign-day-summary strong:first-child {
   color: var(--color-text);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   font-weight: 650;
 }
 
@@ -1649,7 +1649,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   background: rgba(151, 177, 201, 0.1);
   color: var(--faint);
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 650;
 }
 
@@ -1657,7 +1657,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   overflow: hidden;
   color: var(--color-text);
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 10.5px;
+  font-size: var(--font-size-readable-min);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1677,7 +1677,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   height: 16px;
   place-items: center;
   border-radius: 4px;
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 800;
   line-height: 1;
 }
@@ -1809,12 +1809,12 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .order-info-field label,
 .campaign-tag-field .field-label {
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
 }
 
 .campaign-tag-field .field-label small {
   color: var(--faint);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
   font-weight: 400;
 }
 
@@ -1851,14 +1851,14 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .field-label-row span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
 }
 
 .order-info-save {
   min-height: 34px;
   align-self: end;
   color: var(--color-positive);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
 }
 
@@ -1982,7 +1982,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .import-source-item__meta,
 .import-source-empty {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-secondary);
 }
 
 .import-source-item__meta {
@@ -2046,7 +2046,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   padding: 3px 5px;
   border-radius: 3px;
   color: rgba(233, 240, 245, 0.72);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2056,7 +2056,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   padding: 3px 6px;
   border-radius: 3px;
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
   line-height: 1;
 }
 
@@ -2089,7 +2089,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 }
 
 .screenshot-status {
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
 }
 
 .review-editor-panel {
@@ -2132,7 +2132,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   min-width: 900px;
   border-collapse: collapse;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .execution-table th,
@@ -2145,7 +2145,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 
 .execution-table th {
   color: var(--faint);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -2166,7 +2166,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
   justify-content: center;
   padding: 3px 6px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
 }
 
 .execution-type { color: #b8dcfa; background: rgba(100, 181, 255, 0.14); }
@@ -2175,7 +2175,7 @@ html[data-platform="domestic_futures"] .campaign-day-chevron {
 .execution-side { min-width: 20px; margin-left: 5px; }
 .execution-side.long { color: #98f0c7; background: rgba(85, 214, 155, 0.13); }
 .execution-side.short { color: #ffb7b9; background: rgba(255, 125, 129, 0.13); }
-.mono-cell { color: #a9bbca; font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; white-space: nowrap; }
+.mono-cell { color: #a9bbca; font-family: "Cascadia Code", Consolas, monospace; font-size: var(--font-size-secondary); white-space: nowrap; }
 
 @media (max-width: 1080px) {
   .app-page {
@@ -2563,7 +2563,7 @@ html[data-platform="domestic_futures"] .detail-panel select {
 .detail-action-count {
   min-width: 13px;
   color: currentColor;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -2626,7 +2626,7 @@ html[data-platform="domestic_futures"] .detail-panel select {
 
 .checkin-calendar-weekdays span {
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   text-align: center;
 }
 
@@ -2637,7 +2637,7 @@ html[data-platform="domestic_futures"] .detail-panel select {
   border-radius: 6px;
   background: #fbfdfc;
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   text-align: center;
 }
 
@@ -2655,7 +2655,7 @@ html[data-platform="domestic_futures"] .detail-panel select {
 .checkin-calendar-grid .checkin-day span {
   margin-top: 3px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
 }
 
 .checkin-calendar-grid .checkin-day.has-checkin {
@@ -3020,7 +3020,7 @@ html[data-platform] .campaign-tag-field {
 html[data-platform] .order-info-field label,
 html[data-platform] .campaign-tag-field .field-label {
   color: var(--color-muted);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   line-height: 1.25;
 }
 
@@ -3032,7 +3032,7 @@ html[data-platform] .campaign-tag-field .field-label small {
 
 html[data-platform] .order-info-field .field-label-row span {
   color: var(--color-warning);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
 }
 
 html[data-platform] .order-info-field:not(.missing) .field-label-row span {
@@ -3089,7 +3089,7 @@ html[data-platform] .order-info-save {
   align-items: center;
   padding: 0 4px;
   color: var(--color-positive);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
 }
 
 html[data-platform] .order-info-save span {
@@ -3140,7 +3140,7 @@ html[data-platform] .detail-checkin-pill .detail-action-count {
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.09);
   color: inherit;
-  font-size: 10px;
+  font-size: var(--font-size-micro);
 }
 
 @media (max-width: 560px) {
@@ -3215,7 +3215,7 @@ html[data-platform] .campaign-day-weekday {
   border-radius: 4px;
   background: #35414d;
   color: #f4f6f8;
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 700;
   line-height: 14px;
 }
@@ -3394,7 +3394,7 @@ html[data-platform] .order-detail-heading .eyebrow {
 html[data-platform] .order-detail-heading .detail-time {
   display: inline;
   margin: 0;
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
 }
 
 html[data-platform] .detail-order-actions {
@@ -3469,14 +3469,14 @@ html[data-platform] .detail-primary-review-fields .field-label-row,
 html[data-platform] .detail-primary-review-fields .field-label {
   min-height: 14px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
   line-height: 1.2;
 }
 
 html[data-platform] .detail-primary-review-fields .field-label-row span,
 html[data-platform] .detail-primary-review-fields .field-label small {
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
 }
 
 html[data-platform] .detail-primary-review-fields .order-info-field .numeric-cell-input {
@@ -3555,7 +3555,7 @@ html[data-platform] .detail-primary-review-fields .order-info-save {
   justify-content: center;
   padding: 0;
   color: var(--color-positive);
-  font-size: 9px;
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
 }
 
@@ -3631,7 +3631,7 @@ html[data-platform] .order-info-strip .campaign-tag-field[data-tag-picker^="cust
   max-width: min(180px, 100%);
   padding: 5px 10px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   line-height: 1.15;
   white-space: nowrap;
 }
@@ -3930,7 +3930,7 @@ html[data-platform] .review-autosave-state {
   align-items: center;
   gap: 6px;
   color: var(--color-positive);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
 }
 
@@ -4093,6 +4093,14 @@ html[data-platform] .detail-review-meta.floating-context-card {
 .review-editor-panel .review-editor {
   max-height: 360px;
   overflow-y: auto;
+}
+
+@media (min-width: 1081px) {
+  /* The review column stretches with the hero on large screens. Let the
+     editor consume that available height instead of leaving an empty panel. */
+  .detail-review-column .review-editor-panel .review-editor {
+    max-height: none;
+  }
 }
 
 .order-secondary-context {
@@ -4378,7 +4386,7 @@ html[data-platform] .order-detail-heading .detail-title-pnl {
 
 html[data-platform] .order-detail-heading .detail-time {
   color: rgba(224, 233, 241, 0.72);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   font-weight: 450;
 }
 
@@ -4450,7 +4458,7 @@ html[data-platform] .review-editor-meta {
   gap: 14px;
   margin-left: auto;
   color: rgba(224, 233, 241, 0.72);
-  font-size: 11px;
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
 }
 
@@ -4507,7 +4515,7 @@ html[data-platform] .checkin-calendar-grid {
 html[data-platform] .checkin-calendar-weekdays span {
   padding-block: 4px;
   color: rgba(224, 233, 241, 0.62);
-  font-size: 11px;
+  font-size: var(--font-size-secondary);
 }
 
 html[data-platform] .checkin-calendar-grid .checkin-day {
@@ -4538,7 +4546,7 @@ html[data-platform] .checkin-calendar-grid .checkin-day strong {
 html[data-platform] .checkin-calendar-grid .checkin-day span {
   margin: 0;
   color: rgba(224, 233, 241, 0.52);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
 }
 
 html[data-platform] .checkin-calendar-grid .checkin-day.has-checkin {
@@ -4567,13 +4575,13 @@ html[data-platform] .import-source-section.is-secondary .import-source-item__hea
 html[data-platform] .import-source-section.is-secondary .import-source-item__meta,
 html[data-platform] .import-source-section.is-secondary .import-source-empty {
   color: rgba(224, 233, 241, 0.52);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   font-weight: 400;
 }
 
 html[data-platform] .import-source-section.is-secondary .import-source-item__head strong {
   color: rgba(239, 245, 248, 0.78);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   font-weight: 550;
 }
 
@@ -4774,7 +4782,7 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   gap: 6px;
   min-width: 0;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
 }
 
 .campaign-day-date {
@@ -4793,7 +4801,7 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--color-text);
-  font-size: 9px;
+  font-size: var(--font-size-micro);
   font-weight: 700;
 }
 
@@ -4864,7 +4872,7 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   overflow: hidden;
   color: var(--color-muted);
   font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4921,14 +4929,51 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   }
 
   .campaign-order-cell {
-    padding: 8px 9px;
+    padding: 8px 7px;
   }
 }
 
 /* Final alignment pass for the compact order rail. The list keeps its own
    scroll surface, but the native scrollbar stays visually out of the card. */
+body:has(.orders-layout) .app-shell {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+body:has(.orders-layout) .app-shell::after {
+  display: none !important;
+}
+
+body:has(.orders-layout) .app-shell__main {
+  background: transparent !important;
+}
+
+body:has(.orders-layout) .app-page-bar {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 .orders-layout {
-  grid-template-columns: minmax(360px, 400px) minmax(0, 1fr);
+  align-items: stretch;
+  grid-template-columns: minmax(220px, 280px) minmax(1020px, 1fr) !important;
+}
+
+.orders-index-column {
+  align-self: stretch;
+}
+
+.orders-index-column > .trades-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none !important;
+  grid-template-rows: minmax(0, 1fr) !important;
 }
 
 .orders-list-controls {
@@ -4936,12 +4981,17 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
 }
 
 .trades-panel .table-wrap {
+  height: 100%;
+  min-height: 0;
   max-height: none !important;
-  overflow: visible !important;
+  overflow: hidden !important;
 }
 
 .order-card-list {
-  max-height: calc(100dvh - 230px);
+  height: 100%;
+  max-height: none !important;
+  align-content: start;
+  grid-auto-rows: max-content;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -4960,6 +5010,7 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
 }
 
 .campaign-list-main {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: visible;
   white-space: nowrap;
@@ -4977,6 +5028,10 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   white-space: nowrap;
 }
 
+.campaign-list-pnl {
+  margin-left: auto;
+}
+
 .campaign-card-order.has-risk-gap .campaign-order-cell {
   box-shadow: none !important;
 }
@@ -4988,7 +5043,7 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
 .campaign-card-order.active .campaign-list-order {
   width: 100%;
   min-height: 40px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 1px solid rgba(185, 241, 248, 0.78);
   border-radius: var(--radius-pill);
   background: linear-gradient(145deg, rgba(118, 205, 219, 0.3), rgba(38, 89, 102, 0.22)) !important;
@@ -5010,10 +5065,30 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   pointer-events: none;
 }
 
+/* The day cards provide the list's visual frame. Keep the parent as a layout
+   surface so its glass border and refraction do not create a second frame. */
+html[data-platform] .orders-index-column > .trades-panel {
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-platform] .orders-index-column > .trades-panel::before,
+html[data-platform] .orders-index-column > .trades-panel::after {
+  display: none !important;
+  content: none;
+}
+
+.campaign-day-summary {
+  grid-template-columns: auto auto auto auto;
+  justify-content: start;
+}
+
 @media (max-width: 1180px) {
-  .order-card-list {
-    max-height: calc(100dvh - 190px);
-  }
+  .order-card-list { max-height: none !important; }
 }
 
 @media (max-width: 680px) {
@@ -5022,11 +5097,91 @@ html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
   }
 
   .order-card-list {
-    max-height: calc(100dvh - 170px);
+    height: auto;
+    max-height: none !important;
+    overflow-y: visible;
   }
 
   .campaign-list-order {
     min-height: 40px;
     gap: 3px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .orders-index-column > .trades-panel {
+    grid-template-rows: auto !important;
+  }
+
+  .trades-panel .table-wrap {
+    height: auto;
+    overflow: visible !important;
+  }
+
+  .order-card-list {
+    height: auto;
+    overflow-y: visible;
+  }
+}
+
+/* Tokenized scope switcher. The active view is a single raised pill inside
+   one dark glass capsule; inactive views stay quiet so the selected state
+   remains readable at a glance. */
+html[data-platform] .orders-list-views {
+  min-height: 34px;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--glass-control-rim) !important;
+  border-radius: var(--radius-pill);
+  background: rgba(8, 13, 18, 0.76) !important;
+  box-shadow: var(--glass-control-shadow) !important;
+  backdrop-filter: blur(14px) saturate(155%);
+  -webkit-backdrop-filter: blur(14px) saturate(155%);
+}
+
+html[data-platform] .orders-list-views .view-tab {
+  display: inline-flex;
+  min-width: 64px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 11px;
+  border: 1px solid transparent !important;
+  border-radius: var(--order-list-selected-radius);
+  background: transparent !important;
+  color: var(--order-list-muted) !important;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1;
+  transition: background var(--order-list-transition), border-color var(--order-list-transition), box-shadow var(--order-list-transition), color var(--order-list-transition);
+}
+
+html[data-platform] .orders-list-views .view-tab.active,
+html[data-platform] .orders-list-views .view-tab[aria-selected="true"] {
+  border-color: var(--glass-control-rim) !important;
+  background: var(--glass-control-fill-selected) !important;
+  color: var(--order-list-text) !important;
+  box-shadow: var(--glass-control-shadow), 0 0 16px rgba(var(--color-accent-rgb), 0.16) !important;
+}
+
+html[data-platform] .orders-list-views .view-tab:hover:not(.active),
+html[data-platform] .orders-list-views .view-tab:focus-visible:not(.active) {
+  border-color: rgba(var(--color-accent-rgb), 0.34) !important;
+  background: var(--order-list-row-hover-fill) !important;
+  color: var(--order-list-text) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html[data-platform] .orders-list-views .view-tab:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring-shadow) !important;
+}
+
+@media (max-width: 680px) {
+  html[data-platform] .orders-list-views .view-tab {
+    min-width: 60px;
+    padding-inline: 10px;
   }
 }

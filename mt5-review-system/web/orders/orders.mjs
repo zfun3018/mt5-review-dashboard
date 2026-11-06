@@ -593,6 +593,7 @@ export function createOrdersController({
     const panel = view.querySelector?.(".trades-panel");
     const indexColumn = view.querySelector?.(".orders-index-column");
     const detailPanel = view.querySelector?.(".detail-panel");
+    const calendarPanel = view.querySelector?.(".checkin-calendar-panel");
     if (!panel || !detailPanel || typeof panel.getBoundingClientRect !== "function" || typeof detailPanel.getBoundingClientRect !== "function") return;
     if (typeof globalThis.innerWidth === "number" && globalThis.innerWidth <= 1080) {
       panel.style.maxHeight = "";
@@ -604,10 +605,25 @@ export function createOrdersController({
       return;
     }
     const detailHeight = detailPanel.getBoundingClientRect().height;
-    if (detailHeight > 0) {
-      const height = `${Math.ceil(detailHeight)}px`;
+    const panelTop = panel.getBoundingClientRect().top;
+    const calendarBox = calendarPanel && typeof calendarPanel.getBoundingClientRect === "function"
+      ? calendarPanel.getBoundingClientRect()
+      : null;
+    const calendarGap = calendarPanel && typeof globalThis.getComputedStyle === "function"
+      ? Number.parseFloat(globalThis.getComputedStyle(calendarPanel).marginTop) || 0
+      : 0;
+    const calendarTop = Number.isFinite(calendarBox?.top) ? calendarBox.top : 0;
+    const calendarHeight = calendarTop > panelTop
+      ? calendarTop - panelTop - calendarGap
+      : 0;
+    // The detail panel is the grid row's sizing authority. The calendar is a
+    // following sibling, so its top edge should land just after this height;
+    // using the list's own content would let the rail expand the whole row.
+    const targetHeight = detailHeight > 0 ? detailHeight : calendarHeight;
+    if (targetHeight > 0) {
+      const height = `${Math.ceil(targetHeight)}px`;
       panel.style.height = height;
-      panel.style.maxHeight = height;
+      panel.style.maxHeight = "";
       if (indexColumn) {
         indexColumn.style.height = "";
         indexColumn.style.maxHeight = "";
@@ -1351,8 +1367,6 @@ export function createOrdersController({
     syncOrdersCanvasScale();
 
     const timePreset = getElement("timePreset");
-    const startFilter = getElement("startFilter");
-    const endFilter = getElement("endFilter");
     const deletedFilter = getElement("deletedFilter");
     const imageClose = getElement("imageClose");
     bindListViewTabs();
@@ -1364,28 +1378,10 @@ export function createOrdersController({
       timePreset.addEventListener("change", (event) => {
         const preset = event.target.value;
         if (preset !== "custom") {
-          if (startFilter) startFilter.value = "";
-          if (endFilter) endFilter.value = "";
           commitState({ preset, start: "", end: "", page: 1 });
         } else {
           commitState({ preset, page: 1 });
         }
-        loadList();
-      });
-    }
-    if (startFilter) {
-      startFilter.value = state.start || "";
-      startFilter.addEventListener("change", (event) => {
-        if (timePreset) timePreset.value = "custom";
-        commitState({ preset: "custom", start: event.target.value, page: 1 });
-        loadList();
-      });
-    }
-    if (endFilter) {
-      endFilter.value = state.end || "";
-      endFilter.addEventListener("change", (event) => {
-        if (timePreset) timePreset.value = "custom";
-        commitState({ preset: "custom", end: event.target.value, page: 1 });
         loadList();
       });
     }

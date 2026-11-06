@@ -656,7 +656,7 @@ html[data-platform] .app-page-bar__filters .domestic-range button {
   border-radius: var(--radius-pill);
   background: transparent;
   color: rgba(239, 245, 248, 0.84);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 html[data-platform] .app-page-bar__filters .filter-bar select:focus,
@@ -713,7 +713,7 @@ html[data-platform] .app-page-bar__filters .domestic-range button {
   border-radius: var(--radius-pill);
   background: transparent;
   color: rgba(239, 245, 248, 0.78);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -803,7 +803,7 @@ html[data-platform] .app-page-bar__filters .domestic-range button:focus-visible 
   min-height: 30px;
   padding: 0 25px 0 9px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: var(--font-size-readable-min);
 }
 
 .app-page-bar__filters #timePreset {
@@ -826,7 +826,7 @@ html[data-platform] .app-page-bar__filters .domestic-range button:focus-visible 
   border-radius: var(--radius-pill);
   background: rgba(8, 10, 14, 0.42);
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: var(--font-size-secondary);
   white-space: nowrap;
 }
 
@@ -839,7 +839,7 @@ html[data-platform] .app-page-bar__filters .domestic-range button:focus-visible 
   border: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 10px;
+  font-size: var(--font-size-readable-min);
 }
 
 @media (max-width: 720px), (max-width: 900px) and (orientation: landscape) and (max-height: 600px) {
@@ -878,13 +878,13 @@ html[data-platform] .app-page-bar__filters .domestic-range button:focus-visible 
     height: 28px;
     gap: 3px;
     padding: 0 5px;
-    font-size: 9px;
+    font-size: var(--font-size-secondary);
   }
 
   .toolbar-date-control input[type="date"] {
     width: 96px;
     height: 26px;
     min-height: 26px;
-    font-size: 9px;
+    font-size: var(--font-size-secondary);
   }
 }

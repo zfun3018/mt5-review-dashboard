@@ -91,3 +91,52 @@ test("glass surfaces expose a visible static diagonal refraction layer", async (
   assert.doesNotMatch(components, /glass-surface-sheen/);
   assert.doesNotMatch(components, /will-change:\s*transform/);
 });
+
+test("shared surface language separates sibling cards from raised controls and overlays", async () => {
+  const tokens = await readFile(join(cssDir, "tokens.css"), "utf8");
+  const components = await readFile(join(cssDir, "components.css"), "utf8");
+  const surfaceLanguage = await readFile(join(cssDir, "surface-language.css"), "utf8");
+
+  for (const token of [
+    "--glass-card-fill",
+    "--glass-card-rim",
+    "--glass-card-shadow",
+    "--glass-refraction-fill",
+    "--glass-refraction-rim",
+    "--glass-refraction-edge",
+    "--glass-refraction-card-shadow",
+    "--glass-refraction-blur",
+    "--glass-refraction-radius",
+    "--glass-refraction-selected-fill",
+    "--glass-refraction-selected-rim",
+    "--glass-refraction-selected-glow",
+    "--glass-refraction-selected-bevel",
+    "--glass-refraction-selected-blur",
+    "--glass-refraction-text-glow",
+    "--glass-control-fill",
+    "--glass-control-rim",
+    "--glass-control-shadow",
+    "--glass-overlay-shadow",
+    "--glass-level-card",
+    "--glass-level-control",
+    "--glass-level-overlay",
+  ]) {
+    assert.match(tokens, new RegExp(`${token.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*:\\s*[^;]+;`), `missing shared layer token ${token}`);
+  }
+
+  for (const className of [
+    ".glass-card",
+    ".glass-control",
+    ".glass-control--selected",
+    ".glass-overlay",
+  ]) {
+    assert.match(components, new RegExp(`${className.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*\\{`));
+  }
+
+  assert.match(components, /\.glass-card\s*\{[\s\S]*?z-index:\s*var\(--glass-level-card\)/);
+  assert.match(components, /\.glass-control\s*\{[\s\S]*?z-index:\s*var\(--glass-level-control\)/);
+  assert.match(components, /\.glass-overlay\s*\{[\s\S]*?z-index:\s*var\(--glass-level-overlay\)/);
+  assert.match(surfaceLanguage, /\.glass-surface[^\{]*:hover[\s\S]*?transform:\s*none/);
+  assert.match(surfaceLanguage, /\.orders-index-column[\s\S]*var\(--glass-refraction-fill\)/);
+  assert.match(surfaceLanguage, /\.orders-index-column[\s\S]*var\(--glass-refraction-selected-fill\)/);
+});

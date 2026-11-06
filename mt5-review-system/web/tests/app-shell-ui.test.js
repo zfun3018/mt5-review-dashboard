@@ -581,6 +581,9 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.match(tokens, /--sidebar-width:\s*224px/);
   assert.match(tokens, /--sidebar-collapsed-width:\s*56px/);
   assert.match(tokens, /--font-size-xs:\s*12px/);
+  assert.match(tokens, /--font-size-readable-min:\s*12px/);
+  assert.match(tokens, /--font-size-secondary:\s*11px/);
+  assert.match(tokens, /--font-size-micro:\s*10px/);
   assert.match(tokens, /--font-size-display:\s*28px/);
   assert.match(tokens, /--font-size-body:\s*13px/);
   assert.match(tokens, /--radius-control:\s*999px/);
@@ -588,13 +591,13 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.match(tokens, /--radius-panel:\s*24px/);
   assert.match(tokens, /--radius-inner:\s*18px/);
   assert.match(tokens, /--control-height:\s*42px/);
-  assert.match(tokens, /--color-bg:\s*#000000/);
-  assert.match(tokens, /--color-bg-atmosphere:\s*#000000/);
+  assert.match(tokens, /--color-bg:\s*#020305/);
+  assert.match(tokens, /--color-bg-atmosphere:[\s\S]*#020305;/);
   assert.match(tokens, /--glass-base:\s*rgba\(/);
   assert.match(tokens, /--color-accent:\s*#79c8d5/);
   assert.match(tokens, /--glass-blur:\s*38px/);
   assert.match(tokens, /--glass-panel-blur:\s*32px/);
-  assert.match(tokens, /--shadow-panel:[^;]*rgba\(0, 0, 0, 0\.24\)/);
+  assert.match(tokens, /--shadow-panel:\s*var\(--glass-card-shadow\)/);
   assert.match(tokens, /--glass-saturation:\s*175%/);
   assert.match(tokens, /--shadow-ambient:[^;]*,/);
   assert.doesNotMatch(shellSource, /THEME_OPTIONS|THEME_STORAGE_KEY|app-theme-button/);

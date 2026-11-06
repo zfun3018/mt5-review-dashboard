@@ -296,7 +296,7 @@ test.describe("order review workspace", () => {
         orderAmountRightGaps: orderAmounts.map((gap) => gap / pageScale),
       };
     });
-    expect(reviewControlStyles.info.radius).toBe("24px");
+    expect(reviewControlStyles.info.radius).toBe("20px");
     expect(reviewControlStyles.field.radius).toBe("0px");
     expect(reviewControlStyles.stop.radius).toBe("999px");
     expect(reviewControlStyles.stop.width).toBeGreaterThanOrEqual(70);
@@ -305,8 +305,8 @@ test.describe("order review workspace", () => {
     expect(reviewControlStyles.dailyPnl.radius).toBe("0px");
     if (!isMobile) {
       expect(reviewControlStyles.summaryAmountRightGap).toBeLessThanOrEqual(2);
-      expect(reviewControlStyles.orderAmountRightGaps.every((gap) => gap <= 12)).toBe(true);
     }
+    expect(reviewControlStyles.orderAmountRightGaps.every((gap) => gap <= 12)).toBe(true);
     expect(reviewControlStyles.choice.radius).toBe("999px");
     expect(reviewControlStyles.choice.width).toBeLessThanOrEqual(120);
     await expect(page.locator('[data-tag-trigger="trade_type_tags"] [data-lucide="plus"]')).toBeVisible();
@@ -337,7 +337,7 @@ test.describe("order review workspace", () => {
       const calendar = document.querySelector(".checkin-calendar-panel")?.getBoundingClientRect();
       return {
         listModules,
-        calendar: calendar ? {left: calendar.left, width: calendar.width} : null,
+        calendar: calendar ? {left: calendar.left, top: calendar.top, width: calendar.width} : null,
         orderListPanel: rect(".trades-panel"),
         detailPanel: rect(".detail-panel"),
         detailReview: rect(".detail-review-column"),
@@ -352,6 +352,9 @@ test.describe("order review workspace", () => {
     expect(composition.listModules[0].className).toContain("orders-list-controls");
     expect(composition.listModules[1].className).toContain("trades-panel");
     expect(composition.calendar?.width).toBeGreaterThanOrEqual(composition.orderListPanel.width);
+      if (!isMobile) {
+        expect(Math.abs(composition.calendar.top - composition.orderListPanel.bottom)).toBeLessThanOrEqual(14);
+      }
     if (isMobile) {
       expect(composition.overflow, JSON.stringify(composition.scrollMetrics)).toBe(true);
     }
@@ -692,9 +695,11 @@ test("keeps the compact order index narrow and removes redundant list controls",
     expect(weekdayBadge.text).toBe("五");
     const groupColors = await page.locator("#orderRows .campaign-day-card").first().evaluate((row) => ({
       background: getComputedStyle(row).backgroundColor,
+      backgroundImage: getComputedStyle(row).backgroundImage,
       foreground: getComputedStyle(row.querySelector(".campaign-day-date")).color,
     }));
-    expect(groupColors.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(groupColors.background).toBe("rgba(0, 0, 0, 0)");
+    expect(groupColors.backgroundImage).toContain("linear-gradient");
     expect(groupColors.foreground).not.toBe("rgba(0, 0, 0, 0)");
     await expect(page.locator("#orderRows .campaign-day-summary")).toContainText("2笔");
     await expect(page.locator("#orderRows .campaign-day-pnl-pill")).toHaveCount(0);
@@ -728,14 +733,14 @@ test("keeps the compact order index narrow and removes redundant list controls",
       expect(listWidth).toBeLessThanOrEqual(390);
       expect(mobileLayout).toEqual({ overflow: false, detailBelowList: false, metadataBelowScreenshot: true });
     } else {
-      expect(listWidth).toBeGreaterThan(359);
-      expect(listWidth).toBeLessThanOrEqual(400);
+      expect(listWidth).toBeGreaterThanOrEqual(220);
+      expect(listWidth).toBeLessThanOrEqual(280);
       const split = await page.evaluate(() => {
         const list = document.querySelector(".trades-panel").getBoundingClientRect();
         const detail = document.querySelector(".detail-panel").getBoundingClientRect();
         return { listWidth: list.width, detailStartsBesideList: detail.left >= list.right };
       });
-      expect(split.listWidth).toBeLessThanOrEqual(400);
+      expect(split.listWidth).toBeLessThanOrEqual(280);
       expect(split.detailStartsBesideList).toBe(true);
     }
     expect(errors).toEqual([]);
