@@ -11,6 +11,7 @@ from app.analytics import (
 from app.domain.analysis_context import AnalysisContext
 from app.domain.dashboard import build_trade_period_summaries, campaign_period_date_ranges
 from app.domain.metrics import build_metric_registry
+from app.platforms import DOMESTIC_FUTURES_PLATFORM
 
 
 def trade(trade_id, close_time, pnl, commission=0.0, swap=0.0, trade_type="follow", strategy="breakout"):
@@ -43,7 +44,7 @@ def _campaign(campaign_id, close_time, net_pnl, **extra):
     return row
 
 
-def _context(campaigns, *, snapshots=(), settings=None):
+def _context(campaigns, *, snapshots=(), settings=None, platform="mt5"):
     merged_settings = {
         "scratch_threshold_r": 0.15,
         "selected_year": 2026,
@@ -59,7 +60,7 @@ def _context(campaigns, *, snapshots=(), settings=None):
         reference_campaigns=campaigns,
         equity_snapshots=snapshots,
         anchor_utc=datetime(2026, 8, 3, 12, 0, tzinfo=timezone.utc),
-        platform="mt5",
+        platform=platform,
         timezone="Asia/Shanghai",
         settings=merged_settings,
     )
@@ -208,6 +209,53 @@ class CommonMetricRegistryTest(unittest.TestCase):
 
         self.assertEqual(calendar.value["days"]["2026-08-02"]["net_pnl"], 8.0)
         self.assertEqual(calendar.value["days"]["2026-08-01"]["order_count"], 0)
+
+    def test_domestic_calendar_derives_month_and_daily_target_progress_from_campaigns(self):
+        campaigns = [
+            _campaign("C-1", "2026-10-01T01:00:00+00:00", 120.0),
+            _campaign("C-2", "2026-10-01T02:00:00+00:00", -20.0),
+            _campaign("C-3", "2026-10-03T01:00:00+00:00", 80.0),
+            _campaign("C-4", "2026-10-07T01:00:00+00:00", 350.0),
+            _campaign("C-5", "2026-10-01T16:30:00+00:00", 50.0),
+        ]
+        context = _context(
+            campaigns,
+            platform=DOMESTIC_FUTURES_PLATFORM,
+            settings={
+                "selected_year": 2026,
+                "selected_month": 10,
+                "domestic_futures_monthly_target_pnl": 500.0,
+                "domestic_futures_daily_target_pnl": 100.0,
+            },
+        )
+
+        calendar = next(
+            result for result in build_metric_registry().evaluate(context) if result.key == "calendar"
+        )
+
+        self.assertEqual(calendar.definition_version, "2")
+        self.assertEqual(calendar.value["month_net_pnl"], 580.0)
+        self.assertEqual(calendar.value["month_target_pnl"], 500.0)
+        self.assertEqual(calendar.value["daily_target_pnl"], 100.0)
+        self.assertEqual(calendar.value["month_target_completion_percent"], 116.0)
+        self.assertEqual(calendar.value["daily_target_days_met"], 2)
+        self.assertEqual(calendar.value["daily_target_days_total"], 4)
+        self.assertEqual(calendar.value["days"]["2026-10-02"]["net_pnl"], 50.0)
+
+    def test_mt5_calendar_does_not_receive_domestic_target_fields(self):
+        context = _context(
+            [_campaign("C-1", "2026-10-01T01:00:00+00:00", 50.0)],
+            settings={
+                "selected_year": 2026,
+                "selected_month": 10,
+                "domestic_futures_monthly_target_pnl": 500.0,
+                "domestic_futures_daily_target_pnl": 100.0,
+            },
+        )
+        calendar = next(
+            result for result in build_metric_registry().evaluate(context) if result.key == "calendar"
+        )
+        self.assertNotIn("month_target_pnl", calendar.value)
 
     def test_sessions_include_both_sides_of_cross_midnight_window(self):
         context = _context(

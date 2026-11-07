@@ -386,6 +386,12 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('reading_daily_goal', '20')"
     )
+    conn.execute(
+        "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('domestic_futures_monthly_target_pnl', '0')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('domestic_futures_daily_target_pnl', '0')"
+    )
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS import_batches (

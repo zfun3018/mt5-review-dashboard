@@ -25,6 +25,8 @@ test("net performance chart uses cumulative net pnl as a zero-based time series"
   assert.equal(option.series[0].smooth, 0.5);
   assert.equal(option.series[0].smoothMonotone, "x");
   assert.equal(option.series[0].sampling, "lttb");
+  assert.equal(option.yAxis.splitLine.show, false);
+  assert.equal(option.series[0].markLine.data[0].yAxis, 0);
 });
 
 test("A-plan charts use the dark graphite palette with readable axis contrast", async () => {
@@ -198,21 +200,28 @@ test("domestic calendar uses clean colored P/L labels and keeps counts in the to
   assert.equal(calendar.calendar.range[0], "2026-10-01");
   assert.equal(calendar.calendar.orient, "vertical");
   assert.equal(calendar.calendar.dayLabel.firstDay, 1);
-  assert.equal(calendar.calendar.dayLabel.fontSize, 12);
+  assert.equal(calendar.calendar.dayLabel.fontSize, 13);
   assert.equal(calendar.series[0].coordinateSystem, "calendar");
-  assert.deepEqual(calendar.series[0].data[0], ["2026-10-03", 120, 2, 0.5]);
+  assert.equal(calendar.series[0].data.length, 31);
+  assert.deepEqual(calendar.series[0].data[2], ["2026-10-03", 120, 2, 0.5]);
+  assert.deepEqual(calendar.series[0].data[0], ["2026-10-01", 0, 0, 0]);
   assert.equal(calendar.calendar.splitLine.show, false);
   assert.equal(calendar.calendar.itemStyle.color, "transparent");
   assert.equal(calendar.calendar.itemStyle.borderWidth, 0);
   assert.equal(calendar.series[0].itemStyle.color, "transparent");
   assert.equal(calendar.series[0].itemStyle.borderWidth, 0);
-  assert.equal(calendar.series[0].label.rich.profit.color, "#69d6ab");
-  assert.equal(calendar.series[0].label.rich.loss.color, "#ff7d88");
-  assert.equal(calendar.series[0].label.rich.day.fontSize, 11);
-  assert.equal(calendar.series[0].label.rich.profit.fontSize, 11);
-  assert.equal(calendar.series[0].label.formatter({value: ["2026-10-03", 120, 2, 0.5]}), "{day|03}\n{profit|+¥120}");
-  assert.equal(calendar.series[0].label.formatter({value: ["2026-10-04", -50, 1, 0]}), "{day|04}\n{loss|-¥50}");
-  assert.match(calendar.tooltip.formatter({value: ["2026-10-03", 120, 2, 0.5]}), /2 笔 · 胜率 50%/);
+  assert.equal(calendar.series[0].label.rich.profit.color, "#71e4b7");
+  assert.equal(calendar.series[0].label.rich.loss.color, "#ff929b");
+  assert.equal(calendar.series[0].label.fontSize, 12);
+  assert.equal(calendar.series[0].label.align, "center");
+  assert.equal(calendar.series[0].label.verticalAlign, "middle");
+  assert.equal(calendar.series[0].label.rich.day.fontSize, 13);
+  assert.equal(calendar.series[0].label.rich.profit.fontSize, 12);
+  assert.equal(calendar.series[0].label.formatter({value: ["2026-10-03", 120, 2, 0.5]}), "{day|03}\n{profit|+120}");
+  assert.equal(calendar.series[0].label.formatter({value: ["2026-10-04", -50, 1, 0]}), "{day|04}\n{loss|-50}");
+  assert.equal(calendar.series[0].label.formatter({value: ["2026-10-05", 0, 0, 0]}), "{day|05}\n{empty|}");
+  assert.match(calendar.tooltip.formatter({value: ["2026-10-03", 120, 2, 0.5]}), /净盈亏：120.*2 笔 · 胜率 50%/);
+  assert.doesNotMatch(calendar.tooltip.formatter({value: ["2026-10-03", 120, 2, 0.5]}), /¥/);
   assert.deepEqual(DOMESTIC_CHART_DEFINITIONS.map((item) => item.key), ["netPerformance", "monthlyPnl", "calendar", "riskGauge", "contractContribution", "contractLosses"]);
 });
 

@@ -491,7 +491,11 @@ class ApplicationRepositoryReadTest(TemporaryStorageCase):
         self.assertTrue(all(row["active"] for row in classifications))
         self.assertEqual(next(item for item in custom_fields if item["id"] == field["id"]), field)
         self.assertTrue(any(item["name"] == "犯错" for item in custom_fields))
-        self.assertEqual(analysis_settings, {"scratch_threshold_r": 0.15})
+        self.assertEqual(analysis_settings, {
+            "scratch_threshold_r": 0.15,
+            "domestic_futures_monthly_target_pnl": 0.0,
+            "domestic_futures_daily_target_pnl": 0.0,
+        })
 
     def test_album_repository_filters_counts_and_pages_before_custom_values(self):
         single = storage.create_custom_field(

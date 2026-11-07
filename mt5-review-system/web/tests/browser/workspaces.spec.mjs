@@ -146,6 +146,31 @@ test.describe("workspaces — desktop", () => {
     await expectNoErrors(page, errors);
   });
 
+  test("domestic futures calendar targets persist through the settings form and page reload", async ({page, syntheticServer}) => {
+    const errors = attachConsoleAssertions(page);
+    await page.goto(`${syntheticServer.baseURL}/settings/?platform=domestic_futures`);
+    await page.getByRole("tab", {name: "分析设置"}).click();
+
+    const monthly = page.getByLabel("月目标");
+    const daily = page.getByLabel("日均目标");
+    await expect(monthly).toBeVisible();
+    await monthly.fill("6800.50");
+    await daily.fill("320.25");
+    await page.getByRole("button", {name: "保存目标"}).click();
+    await expect(page.getByText("期货日历目标已保存")).toBeVisible();
+
+    const savedResponse = await page.request.get(`${syntheticServer.baseURL}/api/analysis-settings?platform=domestic_futures`);
+    const savedSettings = await savedResponse.json();
+    expect(savedSettings.domestic_futures_monthly_target_pnl).toBe(6800.5);
+    expect(savedSettings.domestic_futures_daily_target_pnl).toBe(320.25);
+
+    await page.reload();
+    await page.getByRole("tab", {name: "分析设置"}).click();
+    await expect(monthly).toHaveValue("6800.50");
+    await expect(daily).toHaveValue("320.25");
+    await expectNoErrors(page, errors);
+  });
+
   test("order detail modal closes on Escape", async ({ page, syntheticServer }) => {
     const errors = attachConsoleAssertions(page);
     await page.goto(`${syntheticServer.baseURL}/orders/`);

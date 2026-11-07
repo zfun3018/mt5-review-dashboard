@@ -286,15 +286,25 @@ class CampaignStorageTest(TemporaryStorageCase):
         self.assertEqual(filtered["campaigns"][0]["risk_status"], "missing")
 
     def test_analysis_setting_defaults_and_validates(self):
-        self.assertEqual(storage.get_analysis_settings()["scratch_threshold_r"], 0.15)
-        self.assertEqual(
-            storage.update_analysis_settings({"scratch_threshold_r": 0.2})[
-                "scratch_threshold_r"
-            ],
-            0.2,
-        )
+        defaults = storage.get_analysis_settings()
+        self.assertEqual(defaults["scratch_threshold_r"], 0.15)
+        self.assertEqual(defaults["domestic_futures_monthly_target_pnl"], 0)
+        self.assertEqual(defaults["domestic_futures_daily_target_pnl"], 0)
+        updated = storage.update_analysis_settings({
+            "scratch_threshold_r": 0.2,
+            "domestic_futures_monthly_target_pnl": 5000,
+            "domestic_futures_daily_target_pnl": 250,
+        })
+        self.assertEqual(updated["scratch_threshold_r"], 0.2)
+        self.assertEqual(updated["domestic_futures_monthly_target_pnl"], 5000)
+        self.assertEqual(updated["domestic_futures_daily_target_pnl"], 250)
+        self.assertEqual(storage.update_analysis_settings({"domestic_futures_daily_target_pnl": 300})["scratch_threshold_r"], 0.2)
         with self.assertRaises(ValueError):
             storage.update_analysis_settings({"scratch_threshold_r": -0.1})
+        for key in ("domestic_futures_monthly_target_pnl", "domestic_futures_daily_target_pnl"):
+            for value in (-1, float("nan"), float("inf"), 1e12):
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    storage.update_analysis_settings({key: value})
 
     def test_analysis_counts_one_merged_campaign(self):
         self._trade(

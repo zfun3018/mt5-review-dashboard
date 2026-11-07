@@ -201,7 +201,17 @@ class CatalogRepository:
     def get_analysis_settings(self, *, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
         context = nullcontext(conn) if conn is not None else closing(connect(self.paths))
         with context as active_conn:
-            row = active_conn.execute(
-                "SELECT value FROM analysis_settings WHERE key = 'scratch_threshold_r'"
-            ).fetchone()
-        return {"scratch_threshold_r": float(row["value"] if row else 0.15)}
+            rows = active_conn.execute(
+                "SELECT key, value FROM analysis_settings WHERE key IN (?, ?, ?) ",
+                (
+                    "scratch_threshold_r",
+                    "domestic_futures_monthly_target_pnl",
+                    "domestic_futures_daily_target_pnl",
+                ),
+            ).fetchall()
+        values = {row["key"]: float(row["value"]) for row in rows}
+        return {
+            "scratch_threshold_r": values.get("scratch_threshold_r", 0.15),
+            "domestic_futures_monthly_target_pnl": values.get("domestic_futures_monthly_target_pnl", 0),
+            "domestic_futures_daily_target_pnl": values.get("domestic_futures_daily_target_pnl", 0),
+        }

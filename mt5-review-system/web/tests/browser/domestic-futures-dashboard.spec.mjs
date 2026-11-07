@@ -36,8 +36,87 @@ test("domestic futures account dashboard renders without horizontal overflow", a
     await route.fulfill({response, json: payload});
   });
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=domestic_futures`);
-  await expect(page.getByRole("heading", {name: "固定周期指标"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "固定周期指标"})).toHaveCount(0);
+  await expect(page.locator('[data-module="period-overview"] .domestic-panel-head')).toHaveCount(0);
   await expect(page.getByText("最近 1 年", {exact: true})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "盈亏日历"})).toBeVisible();
+  await expect(page.locator("#domesticNetSummary")).toBeVisible();
+  const netChartOption = await page.locator("#domesticNetChart").evaluate((node) => {
+    const chart = globalThis.echarts?.getInstanceByDom(node);
+    const option = chart?.getOption();
+    return {
+      splitLine: option?.yAxis?.[0]?.splitLine?.show,
+      zeroAxis: option?.series?.[0]?.markLine?.data?.[0]?.yAxis,
+    };
+  });
+  expect(netChartOption.splitLine).toBe(false);
+  expect(netChartOption.zeroAxis).toBe(0);
+  const periodLayout = await page.locator('.domestic-period-module[data-module="period-overview"]').evaluate((node) => ({
+    cardCount: node.querySelectorAll(".domestic-period-card").length,
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth,
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  const layoutLinkStyle = await page.locator('.app-page-bar__filters .domestic-layout-link').evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {color: style.color, backgroundImage: style.backgroundImage};
+  });
+  expect(periodLayout.cardCount).toBe(5);
+  expect(periodLayout.scrollWidth).toBeLessThanOrEqual(periodLayout.clientWidth);
+  expect(periodLayout.scrollHeight).toBeLessThanOrEqual(periodLayout.clientHeight);
+  const periodCardStyles = await page.locator(".domestic-period-card").evaluateAll((cards) => cards.map((card) => {
+    const style = getComputedStyle(card);
+    return {borderTop: style.borderTop, borderTopColor: style.borderTopColor, borderTopWidth: style.borderTopWidth};
+  }));
+  expect(new Set(periodCardStyles.map(({borderTopColor}) => borderTopColor)).size).toBe(1);
+  expect(new Set(periodCardStyles.map(({borderTopWidth}) => borderTopWidth))).toEqual(new Set(["1px"]));
+  const compactModules = await page.evaluate(() => ["data-health", "review-coverage"].map((id) => {
+    const item = document.querySelector(`.domestic-dashboard-stage [gs-id="${id}"]`);
+    const module = item?.querySelector(".domestic-module");
+    return {
+      id,
+      gridHeight: item?.gridstackNode?.h,
+      fit: item?.dataset.layoutFit,
+      scrollWidth: module?.scrollWidth,
+      clientWidth: module?.clientWidth,
+      scrollHeight: module?.scrollHeight,
+      clientHeight: module?.clientHeight,
+    };
+  }));
+  expect(compactModules.find(({id}) => id === "data-health")).toMatchObject({gridHeight: 4, fit: "resize"});
+  expect(compactModules.find(({id}) => id === "review-coverage")).toMatchObject({gridHeight: 3, fit: "resize"});
+  for (const module of compactModules) {
+    expect(module.scrollWidth).toBeLessThanOrEqual(module.clientWidth);
+    expect(module.scrollHeight).toBeLessThanOrEqual(module.clientHeight);
+  }
+  await expect(page.locator(".domestic-health-bars .domestic-health-bar")).toHaveCount(2);
+  await expect(page.locator(".domestic-review-meter")).toHaveAttribute("role", "progressbar");
+  await expect(page.locator(".domestic-review-score")).toContainText("复盘完成");
+  expect(layoutLinkStyle.color).toBe("rgb(6, 33, 39)");
+  expect(layoutLinkStyle.backgroundImage).toContain("linear-gradient");
+  const shellChrome = await page.evaluate(() => {
+    const shell = document.querySelector(".app-shell");
+    const shellMain = document.querySelector(".app-shell__main");
+    const pageBar = document.querySelector(".app-page-bar");
+    const isMobile = window.innerWidth <= 720;
+    const read = (node) => {
+      const style = getComputedStyle(node);
+      return {backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, border: style.border, boxShadow: style.boxShadow};
+    };
+    return {shell: read(shell), shellMain: read(shellMain), pageBar: read(pageBar), isMobile};
+  });
+  if (shellChrome.isMobile) {
+    expect(shellChrome.shell.border).toMatch(/^0px none /);
+    expect(shellChrome.shell.boxShadow).toBe("none");
+  } else {
+    expect(shellChrome.shell.border).toMatch(/^1px solid /);
+    expect(shellChrome.shell.boxShadow).toContain("48px 130px");
+  }
+  expect(shellChrome.shellMain.backgroundColor).toBe("rgba(8, 11, 15, 0.18)");
+  expect(shellChrome.pageBar.border).toMatch(/^0px none /);
+  expect(shellChrome.pageBar.boxShadow).toBe("none");
+  expect(shellChrome.pageBar.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   await expect(page.getByRole("heading", {name: "合约亏损榜"})).toBeVisible();
   await expect(page.locator("#domesticNetChart canvas")).toHaveCount(1);
   await expect(page.locator("#domesticMonthlyChart canvas")).toHaveCount(1);
@@ -50,17 +129,41 @@ test("domestic futures account dashboard renders without horizontal overflow", a
     const option = chart?.getOption();
     const calendar = option?.calendar?.[0] || option?.calendar;
     const bounds = node.getBoundingClientRect();
+    const monthStart = Array.isArray(calendar?.range) ? calendar.range[0] : calendar?.range;
+    const [year, month] = String(monthStart || "").split("-").map(Number);
     return {
       orient: calendar?.orient,
       weekdayFontSize: calendar?.dayLabel?.fontSize,
+      labelFontSize: option?.series?.[0]?.label?.fontSize,
+      labelAlign: option?.series?.[0]?.label?.align,
       calendarWidth: bounds.width,
       calendarHeight: bounds.height,
+      cellCount: option?.series?.[0]?.data?.length || 0,
+      daysInMonth: new Date(Date.UTC(year, month, 0)).getUTCDate(),
     };
   });
   expect(calendarLayout.orient).toBe("vertical");
-  expect(calendarLayout.weekdayFontSize).toBe(12);
+  expect(calendarLayout.weekdayFontSize).toBe(13);
+  expect(calendarLayout.labelFontSize).toBe(12);
+  expect(calendarLayout.labelAlign).toBe("center");
   expect(calendarLayout.calendarWidth).toBeGreaterThan(0);
   expect(calendarLayout.calendarHeight).toBeGreaterThan(0);
+  expect(calendarLayout.cellCount).toBe(calendarLayout.daysInMonth);
+  await expect(page.locator(".domestic-calendar-module .domestic-calendar-progress")).toHaveCount(2);
+  const unsetGoalTrack = await page.locator(".domestic-calendar-goal.is-unset .domestic-calendar-progress").first().evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {height: style.height, backgroundImage: style.backgroundImage, borderColor: style.borderTopColor};
+  });
+  expect(unsetGoalTrack.height).toBe("13px");
+  expect(unsetGoalTrack.backgroundImage).toContain("repeating-linear-gradient");
+  const calendarOverflow = await page.locator(".domestic-calendar-module").evaluate((node) => ({
+    width: node.clientWidth,
+    scrollWidth: node.scrollWidth,
+    height: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(calendarOverflow.scrollWidth).toBeLessThanOrEqual(calendarOverflow.width);
+  expect(calendarOverflow.scrollHeight).toBeLessThanOrEqual(calendarOverflow.height);
   const contributionChart = await page.locator("#domesticContractContribution").evaluate((node) => {
     const chart = globalThis.echarts?.getInstanceByDom(node);
     const option = chart?.getOption();
@@ -109,6 +212,12 @@ test("domestic futures account dashboard renders without horizontal overflow", a
   expect(glass.shadow).toBe(glass.panelShadow);
   expect(glass.blur).toContain("blur(32px)");
   await assertNoOverflow(page);
+  const monthLabel = page.locator(".domestic-calendar-month-nav > span");
+  const currentMonth = await monthLabel.textContent();
+  const [currentYear, currentMonthNumber] = currentMonth.match(/(\d+)年(\d+)月/).slice(1).map(Number);
+  const nextMonthDate = new Date(Date.UTC(currentYear, currentMonthNumber, 1));
+  await page.locator('[data-calendar-month="next"]').click();
+  await expect(monthLabel).toHaveText(`${nextMonthDate.getUTCFullYear()}年${nextMonthDate.getUTCMonth() + 1}月`);
   expect(errors).toEqual([]);
 });
 
@@ -216,8 +325,9 @@ test("monthly futures chart renders separate profit and loss stacks with a month
 test("domestic futures dashboard keeps the period cards usable on 390px", async ({page, syntheticServer}) => {
   await page.setViewportSize({width: 390, height: 844});
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=domestic_futures`);
-  await expect(page.getByRole("heading", {name: "固定周期指标"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "固定周期指标"})).toHaveCount(0);
   await expect(page.locator(".domestic-period-grid")).toBeVisible();
+  await expect(page.locator('.domestic-period-module[data-module="period-overview"]')).toBeVisible();
   const chartSizes = await page.evaluate(() => ["domesticNetChart", "domesticMonthlyChart", "domesticRiskGauge", "domesticContractContribution", "domesticContractLosses"].map((id) => {
     const rect = document.getElementById(id)?.getBoundingClientRect();
     return {width: rect?.width || 0, height: rect?.height || 0};
@@ -260,7 +370,7 @@ test("domestic dashboard edits the same live GridStack modules and ECharts conta
     root.gridstack.update(calendar, {h: 1});
     return calendar.gridstackNode.h;
   });
-  expect(minCalendarHeight).toBe(5);
+  expect(minCalendarHeight).toBe(8);
 
   await page.evaluate(() => {
     const root = document.querySelector(".domestic-dashboard-stage");
@@ -277,7 +387,7 @@ test("domestic dashboard edits the same live GridStack modules and ECharts conta
   await page.locator("#domesticLayoutEditor [data-layout-save]").click();
   await expect(page).toHaveURL(/\/dashboard\/index\.html\?platform=domestic_futures$/);
   const savedLayout = await page.evaluate(() => JSON.parse(localStorage.getItem("domestic-futures-dashboard-layout-v3")));
-  expect(savedLayout.items.find((item) => item.id === "daily-calendar").h).toBe(5);
+  expect(savedLayout.items.find((item) => item.id === "daily-calendar").h).toBe(8);
   await expect(page.locator(".domestic-dashboard-stage > .grid-stack-item")).toHaveCount(11);
   for (const id of ["domesticNetChart", "domesticMonthlyChart", "domesticCalendarChart", "domesticRiskGauge", "domesticContractContribution", "domesticContractLosses"]) {
     await expect(page.locator(`#${id} canvas`)).toHaveCount(1);
@@ -304,7 +414,8 @@ test("domestic dashboard edits the same live GridStack modules and ECharts conta
     const module = item.querySelector(":scope > .grid-stack-item-content > .domestic-module");
     const fit = item.dataset.layoutFit;
     if (!module) return [{id: item.getAttribute("gs-id"), issue: "missing module"}];
-    if (item.gridstackNode.w !== item.gridstackNode.minW || item.gridstackNode.h !== item.gridstackNode.minH) {
+    if (item.getAttribute("gs-id") !== "period-overview"
+      && (item.gridstackNode.w !== item.gridstackNode.minW || item.gridstackNode.h !== item.gridstackNode.minH)) {
       return [{
         id: item.getAttribute("gs-id"),
         issue: "minimum size not applied",
@@ -326,7 +437,7 @@ test("domestic dashboard edits the same live GridStack modules and ECharts conta
         && rect.top >= moduleRect.top - 1 && rect.bottom <= moduleRect.bottom + 1 ? [] : [{
           id: item.getAttribute("gs-id"),
           issue: "child exceeds module bounds",
-          child: child.className,
+        child: child.className,
           bottomOverflow: Math.round(rect.bottom - moduleRect.bottom),
           rightOverflow: Math.round(rect.right - moduleRect.right),
         }];

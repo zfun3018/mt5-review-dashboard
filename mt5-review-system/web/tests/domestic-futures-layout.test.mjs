@@ -15,6 +15,15 @@ test("domestic futures layout schema exposes stable modules and defaults", async
   assert.deepEqual(cloneDefaultLayout(), DEFAULT_LAYOUT);
   assert.equal(DEFAULT_LAYOUT.items.find((item) => item.id === "net-performance").w, 8);
   assert.equal(DEFAULT_LAYOUT.items.find((item) => item.id === "period-overview").visible, true);
+  assert.equal(DEFAULT_LAYOUT.items.find((item) => item.id === "period-overview").fit, "resize");
+  assert.ok(DEFAULT_LAYOUT.items.find((item) => item.id === "period-overview").minH >= 5);
+  assert.ok(DEFAULT_LAYOUT.items.find((item) => item.id === "period-overview").maxH >= 16);
+  assert.deepEqual(DEFAULT_LAYOUT.items.find((item) => item.id === "data-health"), {
+    id: "data-health", x: 8, y: 21, w: 4, h: 4, minW: 3, minH: 4, maxW: 12, maxH: 16, title: "数据与导入", subtitle: "数据批次与质量", kind: "metrics", fit: "resize", visible: true,
+  });
+  assert.deepEqual(DEFAULT_LAYOUT.items.find((item) => item.id === "review-coverage"), {
+    id: "review-coverage", x: 0, y: 29, w: 4, h: 3, minW: 3, minH: 3, maxW: 12, maxH: 16, title: "复盘完成度", subtitle: "填写初始止损即视为完成", kind: "metrics", fit: "resize", visible: true,
+  });
   assert.equal(DEFAULT_LAYOUT.items.some((item) => item.id === "r-metrics"), false);
   assert.equal(DEFAULT_LAYOUT.items.find((item) => item.id === "net-performance").kind, "chart");
   assert.equal(DEFAULT_LAYOUT.items.find((item) => item.id === "net-performance").fit, "resize");
@@ -52,9 +61,10 @@ test("chart and dense-table modules declare minimum sizes that protect their liv
   const definitions = Object.fromEntries(getModuleDefinitions("domestic_futures").map((item) => [item.id, item]));
   assert.ok(definitions["net-performance"].minW >= 6);
   assert.ok(definitions["net-performance"].minH >= 6);
-  assert.ok(definitions["daily-calendar"].minW >= 4);
-  assert.equal(definitions["daily-calendar"].minH, 5);
-  assert.equal(definitions["daily-calendar"].h, 5);
+  assert.ok(definitions["daily-calendar"].minW >= 6);
+  assert.equal(definitions["daily-calendar"].minH, 8);
+  assert.equal(definitions["daily-calendar"].h, 8);
+  assert.equal(definitions["monthly-pnl"].w, 6);
   assert.ok(definitions["system-evaluation"].minW >= 8);
   assert.ok(definitions["system-evaluation"].minH >= 6);
   const mt5 = Object.fromEntries(getModuleDefinitions("mt5").map((item) => [item.id, item]));
@@ -104,8 +114,17 @@ test("layout normalization migrates the old default calendar size and preserves 
   const previousDefault = normalizeLayout({items: [{id: "daily-calendar", x: 8, y: 13, w: 4, h: 7}]});
   const customHeight = normalizeLayout({items: [{id: "daily-calendar", x: 8, y: 13, w: 4, h: 8}]});
 
-  assert.equal(previousDefault.items.find((item) => item.id === "daily-calendar").h, 5);
+  assert.deepEqual(previousDefault.items.find((item) => item.id === "daily-calendar"), {
+    id: "daily-calendar", x: 6, y: 13, w: 6, h: 8, minW: 6, minH: 8, maxW: 12, maxH: 16, kind: "calendar", fit: "resize", visible: true, title: "盈亏日历", subtitle: "",
+  });
   assert.equal(customHeight.items.find((item) => item.id === "daily-calendar").h, 8);
+  const pairedDefaults = normalizeLayout({items: [
+    {id: "monthly-pnl", x: 0, y: 13, w: 8, h: 8},
+    {id: "daily-calendar", x: 8, y: 13, w: 4, h: 7},
+  ]});
+  assert.deepEqual(pairedDefaults.items.find((item) => item.id === "monthly-pnl"), {
+    id: "monthly-pnl", x: 0, y: 13, w: 6, h: 8, minW: 4, minH: 6, maxW: 12, maxH: 16, kind: "chart", fit: "resize", visible: true, title: "月度盈亏", subtitle: "正柱为品种盈利堆叠，负柱为品种亏损堆叠，折线展示月度净盈亏",
+  });
 });
 
 test("layout normalization refreshes prior default monthly pnl descriptions and keeps custom text", async () => {

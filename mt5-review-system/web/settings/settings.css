@@ -325,6 +325,24 @@
   width: 120px;
 }
 
+.settings-calendar-target-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 190px) auto auto minmax(120px, 190px) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-calendar-target-row label,
+.settings-calendar-target-row > span {
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.settings-calendar-target-row input {
+  width: 100%;
+  min-width: 0;
+}
+
 .settings-import-row {
   display: flex;
   flex-wrap: wrap;
@@ -741,6 +759,18 @@
   .settings-threshold-row input {
     flex: 1;
     width: auto;
+  }
+
+  .settings-calendar-target-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .settings-calendar-target-row label:nth-of-type(2) {
+    grid-column: 1;
+  }
+
+  .settings-calendar-target-row button {
+    grid-column: 1 / -1;
   }
 
   .import-calendar-cell {

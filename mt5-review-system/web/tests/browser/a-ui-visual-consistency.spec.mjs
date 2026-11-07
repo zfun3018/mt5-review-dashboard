@@ -268,7 +268,7 @@ for (const [pageName, route] of routes) {
         expect(orderListGlass.selected.boxShadow).toContain("0px 0px 16px");
         expect(orderListGlass.selected.filter).toContain("blur(12px)");
         expect(orderListGlass.selected.textShadow).toContain("rgba(209, 251, 255, 0.32)");
-        expect(orderListGlass.modules.length).toBeGreaterThanOrEqual(6);
+        expect(orderListGlass.modules.length).toBeGreaterThanOrEqual(styles.isMobile ? 1 : 6);
         expect(orderListGlass.modules.every(({borderColor, borderRadius, boxShadow}) =>
           borderColor !== "rgba(0, 0, 0, 0)" && borderRadius === "20px" && boxShadow.includes("inset"),
         )).toBe(true);

@@ -86,20 +86,42 @@ test("real dashboard mounts domestic futures modules and opens the live editor",
   assert.match(html, /data-domestic-filter/);
   assert.match(html, /index\.html\?platform=domestic_futures&amp;layout=edit/);
   assert.match(html, /id="domesticFixedPeriods"/);
+  assert.doesNotMatch(html, /<header class="domestic-panel-head">[\s\S]*?固定周期指标/);
+  assert.doesNotMatch(html, /domestic-fixed-badge/);
   assert.match(html, /id="domesticMonthlyChart"/);
+  assert.match(html, /<header class="domestic-panel-head">[\s\S]*id="domesticNetSummary" class="domestic-chart-head-summary"[\s\S]*<\/header>[\s\S]*id="domesticNetChart"/);
+  assert.doesNotMatch(html, /id="domesticNetChart"[^>]*>[\s\S]*id="domesticNetSummary"/);
   assert.match(html, /id="domesticContractContribution" class="domestic-contract-chart"/);
   assert.match(html, /id="domesticCalendarChart"/);
+  assert.match(html, /class="domestic-module domestic-module-panel domestic-calendar-module"[^>]*data-module="daily-calendar"/);
+  assert.match(css, /\.domestic-calendar-module\s*\{[\s\S]*grid-template-columns:\s*minmax\(190px, \.72fr\) minmax\(0, 1\.6fr\)/);
+  assert.match(css, /\.domestic-calendar-progress\s*\{[\s\S]*border-radius:\s*var\(--radius-pill\)/);
   assert.match(html, /id="domesticRiskGauge"/);
   assert.match(html, /id="domesticRiskFactors"/);
   assert.doesNotMatch(html, /domestic-risk-meter/);
   assert.match(html, /id="domesticContractLosses"/);
   assert.match(html, /data-domestic-preset="all"/);
   assert.match(html, /data-domestic-custom-dates/);
+  assert.doesNotMatch(html, /domestic-dashboard-intro/);
+  assert.doesNotMatch(html, /domestic-cost-note/);
+  assert.match(html, /data-domestic-custom-dates[\s\S]*?domestic-layout-link/);
   assert.match(html, /document\.body\.dataset\.platform = platform/);
   assert.match(css, /--domestic-ink:\s*var\(--color-text\)/);
   assert.match(css, /--domestic-panel:\s*var\(--color-surface\)/);
   assert.doesNotMatch(css, /color-scheme:\s*light|#f5f8f7|background:\s*#fbfcfc/);
   assert.doesNotMatch(css, /domestic-risk-meter/);
+  assert.match(css, /\.domestic-period-grid\s*\{[\s\S]*auto-fit/);
+  assert.match(css, /\.domestic-period-module\s*\{[\s\S]*overflow:\s*hidden/);
+});
+
+test("domestic futures layout link follows the time filter in the shared page bar", () => {
+  const html = fs.readFileSync(path.join(webRoot, "dashboard/index.html"), "utf8");
+  const filterEnd = html.indexOf("</section>", html.indexOf('data-domestic-filter'));
+  const layoutLink = html.indexOf('class="domestic-layout-link"');
+
+  assert.ok(filterEnd > -1);
+  assert.ok(layoutLink > html.indexOf('data-domestic-custom-dates'));
+  assert.ok(layoutLink < filterEnd);
 });
 
 test("dashboard routes each platform to its matching controller", () => {

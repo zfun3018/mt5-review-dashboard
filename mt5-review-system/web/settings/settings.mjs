@@ -50,6 +50,7 @@ export function createSettingsController({
   location = globalThis.location,
   history = globalThis.history,
   onRefresh = null,
+  toast: toastOverride = null,
   confirm = (message) => (globalThis.confirm ? globalThis.confirm(message) : true),
 } = {}) {
   const gate = new RequestGate();
@@ -57,7 +58,11 @@ export function createSettingsController({
     tab: "classifications",
     classifications: [],
     customFields: [],
-    analysisSettings: { scratch_threshold_r: 0.15 },
+    analysisSettings: {
+      scratch_threshold_r: 0.15,
+      domestic_futures_monthly_target_pnl: 0,
+      domestic_futures_daily_target_pnl: 0,
+    },
     status: null,
     backups: [],
     importBatches: [],
@@ -74,6 +79,10 @@ export function createSettingsController({
   let scratchValue = null;
 
   function toast(message, options) {
+    if (typeof toastOverride === "function") {
+      toastOverride(message, options);
+      return;
+    }
     if (typeof view.getElementById !== "function") return;
     if (typeof globalThis.document === "undefined") return;
     showToast(message, options);
@@ -138,6 +147,9 @@ export function createSettingsController({
     state.dataAccounts = accounts?.accounts || [];
     scratchValue = Number(state.analysisSettings.scratch_threshold_r ?? 0.15);
     renderScratchThreshold();
+    renderDomesticCalendarTargets();
+    const targetSettings = getElement("domesticCalendarTargets");
+    if (targetSettings) targetSettings.hidden = platform !== "domestic_futures";
     renderStatus();
     renderBackups();
     classificationsModule.render();
@@ -255,6 +267,13 @@ export function createSettingsController({
   function renderScratchThreshold() {
     const input = getElement("scratchThresholdR");
     if (input) input.value = Number(scratchValue).toFixed(2);
+  }
+
+  function renderDomesticCalendarTargets() {
+    const monthly = getElement("domesticMonthlyTargetPnl");
+    const daily = getElement("domesticDailyTargetPnl");
+    if (monthly) monthly.value = Number(state.analysisSettings.domestic_futures_monthly_target_pnl ?? 0).toFixed(2);
+    if (daily) daily.value = Number(state.analysisSettings.domestic_futures_daily_target_pnl ?? 0).toFixed(2);
   }
 
   function renderStatus() {
@@ -603,6 +622,50 @@ export function createSettingsController({
     return true;
   }
 
+  async function saveDomesticCalendarTargets(values = {}) {
+    if (readPlatform(location) !== "domestic_futures") return false;
+    const monthlyRaw = values.monthly ?? getElement("domesticMonthlyTargetPnl")?.value;
+    const dailyRaw = values.daily ?? getElement("domesticDailyTargetPnl")?.value;
+    const monthly = Number(monthlyRaw);
+    const daily = Number(dailyRaw);
+    if (!Number.isFinite(monthly) || !Number.isFinite(daily)
+      || monthly < 0 || daily < 0 || monthly > 1e9 || daily > 1e9) {
+      toast("月目标和日均目标须为 0 到 1,000,000,000 之间的有效金额", {tone: "error"});
+      renderDomesticCalendarTargets();
+      return false;
+    }
+    try {
+      const updated = await api.requestJson("/api/analysis-settings", {
+        method: "PATCH",
+        body: {
+          domestic_futures_monthly_target_pnl: monthly,
+          domestic_futures_daily_target_pnl: daily,
+        },
+      });
+      if (!Number.isFinite(Number(updated?.domestic_futures_monthly_target_pnl))
+        || !Number.isFinite(Number(updated?.domestic_futures_daily_target_pnl))) {
+        throw new Error("当前本地服务尚未识别期货日历目标字段，请重启本地服务后重试");
+      }
+      const persisted = await api.requestJson("/api/analysis-settings");
+      const savedMonthly = Number(persisted?.domestic_futures_monthly_target_pnl);
+      const savedDaily = Number(persisted?.domestic_futures_daily_target_pnl);
+      if (!Number.isFinite(savedMonthly) || !Number.isFinite(savedDaily)
+        || Math.abs(savedMonthly - monthly) > 1e-9 || Math.abs(savedDaily - daily) > 1e-9) {
+        throw new Error("目标未能从本地服务回读，请重启本地服务后重试");
+      }
+      state.analysisSettings = {...state.analysisSettings, ...persisted};
+      renderDomesticCalendarTargets();
+      toast("期货日历目标已保存");
+      return true;
+    } catch (error) {
+      const message = Number(error?.status) === 400 || Number(error?.status) === 404
+        ? "当前本地服务尚未支持期货日历目标保存，请重启本地服务后重试"
+        : error?.message || "期货日历目标保存失败，请稍后重试";
+      toast(message, {tone: "error"});
+      return false;
+    }
+  }
+
   async function createBackup() {
     const backup = await api.requestJson("/api/backups", { method: "POST" });
     state.backups = [backup, ...state.backups.filter((item) => item.id !== backup.id)];
@@ -698,6 +761,7 @@ export function createSettingsController({
       }
     });
     getElement("saveScratchThreshold")?.addEventListener("click", () => saveScratchThreshold());
+    getElement("saveDomesticCalendarTargets")?.addEventListener("click", () => saveDomesticCalendarTargets());
     getElement("refreshStatus")?.addEventListener("click", refreshStatus);
     getElement("previewDataCleanup")?.addEventListener("click", () => previewDataCleanup().catch(() => {}));
     getElement("executeDataCleanup")?.addEventListener("click", () => executeDataCleanup().catch((error) => {
@@ -730,6 +794,7 @@ export function createSettingsController({
     loadImportBatchIssues,
     downloadFuturesTemplate,
     saveScratchThreshold,
+    saveDomesticCalendarTargets,
     createBackup,
     importFuturesData,
     refreshImportReconciliation,

@@ -63,7 +63,6 @@ html[data-platform="domestic_futures"] .app-navigation__link[aria-current="page"
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-html[data-platform="mt5"] .app-page-bar,
 html[data-platform="domestic_futures"] .app-page-bar {
   top: 12px;
   min-height: 56px;
@@ -72,10 +71,10 @@ html[data-platform="domestic_futures"] .app-page-bar {
   border: 0;
   border-bottom: 0;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.035);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.09);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 html[data-platform="mt5"] .app-page-bar h1,
@@ -276,8 +275,7 @@ html[data-platform] .app-page-bar__actions > .app-icon-button {
 }
 
 html[data-platform="mt5"] .filter-bar,
-html[data-platform="domestic_futures"] .domestic-filter-bar,
-html[data-platform="domestic_futures"] .domestic-cost-note {
+html[data-platform="domestic_futures"] .domestic-filter-bar {
   background: var(--glass-base);
   border-color: var(--color-border);
   box-shadow: var(--shadow-raised);
@@ -302,7 +300,6 @@ html[data-platform="domestic_futures"] .dashboard-glass-module [data-module-subt
 @media (prefers-reduced-transparency: reduce) {
   html[data-platform="mt5"] .filter-bar,
   html[data-platform="domestic_futures"] .domestic-filter-bar,
-  html[data-platform="domestic_futures"] .domestic-cost-note,
   html[data-platform="mt5"] .dashboard-glass-module,
   html[data-platform="domestic_futures"] .dashboard-glass-module {
     background: var(--glass-base-fallback);
@@ -327,5 +324,14 @@ html[data-platform="domestic_futures"] .dashboard-glass-module [data-module-subt
   html[data-platform="mt5"] .mt5-dashboard-layout .dashboard-glass-module[data-glass-layer="clear"],
   html[data-platform="domestic_futures"] .domestic-dashboard-stage .dashboard-glass-module[data-glass-layer="clear"] {
     background: var(--glass-clear-fallback);
+  }
+}
+
+/* Keep the domestic futures toolbar continuous with the page background,
+   including when the system requests reduced transparency. */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-platform="domestic_futures"] .app-page-bar {
+    background: transparent;
+    box-shadow: none;
   }
 }

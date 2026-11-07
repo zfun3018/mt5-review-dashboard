@@ -110,6 +110,15 @@ function compactAxisValue(value) {
   return `${sign}¥${Math.round(absolute).toLocaleString("zh-CN")}`;
 }
 
+function compactCalendarValue(value) {
+  const amount = toFiniteNumber(value);
+  const sign = amount < 0 ? "-" : "";
+  const absolute = Math.abs(amount);
+  if (absolute >= 10000) return `${sign}${(absolute / 10000).toFixed(1)}万`;
+  if (absolute >= 1000) return `${sign}${(absolute / 1000).toFixed(1)}k`;
+  return `${sign}${Math.round(absolute).toLocaleString("zh-CN")}`;
+}
+
 function axisBounds(values) {
   const finiteValues = values.filter(Number.isFinite);
   if (!finiteValues.length) return {min: -1, max: 1};
@@ -151,7 +160,7 @@ export function buildNetPerformanceOption(payload = {}) {
       axisLabel: {color: "#8d96a3", formatter: compactAxisValue},
       axisLine: {show: false},
       axisTick: {show: false},
-      splitLine: {lineStyle: {color: "rgba(255, 255, 255, 0.08)", type: "dashed"}},
+      splitLine: {show: false},
     },
     series: [{
       name: "累计净盈亏",
@@ -521,18 +530,23 @@ export function buildDomesticCalendarOption(payload = {}) {
     ? new Date(Date.UTC(year, month, 0)).getUTCDate()
     : 0;
   const state = chartMetricState(payload, "calendar");
-  const data = Object.entries(calendar.days || {})
+  const recordedDays = Object.entries(calendar.days || {})
     .map(([key, item]) => [String(item?.label || key).slice(0, 10), item])
     .filter(([day]) => /^\d{4}-\d{2}-\d{2}$/.test(day) && day.startsWith(`${monthKey}-`))
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([day, item]) => [day, toFiniteNumber(item?.net_pnl), toFiniteNumber(item?.order_count), toFiniteNumber(item?.win_rate)]);
+    .sort(([left], [right]) => left.localeCompare(right));
+  const byDay = new Map(recordedDays);
+  const data = state ? [] : Array.from({length: daysInMonth}, (_, index) => {
+    const day = `${monthKey}-${String(index + 1).padStart(2, "0")}`;
+    const item = byDay.get(day);
+    return [day, toFiniteNumber(item?.net_pnl), toFiniteNumber(item?.order_count), toFiniteNumber(item?.win_rate)];
+  });
 
   return {
     animation: false,
     tooltip: {
       formatter: (params) => {
         const [day, pnl = 0, count = 0, winRate = 0] = params?.value || [];
-        return `${day}<br/>净盈亏：${compactAxisValue(pnl)}<br/>交易：${count} 笔 · 胜率 ${Math.round(winRate * 100)}%`;
+        return `${day}<br/>净盈亏：${compactCalendarValue(pnl)}<br/>交易：${count} 笔 · 胜率 ${Math.round(winRate * 100)}%`;
       },
     },
     calendar: {
@@ -545,7 +559,7 @@ export function buildDomesticCalendarOption(payload = {}) {
       bottom: 4,
       splitLine: {show: false},
       itemStyle: {borderWidth: 0, borderColor: "transparent", color: "transparent"},
-      dayLabel: {firstDay: 1, nameMap: ["日", "一", "二", "三", "四", "五", "六"], color: "#8d96a3", fontSize: 12, margin: 8},
+      dayLabel: {firstDay: 1, nameMap: ["日", "一", "二", "三", "四", "五", "六"], color: "#aab8c5", fontSize: 13, margin: 9},
       monthLabel: {show: false},
       yearLabel: {show: false},
     },
@@ -557,18 +571,20 @@ export function buildDomesticCalendarOption(payload = {}) {
       label: {
         show: true,
         color: "#f1f4f6",
-        fontSize: 11,
-        lineHeight: 15,
+        fontSize: 12,
+        lineHeight: 17,
+        align: "center",
+        verticalAlign: "middle",
         rich: {
-          day: {color: "#8d96a3", fontSize: 11, lineHeight: 13},
-          profit: {color: "#69d6ab", fontSize: 11, fontWeight: 700, lineHeight: 15},
-          loss: {color: "#ff7d88", fontSize: 11, fontWeight: 700, lineHeight: 15},
-          flat: {color: "#b7bec8", fontSize: 11, fontWeight: 600, lineHeight: 15},
-          empty: {color: "#64707d", fontSize: 11, lineHeight: 15},
+          day: {color: "#c0ccd5", fontSize: 13, fontWeight: 650, lineHeight: 16, align: "center"},
+          profit: {color: "#71e4b7", fontSize: 12, fontWeight: 750, lineHeight: 17, align: "center"},
+          loss: {color: "#ff929b", fontSize: 12, fontWeight: 750, lineHeight: 17, align: "center"},
+          flat: {color: "#c5ced5", fontSize: 12, fontWeight: 650, lineHeight: 17, align: "center"},
+          empty: {color: "#667582", fontSize: 12, lineHeight: 17, align: "center"},
         },
         formatter: (params) => {
           const [day, pnl = 0, count = 0] = params?.value || [];
-          const amount = count ? `${Number(pnl) > 0 ? "+" : ""}${compactAxisValue(pnl)}` : "—";
+          const amount = count ? `${Number(pnl) > 0 ? "+" : ""}${compactCalendarValue(pnl)}` : "";
           const tone = !count ? "empty" : Number(pnl) > 0 ? "profit" : Number(pnl) < 0 ? "loss" : "flat";
           return `{day|${String(day).slice(-2)}}\n{${tone}|${amount}}`;
         },

@@ -150,11 +150,57 @@ function renderRisk(view, payload) {
 function renderCalendarSummary(view, payload) {
   const calendar = payload?.calendar;
   if (!calendar) return renderEmpty(view, "domesticCalendarSummary");
-  setHtml(view, "domesticCalendarSummary", `<div class="domestic-calendar-summary"><strong class="${profitClass(calendar.month_net_pnl)}">${money(calendar.month_net_pnl)}</strong><span>${calendar.year}年${calendar.month}月 · ${calendar.month_order_count || 0} 笔 · 胜率 ${formatPercent(calendar.month_win_rate)}</span></div>`);
+  const monthTarget = Number(calendar.month_target_pnl) || 0;
+  const dailyTarget = Number(calendar.daily_target_pnl) || 0;
+  const monthPercent = calendar.month_target_completion_percent;
+  const dailyMet = Number(calendar.daily_target_days_met) || 0;
+  const dailyTotal = Number(calendar.daily_target_days_total) || 0;
+  const monthProgress = monthTarget > 0 && Number.isFinite(Number(monthPercent))
+    ? Math.max(0, Math.min(100, Number(monthPercent)))
+    : 0;
+  const dailyProgress = dailyTarget > 0 && dailyTotal > 0 ? Math.max(0, Math.min(100, dailyMet / dailyTotal * 100)) : 0;
+  setHtml(view, "domesticCalendarSummary", `
+    <div class="domestic-calendar-month">
+      <h3 class="domestic-calendar-title">盈亏日历</h3>
+      <div class="domestic-calendar-month-nav">
+        <button class="app-icon-button" type="button" data-calendar-month="previous" title="上月" aria-label="上月">‹</button>
+        <span>${calendar.year}年${calendar.month}月</span>
+        <button class="app-icon-button" type="button" data-calendar-month="next" title="下月" aria-label="下月">›</button>
+      </div>
+      <div class="domestic-calendar-month-result">
+        <p class="domestic-calendar-eyebrow">本月净盈亏</p>
+        <strong class="domestic-calendar-total ${profitClass(calendar.month_net_pnl)}">${money(calendar.month_net_pnl)}</strong>
+        <span class="domestic-calendar-trades">${calendar.month_order_count || 0} 笔平仓 · 胜率 ${formatPercent(calendar.month_win_rate)}</span>
+      </div>
+    </div>
+    <div class="domestic-calendar-goals">
+      <div class="domestic-calendar-goal ${dailyTarget > 0 ? "" : "is-unset"}">
+        <div class="domestic-calendar-goal-head">
+          <div class="domestic-calendar-goal-label"><span>日均目标</span><strong>${dailyTarget > 0 ? money(dailyTarget) : "未设置"}</strong></div>
+          <b class="domestic-calendar-goal-value">${dailyTarget > 0 ? `${dailyMet}/${dailyTotal}天` : "待设置"}</b>
+        </div>
+        <div class="domestic-calendar-progress" role="progressbar" aria-label="日均目标达成天数" aria-valuemin="0" aria-valuemax="${dailyTotal}" aria-valuenow="${dailyTarget > 0 ? dailyMet : 0}"><i style="width:${dailyProgress}%"></i></div>
+        <small>${dailyTarget > 0 ? "当日净盈亏达到目标即计为达标" : "设置日均目标后查看达标天数"}</small>
+      </div>
+      <div class="domestic-calendar-goal ${monthTarget > 0 ? "" : "is-unset"}">
+        <div class="domestic-calendar-goal-head">
+          <div class="domestic-calendar-goal-label"><span>月目标</span><strong>${monthTarget > 0 ? money(monthTarget) : "未设置"}</strong></div>
+          <b class="domestic-calendar-goal-value">${monthTarget > 0 && Number.isFinite(Number(monthPercent)) ? `${Number(monthPercent).toFixed(1)}%` : "待设置"}</b>
+        </div>
+        <div class="domestic-calendar-progress" role="progressbar" aria-label="月目标完成度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${monthTarget > 0 ? monthProgress : 0}"><i style="width:${monthProgress}%"></i></div>
+        <small>${monthTarget > 0 ? `${money(calendar.month_net_pnl)} / ${money(monthTarget)}` : "设置月目标后查看完成度"}</small>
+      </div>
+    </div>`);
 }
 
 function renderDataHealth(view, payload, importSummary, platform = "domestic_futures") {
   const metrics = payload?.metrics || {};
+  const orderCount = Math.max(0, Number(metrics.order_count) || 0);
+  const winCount = Math.max(0, Number(metrics.win_count) || 0);
+  const lossCount = Math.max(0, Number(metrics.loss_count) || 0);
+  const baseCount = Math.max(1, orderCount, winCount + lossCount);
+  const winPercent = Math.min(100, Math.round(winCount / baseCount * 100));
+  const lossPercent = Math.min(100, Math.round(lossCount / baseCount * 100));
   const latest = importSummary?.latest_trade;
   const status = platform === "mt5"
     ? (metrics.order_count ? "已读取本地组合" : "等待 MT5 同步")
@@ -162,7 +208,7 @@ function renderDataHealth(view, payload, importSummary, platform = "domestic_fut
   const note = platform === "mt5"
     ? (metrics.order_count ? "统计以合并后的交易组合为单位" : "可在 MT5 工作区执行同步")
     : (latest ? safe(String(latest.time_bj || "").replace("T", " ").slice(0, 16)) : "可在设置页导入成交记录");
-  setHtml(view, "domesticDataHealth", `<div class="domestic-health-status"><span class="health-dot"></span><div><strong>${status}</strong><small>${note}</small></div></div><div class="domestic-health-list"><span>分析交易<strong>${metrics.order_count || 0}</strong></span><span>盈利笔数<strong>${metrics.win_count || 0}</strong></span><span>亏损笔数<strong>${metrics.loss_count || 0}</strong></span><span>费用记录<strong>${metrics.fee_total ? "已计入" : "暂无"}</strong></span></div>`);
+  setHtml(view, "domesticDataHealth", `<div class="domestic-health-status"><span class="health-dot"></span><div><strong>${status}</strong><small>${note}</small></div></div><div class="domestic-health-visual" aria-label="交易盈亏分布"><div class="domestic-health-bars"><div class="domestic-health-bar"><span>盈利</span><i><em style="width:${winPercent}%"></em></i><strong>${winCount}</strong></div><div class="domestic-health-bar is-loss"><span>亏损</span><i><em style="width:${lossPercent}%"></em></i><strong>${lossCount}</strong></div></div><div class="domestic-health-total"><strong>${orderCount}</strong><span>分析交易</span></div></div><div class="domestic-health-list"><span>费用记录<strong>${metrics.fee_total ? "已计入" : "暂无"}</strong></span><span>数据状态<strong>${latest ? "完整" : "待导入"}</strong></span></div>`);
 }
 
 function renderReviewCoverage(view, payload) {
@@ -170,7 +216,7 @@ function renderReviewCoverage(view, payload) {
   const total = Number(coverage.total || payload?.metrics?.order_count || 0);
   const reviewed = Number(coverage.reviewed || 0);
   const percent = total ? Math.round(reviewed / total * 100) : 0;
-  setHtml(view, "domesticReviewCoverage", `<p>填写初始止损即视为复盘完成</p><div class="domestic-review-meter"><i style="width:${percent}%"></i></div><div class="domestic-review-meta"><strong>${percent}%</strong><span>${reviewed} / ${total} 笔已完成</span></div><div class="domestic-review-note">尚未填写初始止损：${Math.max(0, total - reviewed)} 笔</div>`);
+  setHtml(view, "domesticReviewCoverage", `<div class="domestic-review-strip"><div class="domestic-review-score"><strong>${percent}%</strong><span>复盘完成</span></div><div class="domestic-review-meter" role="progressbar" aria-label="复盘完成度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="domestic-review-meta"><strong>${reviewed} / ${total}</strong><span>笔已完成 · 待复盘 ${Math.max(0, total - reviewed)} 笔</span></div></div>`);
 }
 
 function renderSystemEvaluation(view, payload) {
@@ -199,6 +245,64 @@ function renderRMetrics(view, payload) {
   setHtml(view, "domesticRMetrics", `<div class="domestic-r-grid">${values.map(([label, value, tone]) => `<div><span>${label}</span><strong class="${tone}">${value}</strong></div>`).join("")}</div><small class="domestic-module-note">已完成 R 计算：${metrics.complete_count || 0} / ${metrics.sample_count || 0} 笔组合</small>`);
 }
 
+export function createPeriodModuleHeightController({
+  root,
+  gridController,
+  ResizeObserver = globalThis.ResizeObserver,
+  MutationObserver = globalThis.MutationObserver,
+  requestAnimationFrame = globalThis.requestAnimationFrame,
+  cancelAnimationFrame = globalThis.cancelAnimationFrame,
+} = {}) {
+  const module = root?.querySelector?.('[data-module="period-overview"]');
+  const cards = module?.querySelector?.(".domestic-period-grid");
+  const wrapper = module?.closest?.(".grid-stack-item");
+  const grid = gridController?.grid;
+  if (!module || !cards || !wrapper || !grid || typeof ResizeObserver !== "function") {
+    return {refresh() {}, dispose() {}};
+  }
+
+  let frame = null;
+  const schedule = () => {
+    if (frame !== null) return;
+    const run = () => {
+      frame = null;
+      const node = wrapper.gridstackNode;
+      const contentHeight = cards.scrollHeight;
+      if (!node || !contentHeight) return;
+      const cellHeight = Number(grid.getCellHeight?.()) || 48;
+      const minHeight = Number(node.minH) || 1;
+      const maxHeight = Number(node.maxH) || 999;
+      const nextHeight = Math.min(maxHeight, Math.max(minHeight, Math.ceil((contentHeight + 4) / cellHeight)));
+      if (nextHeight !== node.h) grid.update?.(wrapper, {h: nextHeight});
+    };
+    frame = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame(run)
+      : globalThis.setTimeout(run, 0);
+  };
+
+  const sizeObserver = new ResizeObserver(schedule);
+  sizeObserver.observe(module);
+  sizeObserver.observe(cards);
+  const mutationObserver = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
+  mutationObserver?.observe(cards, {childList: true, subtree: true, characterData: true});
+  grid.on?.("change resizestop", schedule);
+  schedule();
+
+  return {
+    refresh: schedule,
+    dispose() {
+      sizeObserver.disconnect();
+      mutationObserver?.disconnect();
+      grid.off?.("change resizestop", schedule);
+      if (frame !== null) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
+        else globalThis.clearTimeout(frame);
+        frame = null;
+      }
+    },
+  };
+}
+
 export function createDomesticFuturesDashboardController({api, view = globalThis.document, location = globalThis.location, history = globalThis.history, onRefresh = null, platform = readPlatform(location)} = {}) {
   platform = normalizePlatform(platform);
   const gate = new RequestGate();
@@ -207,6 +311,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
   let importSummary = null;
   let charts = null;
   let gridController = null;
+  let periodHeightController = null;
   let layoutEditorController = null;
   let loadRevision = 0;
   const root = view.getElementById("domesticDashboard");
@@ -255,6 +360,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
         GridStack: globalThis.GridStack,
         document: view,
       });
+      periodHeightController = createPeriodModuleHeightController({root: stage, gridController});
       layoutEditorController = mountDashboardLayoutEditorMode({
         root: stage,
         toolbar: view.getElementById("domesticLayoutEditor"),
@@ -285,6 +391,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
       metricMeta: payload?.metric_meta || {},
     });
     renderRMetrics(view, payload);
+    periodHeightController?.refresh?.();
     const rangeLabel = state.preset === "all"
       ? "全部时间"
       : (FILTER_PRESETS.find((item) => item.value === state.preset)?.label || "自定义");
@@ -315,6 +422,15 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
     if (end) end.value = state.end || "";
     start?.addEventListener("change", (event) => { commitState({preset: "custom", start: event.target.value}); load(); });
     end?.addEventListener("change", (event) => { commitState({preset: "custom", end: event.target.value}); load(); });
+    root?.addEventListener?.("click", (event) => {
+      const button = event.target?.closest?.("[data-calendar-month]");
+      if (!button) return;
+      const calendar = payload?.calendar || {};
+      const current = new Date(Number(calendar.year) || new Date().getFullYear(), (Number(calendar.month) || 1) - 1, 1);
+      current.setMonth(current.getMonth() + (button.dataset.calendarMonth === "previous" ? -1 : 1));
+      commitState({year: current.getFullYear(), month: current.getMonth() + 1});
+      load();
+    });
     syncPresetUi();
   }
 
@@ -335,6 +451,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
     loadRevision += 1;
     gate.abortAll();
     charts?.dispose();
+    periodHeightController?.dispose?.();
     gridController?.destroy?.();
     layoutEditorController?.dispose?.();
   }

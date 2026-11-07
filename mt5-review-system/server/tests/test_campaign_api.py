@@ -108,8 +108,50 @@ class CampaignApiTest(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(settings["scratch_threshold_r"], 0.15)
+        self.assertEqual(settings["domestic_futures_monthly_target_pnl"], 0)
+        self.assertEqual(settings["domestic_futures_daily_target_pnl"], 0)
         self.assertEqual(patch_status, 200)
         self.assertEqual(updated["scratch_threshold_r"], 0.2)
+
+        _, saved = self.request(
+            "/api/analysis-settings",
+            method="PATCH",
+            payload={
+                "domestic_futures_monthly_target_pnl": 5000,
+                "domestic_futures_daily_target_pnl": 250,
+            },
+        )
+        _, reloaded = self.request("/api/analysis-settings")
+        self.assertEqual(saved["scratch_threshold_r"], 0.2)
+        self.assertEqual(reloaded["domestic_futures_monthly_target_pnl"], 5000)
+        self.assertEqual(reloaded["domestic_futures_daily_target_pnl"], 250)
+
+        storage.upsert_trade({
+            "id": "FUTURES-TARGET-1",
+            "platform": "domestic_futures",
+            "account": "FUTURES-ACC",
+            "order_no": "FUTURES-TARGET-1",
+            "position_id": "FUTURES-POS-1",
+            "order_ticket": "FUTURES-ORDER-1",
+            "deal_ticket": "FUTURES-DEAL-1",
+            "symbol": "IF2611",
+            "side": "long",
+            "lots": 1.0,
+            "open_time_utc": "2026-08-01T00:00:00+00:00",
+            "close_time_utc": "2026-08-01T01:00:00+00:00",
+            "entry_price": 4000.0,
+            "exit_price": 4150.0,
+            "pnl": 150.0,
+            "commission": -5.0,
+            "swap": 0.0,
+            "fee": 0.0,
+            "screenshot_path": "",
+        })
+        _, analysis = self.request("/api/analysis?year=2026&month=8&platform=domestic_futures")
+        self.assertEqual(analysis["calendar"]["month_net_pnl"], 145.0)
+        self.assertEqual(analysis["calendar"]["month_target_completion_percent"], 2.9)
+        self.assertEqual(analysis["calendar"]["daily_target_days_met"], 0)
+        self.assertEqual(analysis["calendar"]["daily_target_days_total"], 1)
 
     def test_campaign_review_is_saved_on_campaign(self):
         campaign_id = self.request("/api/campaigns")[1]["campaigns"][0]["id"]

@@ -141,7 +141,10 @@ function recordingApi(routes = {}) {
       if (requestPath === "/api/custom-fields" && method === "POST") {
         return { id: 2, name: "新字段", field_type: "text", sort_order: 2, options: [] };
       }
-      if (Object.prototype.hasOwnProperty.call(merged, requestPath)) return merged[requestPath];
+      if (Object.prototype.hasOwnProperty.call(merged, requestPath)) {
+        const response = merged[requestPath];
+        return typeof response === "function" ? response({method, body: options.body}) : response;
+      }
       if (requestPath.startsWith("/api/classification-options/")) return { ok: true };
       if (requestPath.startsWith("/api/custom-fields/")) return { ok: true };
       throw new Error(`unexpected path ${requestPath}`);
@@ -149,12 +152,13 @@ function recordingApi(routes = {}) {
   };
 }
 
-function controllerWith(routes = {}, location = { search: "", pathname: "/settings/", hash: "" }) {
+function controllerWith(routes = {}, location = { search: "", pathname: "/settings/", hash: "" }, toast = () => {}) {
   const api = recordingApi(routes);
   const view = new FakeView();
   const controller = createSettingsController({
     api,
     view,
+    toast,
     location,
     history: { replaceState() {} },
   });
@@ -556,6 +560,72 @@ test("scratch threshold validates range before saving", async () => {
   assert.ok(patchIndex >= 0);
   assert.equal(api.paths[patchIndex], "/api/analysis-settings");
   assert.deepEqual(api.bodies[patchIndex], { scratch_threshold_r: 0.35 });
+});
+
+test("domestic futures calendar targets load and save as independent analysis settings", async () => {
+  let persistedSettings = {
+    scratch_threshold_r: 0.2,
+    domestic_futures_monthly_target_pnl: 5000,
+    domestic_futures_daily_target_pnl: 250,
+  };
+  const {api, controller, view} = controllerWith({
+    "/api/analysis-settings": ({method, body}) => {
+      if (method === "PATCH") persistedSettings = {...persistedSettings, ...body};
+      return {...persistedSettings};
+    },
+    "/api/data/accounts?platform=domestic_futures": {accounts: []},
+  }, {search: "?platform=domestic_futures", pathname: "/settings/", hash: ""});
+  await controller.load();
+  assert.equal(view.getElementById("domesticMonthlyTargetPnl").value, "5000.00");
+  assert.equal(view.getElementById("domesticDailyTargetPnl").value, "250.00");
+  assert.equal(view.getElementById("domesticCalendarTargets").hidden, false);
+
+  const rejected = await controller.saveDomesticCalendarTargets({monthly: -1, daily: 0});
+  assert.equal(rejected, false);
+  assert.equal(api.methods.includes("PATCH"), false);
+  const saved = await controller.saveDomesticCalendarTargets({monthly: 7500, daily: 300});
+  assert.equal(saved, true);
+  const patchIndex = api.methods.indexOf("PATCH");
+  assert.deepEqual(api.bodies[patchIndex], {
+    domestic_futures_monthly_target_pnl: 7500,
+    domestic_futures_daily_target_pnl: 300,
+  });
+  assert.equal(view.getElementById("domesticMonthlyTargetPnl").value, "7500.00");
+  assert.equal(view.getElementById("domesticDailyTargetPnl").value, "300.00");
+  assert.equal(api.methods[patchIndex + 1], "GET");
+});
+
+test("domestic target save reports an outdated server and keeps the entered values", async () => {
+  const notices = [];
+  const {controller, view} = controllerWith({
+    "/api/analysis-settings": ({method}) => {
+      if (method === "PATCH") throw Object.assign(new Error("unsupported field"), {status: 400});
+      return {
+        scratch_threshold_r: 0.2,
+        domestic_futures_monthly_target_pnl: 0,
+        domestic_futures_daily_target_pnl: 0,
+      };
+    },
+    "/api/data/accounts?platform=domestic_futures": {accounts: []},
+  }, {search: "?platform=domestic_futures", pathname: "/settings/", hash: ""}, (message, options) => notices.push({message, options}));
+  await controller.load();
+  view.getElementById("domesticMonthlyTargetPnl").value = "6200";
+  view.getElementById("domesticDailyTargetPnl").value = "310";
+
+  const saved = await controller.saveDomesticCalendarTargets();
+
+  assert.equal(saved, false);
+  assert.equal(view.getElementById("domesticMonthlyTargetPnl").value, "6200");
+  assert.equal(view.getElementById("domesticDailyTargetPnl").value, "310");
+  assert.match(notices.at(-1).message, /重启本地服务后重试/);
+  assert.equal(notices.at(-1).options.tone, "error");
+});
+
+test("calendar target controls are limited to domestic futures analysis settings", () => {
+  assert.match(settingsHtml, /id="domesticCalendarTargets"[^>]*data-domestic-target-settings[^>]*hidden/);
+  assert.match(settingsHtml, /id="domesticMonthlyTargetPnl"/);
+  assert.match(settingsHtml, /id="domesticDailyTargetPnl"/);
+  assert.match(settingsSource, /getElement\("domesticCalendarTargets"\)/);
 });
 
 test("status retries on demand without reloading configuration", async () => {

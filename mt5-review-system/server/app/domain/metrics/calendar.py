@@ -9,7 +9,7 @@ from ..metric_contracts import MetricDefinition, MetricResult
 from ...platforms import DOMESTIC_FUTURES_PLATFORM
 
 
-DEFINITION_VERSION = "1"
+DEFINITION_VERSION = "2"
 MONTHLY_PNL_DEFINITION_VERSION = "2"
 
 
@@ -35,6 +35,23 @@ def build_calendar_result(context: AnalysisContext) -> MetricResult:
         int(context.settings["selected_year"]),
         int(context.settings["selected_month"]),
     )
+    if context.platform == DOMESTIC_FUTURES_PLATFORM:
+        month_target = max(0.0, float(context.settings.get("domestic_futures_monthly_target_pnl") or 0))
+        daily_target = max(0.0, float(context.settings.get("domestic_futures_daily_target_pnl") or 0))
+        active_days = [day for day in value["days"].values() if day["order_count"] > 0]
+        value.update({
+            "month_target_pnl": month_target,
+            "daily_target_pnl": daily_target,
+            "month_target_completion_percent": (
+                round(value["month_net_pnl"] / month_target * 100, 1)
+                if month_target > 0 else None
+            ),
+            "daily_target_days_met": (
+                sum(1 for day in active_days if day["net_pnl"] >= daily_target)
+                if daily_target > 0 else None
+            ),
+            "daily_target_days_total": len(active_days),
+        })
     return MetricResult(
         key="calendar",
         value=value,

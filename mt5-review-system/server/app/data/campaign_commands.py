@@ -416,22 +416,38 @@ def update_campaign_initial_stop(
 
 
 def update_analysis_settings(payload: dict[str, Any]) -> dict[str, Any]:
-    try:
-        threshold = float(payload.get("scratch_threshold_r"))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Scratch 阈值必须是有效数字") from exc
-    if not math.isfinite(threshold) or not 0 <= threshold <= 5:
-        raise ValueError("Scratch 阈值必须在 0R 到 5R 之间")
+    definitions = {
+        "scratch_threshold_r": (0.15, 0, 5, "Scratch 阈值必须在 0R 到 5R 之间"),
+        "domestic_futures_monthly_target_pnl": (0, 0, 1e9, "期货月目标必须在 0 到 1,000,000,000 之间"),
+        "domestic_futures_daily_target_pnl": (0, 0, 1e9, "期货日均目标必须在 0 到 1,000,000,000 之间"),
+    }
+    values = {}
+    for key, (default, minimum, maximum, range_error) in definitions.items():
+        if key not in payload:
+            continue
+        try:
+            value = float(payload[key])
+        except (TypeError, ValueError) as exc:
+            label = "Scratch 阈值" if key == "scratch_threshold_r" else "期货目标"
+            raise ValueError(f"{label}必须是有效数字") from exc
+        if not math.isfinite(value) or not minimum <= value <= maximum:
+            raise ValueError(range_error)
+        values[key] = value
     with db() as conn:
-        conn.execute(
+        conn.executemany(
             """
             INSERT INTO analysis_settings (key, value, updated_at)
-            VALUES ('scratch_threshold_r', ?, CURRENT_TIMESTAMP)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
             """,
-            (str(threshold),),
+            [(key, str(value)) for key, value in values.items()],
         )
-    return {"scratch_threshold_r": threshold}
+        rows = conn.execute(
+            "SELECT key, value FROM analysis_settings WHERE key IN (?, ?, ?)",
+            tuple(definitions),
+        ).fetchall()
+    current = {row["key"]: float(row["value"]) for row in rows}
+    return {key: current.get(key, default) for key, (default, *_rest) in definitions.items()}
 
 
 def update_campaign_review(
