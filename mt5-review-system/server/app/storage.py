@@ -332,8 +332,8 @@ def list_custom_fields(
 
 def get_analysis_settings() -> dict[str, Any]:
     return _application_services().settings.get_analysis_settings()
-
-
+def get_dashboard_layout(platform: str = "mt5") -> dict[str, Any] | None: return _application_services().settings.get_dashboard_layout(platform)
+def put_dashboard_layout(platform: str, layout: dict[str, Any], expected_revision: int | None = None) -> dict[str, Any]: return _application_services().settings.put_dashboard_layout(platform, layout, expected_revision=expected_revision)
 def get_local_status() -> dict[str, Any]:
     return _application_services().settings.get_status()
 

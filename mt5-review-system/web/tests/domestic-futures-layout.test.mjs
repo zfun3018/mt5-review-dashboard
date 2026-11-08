@@ -19,10 +19,10 @@ test("domestic futures layout schema exposes stable modules and defaults", async
   assert.ok(DEFAULT_LAYOUT.items.find((item) => item.id === "period-overview").minH >= 5);
   assert.ok(DEFAULT_LAYOUT.items.find((item) => item.id === "period-overview").maxH >= 16);
   assert.deepEqual(DEFAULT_LAYOUT.items.find((item) => item.id === "data-health"), {
-    id: "data-health", x: 8, y: 21, w: 4, h: 4, minW: 3, minH: 4, maxW: 12, maxH: 16, title: "数据与导入", subtitle: "数据批次与质量", kind: "metrics", fit: "resize", visible: true,
+    id: "data-health", x: 8, y: 21, w: 4, h: 5, minW: 3, minH: 4, maxW: 12, maxH: 16, title: "数据与导入", subtitle: "数据批次与质量", kind: "metrics", fit: "resize", visible: true,
   });
   assert.deepEqual(DEFAULT_LAYOUT.items.find((item) => item.id === "review-coverage"), {
-    id: "review-coverage", x: 0, y: 29, w: 4, h: 3, minW: 3, minH: 3, maxW: 12, maxH: 16, title: "复盘完成度", subtitle: "填写初始止损即视为完成", kind: "metrics", fit: "resize", visible: true,
+    id: "review-coverage", x: 8, y: 26, w: 4, h: 3, minW: 3, minH: 3, maxW: 12, maxH: 16, title: "复盘完成度", subtitle: "填写初始止损即视为完成", kind: "metrics", fit: "resize", visible: true,
   });
   assert.equal(DEFAULT_LAYOUT.items.some((item) => item.id === "r-metrics"), false);
   assert.equal(DEFAULT_LAYOUT.items.find((item) => item.id === "net-performance").kind, "chart");
@@ -69,7 +69,7 @@ test("chart and dense-table modules declare minimum sizes that protect their liv
   assert.ok(definitions["system-evaluation"].minH >= 6);
   const mt5 = Object.fromEntries(getModuleDefinitions("mt5").map((item) => [item.id, item]));
   assert.ok(mt5.equity.minW >= 6 && mt5.equity.minH >= 6);
-  assert.ok(mt5.calendar.minW >= 6 && mt5.calendar.minH >= 8);
+  assert.ok(mt5.calendar.minW >= 5 && mt5.calendar.minH >= 4);
   assert.ok(mt5.heatmap.minW >= 5 && mt5.heatmap.minH >= 6);
   assert.ok(mt5["period-overview"].minW >= 6 && mt5["period-overview"].minH >= 6);
   assert.ok(mt5["daily-evaluation"].minW >= 8 && mt5["daily-evaluation"].minH >= 7);

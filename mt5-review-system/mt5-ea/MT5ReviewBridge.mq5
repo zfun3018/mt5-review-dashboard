@@ -2,7 +2,7 @@
 #property version "1.000"
 #property description "Local MT5 review bridge: trade events, M5 screenshots, local JSONL fallback."
 
-input string InpBridgeUrl = "http://127.0.0.1:8787/api/mt5/events";
+input string InpBridgeUrl = "http://127.0.0.1:9277/api/mt5/events";
 input bool InpSendHttp = true;
 input bool InpWriteJsonl = true;
 input int InpHttpTimeoutMs = 2500;

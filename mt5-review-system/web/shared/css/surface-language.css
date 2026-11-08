@@ -77,7 +77,6 @@
 
 :is(
   .button-primary,
-  .dashboard-layout-link,
   .domestic-layout-link
 ) {
   border-color: rgba(201, 250, 252, 0.7);

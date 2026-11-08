@@ -32,7 +32,7 @@ Set-Location .\mt5-review-system
 .\start.ps1
 ```
 
-浏览器打开 `http://127.0.0.1:8787`。如果默认端口被占用，可以仅对当前进程指定端口：
+浏览器打开 `http://127.0.0.1:9277`。如果默认端口被占用，可以仅对当前进程指定端口：
 
 ```powershell
 $env:MT5_REVIEW_PORT = "8790"
@@ -81,7 +81,7 @@ python .\tools\check_release.py
 
 1. 编辑本地 `config.local.json`，填写 MT5 安装目录、终端数据目录和桥接目录。
 2. 执行 `.\tools\install_ea.ps1`，在 MetaEditor 编译 `mt5-ea/MT5ReviewBridge.mq5`。
-3. 在 MT5 的“工具 → 选项 → EA 交易”中允许 `http://127.0.0.1:8787` WebRequest。
+3. 在 MT5 的“工具 → 选项 → EA 交易”中允许 `http://127.0.0.1:9277` WebRequest。
 4. EA 通过 WebRequest 推送事件，同时写入本地 JSONL；需要补偿时执行 `.\tools\import_from_mt5.ps1`。
 
 ### 国内期货

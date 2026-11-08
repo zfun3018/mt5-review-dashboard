@@ -221,10 +221,12 @@
 .domestic-review-meta strong { color: var(--domestic-ink); font-size: var(--font-size-secondary); }
 
 #domesticModeEvaluation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 16px 18px 18px; }
-.domestic-mode-group header, .domestic-mode-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 10px; }
+.domestic-mode-group header, .domestic-mode-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(92px, 1fr) minmax(52px, .55fr) minmax(112px, 1.2fr); align-items: center; gap: 10px; }
 .domestic-mode-group header { padding-bottom: 8px; border-bottom: 1px solid var(--domestic-soft); color: var(--domestic-muted); font-size: var(--font-size-secondary); }
 .domestic-mode-row { padding: 10px 0; border-bottom: 1px solid var(--domestic-soft); font-size: var(--font-size-readable-min); }
 .domestic-mode-row small { color: var(--domestic-muted); font-size: var(--font-size-secondary); }
+.domestic-mode-group header > :not(:first-child), .domestic-mode-row > :not(:first-child) { min-width: 0; text-align: right; }
+.domestic-mode-group header > :first-child, .domestic-mode-row > :first-child { justify-self: start; text-align: left; }
 
 @media (max-width: 1080px) {
   .domestic-period-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -247,6 +249,7 @@
   .domestic-period-metrics { padding-top: 5px; }
   .domestic-chart-head-summary { justify-content: flex-start; width: 100%; margin-left: 0; padding-top: 8px; text-align: left; }
   #domesticModeEvaluation { grid-template-columns: minmax(0, 1fr); }
+  .domestic-mode-group header, .domestic-mode-row { grid-template-columns: minmax(70px, 1fr) minmax(70px, 1fr) minmax(42px, .6fr) minmax(95px, 1.2fr); gap: 8px; }
   .domestic-table th, .domestic-table td { padding-right: 12px; padding-left: 12px; }
   .domestic-r-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .domestic-heatmap { min-width: 560px; }
@@ -296,7 +299,8 @@
 
 .app-page-bar__filters .domestic-layout-link {
   flex: 0 0 auto;
-  min-height: var(--control-height);
+  height: 34px;
+  min-height: 34px;
   padding-inline: 12px;
   font-size: var(--font-size-readable-min);
   white-space: nowrap;

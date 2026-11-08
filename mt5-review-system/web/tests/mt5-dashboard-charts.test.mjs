@@ -32,6 +32,10 @@ test("MT5 cumulative chart sorts points by close time before building the option
   assert.equal(option.series[0].smooth, 0.5);
   assert.equal(option.series[0].smoothMonotone, "x");
   assert.equal(option.series[0].sampling, "lttb");
+  assert.equal(option.xAxis.axisLine.show, false);
+  assert.equal(option.yAxis.splitLine.show, false);
+  assert.equal(option.series[0].markLine.data[0].yAxis, 0);
+  assert.equal(option.series[0].markLine.lineStyle.type, "solid");
 });
 
 test("MT5 cumulative chart uses a time axis for ordered points", async () => {
@@ -197,7 +201,7 @@ test("MT5 calendar is rendered by ECharts and preserves the full monthly day ran
   assert.deepEqual(option.calendar.range, ["2026-10-01", "2026-10-31"]);
   assert.equal(option.calendar.orient, "vertical");
   assert.equal(option.calendar.cellSize[0], "auto");
-  assert.equal(option.calendar.cellSize[1], 26);
+  assert.equal(option.calendar.cellSize[1], "auto");
   assert.equal(option.calendar.splitLine.show, false);
   assert.equal(option.calendar.itemStyle.color, "transparent");
   assert.equal(option.series[0].type, "heatmap");
@@ -217,6 +221,8 @@ test("MT5 calendar is rendered by ECharts and preserves the full monthly day ran
   assert.doesNotMatch(label, /\\n/);
   assert.equal(option.series[0].label.rich.loss.color, "#ff7d88");
   assert.equal(option.series[0].label.rich.profit.color, "#69d6ab");
+  assert.equal(option.series[0].label.rich.day.fontSize, 15);
+  assert.equal(option.series[0].label.rich.profit.fontSize, 18);
   assert.equal(option.series[0].itemStyle.color, "transparent");
   assert.equal(option.series[0].itemStyle.borderWidth, 0);
   assert.equal(option.series[0].label.formatter({value: ["2026-10-01", 5.5, 4, 0.75]}), "{day|01}\n{profit|$6}");
@@ -358,6 +364,21 @@ test("MT5 heatmap uses the backend date and weekday labels", async () => {
     },
   });
 
-  assert.deepEqual(option.yAxis.data, ["10月19日 周一", "10月20日 周二"]);
-  assert.match(option.tooltip.formatter({value: [9, 0, 50, 1]}), /10月19日 周一/);
+  assert.deepEqual(option.yAxis.data, ["周一", "周二"]);
+  assert.equal(option.yAxis.inverse, true);
+  assert.match(option.tooltip.formatter({value: [9, 0, 50, 1]}), /周一/);
+});
+
+test("MT5 heatmap keeps only the latest Monday to Friday rows", async () => {
+  const {buildHeatmapOption} = await import(moduleUrl("dashboard/domestic-futures-charts.mjs"));
+  const option = buildHeatmapOption({heatmap: {days: [
+    {date: "2026-10-23", label: "10月23日 周五", hours: []},
+    {date: "2026-10-24", label: "10月24日 周六", hours: []},
+    {date: "2026-10-22", label: "10月22日 周四", hours: []},
+    {date: "2026-10-21", label: "10月21日 周三", hours: []},
+    {date: "2026-10-20", label: "10月20日 周二", hours: []},
+    {date: "2026-10-19", label: "10月19日 周一", hours: []},
+    {date: "2026-10-18", label: "10月18日 周日", hours: []},
+  ]}});
+  assert.deepEqual(option.yAxis.data, ["周一", "周二", "周三", "周四", "周五"]);
 });

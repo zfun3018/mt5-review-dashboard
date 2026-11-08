@@ -5,6 +5,7 @@ import {normalizePlatform, readPlatform} from "../shared/js/platform.mjs";
 import {buildAnalysisQuery, readDashboardState, resolveAnalysisWindow, writeDashboardState} from "./dashboard-state.mjs";
 import {createDomesticFuturesCharts} from "./domestic-futures-charts.mjs";
 import {loadLayout} from "./domestic-futures-layout.mjs";
+import {loadLayoutFromServer, watchDashboardLayout} from "./dashboard-layout.mjs";
 import {createDashboardGrid} from "./dashboard-grid.mjs";
 import {mountDashboardLayoutEditorMode} from "./dashboard-layout-editor-mode.mjs";
 import {DOMESTIC_FUTURES_DASHBOARD_MODULES} from "./dashboard-module-registry.mjs";
@@ -313,6 +314,9 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
   let gridController = null;
   let periodHeightController = null;
   let layoutEditorController = null;
+  let layoutState = null;
+  let layoutStatePromise = null;
+  let stopLayoutWatch = () => {};
   let loadRevision = 0;
   const root = view.getElementById("domesticDashboard");
 
@@ -326,12 +330,18 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
       findRoot: (selector) => root?.querySelector?.(selector),
     });
     try {
+      if (!layoutState && !layoutStatePromise) {
+        layoutStatePromise = loadLayoutFromServer({api, storage: globalThis.localStorage, platform: "domestic_futures"})
+          .catch(() => ({layout: loadLayout(), revision: 0}));
+      }
+      const layoutPromise = layoutState ? Promise.resolve(layoutState) : layoutStatePromise;
       const analysis = gate.run("domestic-analysis", (signal) => api.requestJson(`/api/analysis?${analysisQuery}`, {signal}));
       const imports = platform === "domestic_futures"
         ? api.requestJson("/api/platforms/import-summary?platform=domestic_futures").catch(() => null)
         : Promise.resolve(null);
-      const [nextPayload, nextImportSummary] = await Promise.all([analysis, imports]);
+      const [nextPayload, nextImportSummary, nextLayoutState] = await Promise.all([analysis, imports, layoutPromise]);
       if (revision !== loadRevision) return;
+      layoutState ||= nextLayoutState;
       payload = nextPayload;
       importSummary = nextImportSummary;
       renderAll();
@@ -354,7 +364,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
     if (!gridController) {
       gridController = createDashboardGrid({
         root: stage,
-        layout: loadLayout(),
+        layout: layoutState.layout,
         selector: "[data-module]",
         editable: new URLSearchParams(location.search).get("layout") === "edit",
         GridStack: globalThis.GridStack,
@@ -365,11 +375,22 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
         root: stage,
         toolbar: view.getElementById("domesticLayoutEditor"),
         gridController,
-        layout: loadLayout(),
+        layout: layoutState.layout,
         platform: "domestic_futures",
+        api,
+        revision: layoutState.revision,
         location,
         document: view,
       });
+      if (new URLSearchParams(location.search).get("layout") !== "edit") {
+        stopLayoutWatch();
+        stopLayoutWatch = watchDashboardLayout({
+          api,
+          platform: "domestic_futures",
+          revision: layoutState.revision,
+          location,
+        });
+      }
     }
     charts ||= createDomesticFuturesCharts({view});
     const renderers = {
@@ -454,6 +475,7 @@ export function createDomesticFuturesDashboardController({api, view = globalThis
     periodHeightController?.dispose?.();
     gridController?.destroy?.();
     layoutEditorController?.dispose?.();
+    stopLayoutWatch();
   }
 
   return {init, load, dispose, getState: () => state};

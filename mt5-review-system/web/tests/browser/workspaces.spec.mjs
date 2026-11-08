@@ -45,7 +45,7 @@ test.describe("workspaces — desktop", () => {
     const errors = attachConsoleAssertions(page);
     await page.goto(`${syntheticServer.baseURL}/`);
     await expect(page).toHaveURL(/\/dashboard\//);
-    await expect(page.getByRole("heading", { name: "R 指标概览" })).toBeVisible();
+    await expect(page.locator(".r-metric-item")).toHaveCount(7);
     await assertNoOverflow(page);
     await expectNoErrors(page, errors);
   });
@@ -97,6 +97,37 @@ test.describe("workspaces — desktop", () => {
     expect(appearance.toolbarBackground).not.toBe("");
     expect(appearance.pageBackground).not.toBe("");
     expect(appearance.overflow).toBe(true);
+  });
+
+  test("dashboard top bar controls share one compact height", async ({page, syntheticServer}) => {
+    await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=mt5`);
+    const heights = await page.locator([
+      ".app-page-bar__filters .app-filter-preset",
+      "#mt5DashboardLayoutLink",
+      ".app-page-bar__actions > .app-page-bar__refresh",
+      ".app-page-bar__actions > .app-platform-button",
+      ".app-page-bar__actions > .app-share-button",
+    ].join(", ")).evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().height)));
+    expect(heights.length).toBe(8);
+    expect(new Set(heights)).toEqual(new Set([34]));
+  });
+
+  test("MT5 R metric cards stay visible without an internal scrollbar", async ({page, syntheticServer}) => {
+    await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=mt5`);
+    const metrics = await page.locator(".r-metric-panel").evaluate((node) => ({
+      overflowX: getComputedStyle(node).overflowX,
+      overflowY: getComputedStyle(node).overflowY,
+      scrollWidth: node.scrollWidth,
+      clientWidth: node.clientWidth,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+      cards: node.querySelectorAll(".r-metric-item").length,
+    }));
+    expect(metrics.overflowX).toBe("hidden");
+    expect(metrics.overflowY).toBe("hidden");
+    expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth);
+    expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight);
+    expect(metrics.cards).toBe(7);
   });
 
   test("order toolbar keeps the requested compact filters and persists their state", async ({ page, syntheticServer }) => {
@@ -151,8 +182,8 @@ test.describe("workspaces — desktop", () => {
     await page.goto(`${syntheticServer.baseURL}/settings/?platform=domestic_futures`);
     await page.getByRole("tab", {name: "分析设置"}).click();
 
-    const monthly = page.getByLabel("月目标");
-    const daily = page.getByLabel("日均目标");
+    const monthly = page.locator("#domesticCalendarTargets").getByLabel("月目标");
+    const daily = page.locator("#domesticCalendarTargets").getByLabel("日均目标");
     await expect(monthly).toBeVisible();
     await monthly.fill("6800.50");
     await daily.fill("320.25");
@@ -201,8 +232,9 @@ test.describe("workspaces — 390px mobile", () => {
     await expect(dashboardFilters).toBeVisible();
     await expect(dashboardFilters.locator("#timePreset")).toBeHidden();
     await expect(dashboardFilters.locator(".app-filter-presets")).toBeVisible();
-    await expect(dashboardFilters.locator("#startDateFilter")).toBeVisible();
-    await expect(dashboardFilters.locator("#endDateFilter")).toBeVisible();
+    await expect(dashboardFilters.locator("#startDateFilter, #endDateFilter")).toHaveCount(0);
+    await expect(dashboardFilters.locator(".app-filter-preset[data-preset=\"custom\"]")).toHaveCount(0);
+    await expect(dashboardFilters.locator("#mt5DashboardLayoutLink")).toBeVisible();
     await expect(page.locator(".app-page-bar__search")).toHaveCount(0);
     await dashboardFilters.locator('.app-filter-preset[data-preset="30d"]').click();
     await expect(page).toHaveURL(/preset=30d/);

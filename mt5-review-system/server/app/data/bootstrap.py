@@ -4,6 +4,7 @@ import sqlite3
 
 from ..core.config import get_runtime_paths
 from .database import transaction
+from .dashboard_layout_schema import ensure_dashboard_layout_schema
 
 
 def db():
@@ -351,6 +352,13 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS dashboard_layouts (
+            platform TEXT PRIMARY KEY,
+            revision INTEGER NOT NULL DEFAULT 0,
+            layout_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_deal_position_time
             ON deal_events(account, position_id, time_msc, deal_ticket);
         CREATE INDEX IF NOT EXISTS idx_positions_campaign_lookup
@@ -371,6 +379,7 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
             ON campaign_positions(campaign_id, sort_order);
         """
     )
+    ensure_dashboard_layout_schema(conn)
     for table_name in ("deal_events", "positions", "trade_campaigns"):
         columns = {
             row["name"]
@@ -391,6 +400,12 @@ def _ensure_schema(conn: sqlite3.Connection, previous_version: int = 0) -> None:
     )
     conn.execute(
         "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('domestic_futures_daily_target_pnl', '0')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('mt5_monthly_target_pnl', '0')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO analysis_settings (key, value) VALUES ('mt5_daily_target_pnl', '0')"
     )
     conn.executescript(
         """

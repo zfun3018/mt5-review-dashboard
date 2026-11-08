@@ -99,7 +99,7 @@ const DEFAULT_ROUTES = {
   },
   "/api/analysis-settings": { scratch_threshold_r: 0.2 },
   "/api/status": {
-    bridge_endpoint: "http://127.0.0.1:8787/api/mt5/events",
+    bridge_endpoint: "http://127.0.0.1:9277/api/mt5/events",
     database_path: "C:\\secret\\journal.sqlite",
     data_dir: "C:\\secret\\data",
     data_size_bytes: 1048576,
@@ -595,6 +595,32 @@ test("domestic futures calendar targets load and save as independent analysis se
   assert.equal(api.methods[patchIndex + 1], "GET");
 });
 
+test("MT5 calendar targets use platform-scoped analysis settings", async () => {
+  let persistedSettings = {
+    scratch_threshold_r: 0.2,
+    mt5_monthly_target_pnl: 1200,
+    mt5_daily_target_pnl: 60,
+  };
+  const {api, controller, view} = controllerWith({
+    "/api/analysis-settings": ({method, body}) => {
+      if (method === "PATCH") persistedSettings = {...persistedSettings, ...body};
+      return {...persistedSettings};
+    },
+  }, {search: "?platform=mt5", pathname: "/settings/", hash: ""});
+  await controller.load();
+  assert.equal(view.getElementById("mt5MonthlyTargetPnl").value, "1200.00");
+  assert.equal(view.getElementById("mt5DailyTargetPnl").value, "60.00");
+  assert.equal(view.getElementById("mt5CalendarTargets").hidden, false);
+  assert.equal(view.getElementById("domesticCalendarTargets").hidden, true);
+
+  const saved = await controller.saveMt5CalendarTargets({monthly: 1500, daily: 75});
+  assert.equal(saved, true);
+  const patchIndex = api.methods.indexOf("PATCH");
+  assert.deepEqual(api.bodies[patchIndex], {mt5_monthly_target_pnl: 1500, mt5_daily_target_pnl: 75});
+  assert.equal(view.getElementById("mt5MonthlyTargetPnl").value, "1500.00");
+  assert.equal(view.getElementById("mt5DailyTargetPnl").value, "75.00");
+});
+
 test("domestic target save reports an outdated server and keeps the entered values", async () => {
   const notices = [];
   const {controller, view} = controllerWith({
@@ -621,11 +647,15 @@ test("domestic target save reports an outdated server and keeps the entered valu
   assert.equal(notices.at(-1).options.tone, "error");
 });
 
-test("calendar target controls are limited to domestic futures analysis settings", () => {
+test("calendar target controls are platform-specific analysis settings", () => {
   assert.match(settingsHtml, /id="domesticCalendarTargets"[^>]*data-domestic-target-settings[^>]*hidden/);
   assert.match(settingsHtml, /id="domesticMonthlyTargetPnl"/);
   assert.match(settingsHtml, /id="domesticDailyTargetPnl"/);
+  assert.match(settingsHtml, /id="mt5CalendarTargets"[^>]*data-mt5-target-settings[^>]*hidden/);
+  assert.match(settingsHtml, /id="mt5MonthlyTargetPnl"/);
+  assert.match(settingsHtml, /id="mt5DailyTargetPnl"/);
   assert.match(settingsSource, /getElement\("domesticCalendarTargets"\)/);
+  assert.match(settingsSource, /getElement\("mt5CalendarTargets"\)/);
 });
 
 test("status retries on demand without reloading configuration", async () => {
@@ -658,7 +688,7 @@ test("status view omits absolute local paths", async () => {
   const { view, controller } = controllerWith();
   await controller.load();
   const html = view.getElementById("settingsStatus").innerHTML;
-  assert.match(html, /127\.0\.0\.1:8787/);
+  assert.match(html, /127\.0\.0\.1:9277/);
   assert.match(html, /42/);
   assert.match(html, /XAUUSD/);
   assert.doesNotMatch(html, /C:\\secret/);

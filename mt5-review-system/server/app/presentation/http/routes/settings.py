@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 from urllib.parse import unquote
 
-from ..responses import bad_request, created, not_found, ok
+from ....data.catalog_repository import DashboardLayoutConflict
+from ..responses import bad_request, conflict, created, not_found, ok
 from . import Body, Query, first, path_part, request_body
 
 if TYPE_CHECKING:
@@ -16,6 +17,36 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
 
     def update_analysis_settings(path: str, query: Query, body: Body):
         return ok(storage.update_analysis_settings(request_body(body)))
+
+    def dashboard_layout(path: str, query: Query, body: Body):
+        platform = first(query, "platform", "mt5") or "mt5"
+        record = storage.get_dashboard_layout(platform)
+        return ok(record or {"platform": platform, "revision": 0, "layout": None})
+
+    def update_dashboard_layout(path: str, query: Query, body: Body):
+        platform = first(query, "platform", "mt5") or "mt5"
+        payload = request_body(body)
+        if "layout" not in payload:
+            raise ValueError("layout is required")
+        revision = payload.get("revision")
+        if revision is not None:
+            try:
+                revision = int(revision)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("revision must be an integer") from exc
+        try:
+            return ok(
+                storage.put_dashboard_layout(
+                    platform,
+                    payload["layout"],
+                    expected_revision=revision,
+                )
+            )
+        except DashboardLayoutConflict as exc:
+            return conflict(
+                str(exc),
+                {"platform": exc.platform, "revision": exc.current_revision},
+            )
 
     def trends(path: str, query: Query, body: Body):
         return ok({"trends": storage.list_trends()})
@@ -181,6 +212,8 @@ def register(router: Router, storage, auto_import: Callable[[], object]) -> None
         update_analysis_settings,
         reads_body=True,
     )
+    router.add("GET", "/api/dashboard-layout", dashboard_layout)
+    router.add("PUT", "/api/dashboard-layout", update_dashboard_layout, reads_body=True)
     router.add("GET", "/api/trends", trends)
     router.add("POST", "/api/trends", create_trend, reads_body=True)
     router.add_prefix("PUT", "/api/trends/", trend_put, reads_body=True)

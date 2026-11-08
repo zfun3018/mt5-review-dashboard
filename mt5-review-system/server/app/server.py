@@ -113,6 +113,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         content = file_path.read_bytes()
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
+        # The local dashboard is edited in place during development and its
+        # layout/runtime modules are loaded as ES modules. Prevent a browser
+        # from keeping an older CSS/JS graph after a UI update.
+        self.send_header("Cache-Control", "no-store, max-age=0")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self._write_response_body(content)
@@ -132,6 +136,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self.send_response(response.status)
         for name, value in response.headers.items():
             self.send_header(name, value)
+        # API responses contain mutable local state such as settings and
+        # dashboard layouts. Browsers must always read the latest database
+        # value after another page or window saves it.
+        self.send_header("Cache-Control", "no-store, max-age=0")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self._write_response_body(body)

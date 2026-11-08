@@ -84,7 +84,7 @@ test("domestic futures account dashboard renders without horizontal overflow", a
       clientHeight: module?.clientHeight,
     };
   }));
-  expect(compactModules.find(({id}) => id === "data-health")).toMatchObject({gridHeight: 4, fit: "resize"});
+  expect(compactModules.find(({id}) => id === "data-health")).toMatchObject({gridHeight: 5, fit: "resize"});
   expect(compactModules.find(({id}) => id === "review-coverage")).toMatchObject({gridHeight: 3, fit: "resize"});
   for (const module of compactModules) {
     expect(module.scrollWidth).toBeLessThanOrEqual(module.clientWidth);
@@ -106,14 +106,9 @@ test("domestic futures account dashboard renders without horizontal overflow", a
     };
     return {shell: read(shell), shellMain: read(shellMain), pageBar: read(pageBar), isMobile};
   });
-  if (shellChrome.isMobile) {
-    expect(shellChrome.shell.border).toMatch(/^0px none /);
-    expect(shellChrome.shell.boxShadow).toBe("none");
-  } else {
-    expect(shellChrome.shell.border).toMatch(/^1px solid /);
-    expect(shellChrome.shell.boxShadow).toContain("48px 130px");
-  }
-  expect(shellChrome.shellMain.backgroundColor).toBe("rgba(8, 11, 15, 0.18)");
+  expect(shellChrome.shell.border).toMatch(/^0px none /);
+  expect(shellChrome.shell.boxShadow).toBe("none");
+  expect(shellChrome.shellMain.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   expect(shellChrome.pageBar.border).toMatch(/^0px none /);
   expect(shellChrome.pageBar.boxShadow).toBe("none");
   expect(shellChrome.pageBar.backgroundColor).toBe("rgba(0, 0, 0, 0)");
@@ -149,14 +144,14 @@ test("domestic futures account dashboard renders without horizontal overflow", a
   expect(calendarLayout.calendarWidth).toBeGreaterThan(0);
   expect(calendarLayout.calendarHeight).toBeGreaterThan(0);
   expect(calendarLayout.cellCount).toBe(calendarLayout.daysInMonth);
-  await expect(page.locator(".domestic-calendar-module .domestic-calendar-progress")).toHaveCount(2);
-  const unsetGoalTrack = await page.locator(".domestic-calendar-goal.is-unset .domestic-calendar-progress").first().evaluate((node) => {
+  await expect(page.locator("#domesticDashboard .domestic-calendar-module .domestic-calendar-progress")).toHaveCount(2);
+  const unsetGoalTrack = await page.locator("#domesticDashboard .domestic-calendar-goal.is-unset .domestic-calendar-progress").first().evaluate((node) => {
     const style = getComputedStyle(node);
     return {height: style.height, backgroundImage: style.backgroundImage, borderColor: style.borderTopColor};
   });
   expect(unsetGoalTrack.height).toBe("13px");
   expect(unsetGoalTrack.backgroundImage).toContain("repeating-linear-gradient");
-  const calendarOverflow = await page.locator(".domestic-calendar-module").evaluate((node) => ({
+  const calendarOverflow = await page.locator("#domesticDashboard .domestic-calendar-module").evaluate((node) => ({
     width: node.clientWidth,
     scrollWidth: node.scrollWidth,
     height: node.clientHeight,
@@ -212,7 +207,7 @@ test("domestic futures account dashboard renders without horizontal overflow", a
   expect(glass.shadow).toBe(glass.panelShadow);
   expect(glass.blur).toContain("blur(32px)");
   await assertNoOverflow(page);
-  const monthLabel = page.locator(".domestic-calendar-month-nav > span");
+  const monthLabel = page.locator("#domesticDashboard .domestic-calendar-month-nav > span");
   const currentMonth = await monthLabel.textContent();
   const [currentYear, currentMonthNumber] = currentMonth.match(/(\d+)年(\d+)月/).slice(1).map(Number);
   const nextMonthDate = new Date(Date.UTC(currentYear, currentMonthNumber, 1));

@@ -576,6 +576,8 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   const domesticWorkspace = fs.readFileSync(path.join(webRoot, "shared/css/domestic-futures-workspace.css"), "utf8");
   const domesticDashboard = fs.readFileSync(path.join(webRoot, "dashboard/domestic-futures-dashboard.css"), "utf8");
   const dashboard = fs.readFileSync(path.join(webRoot, "dashboard/dashboard.css"), "utf8");
+  const dashboardHtml = fs.readFileSync(path.join(webRoot, "dashboard/index.html"), "utf8");
+  const surfaceLanguage = fs.readFileSync(path.join(webRoot, "shared/css/surface-language.css"), "utf8");
   const allStyles = [tokens, base, shell, components].join("\n");
 
   assert.match(tokens, /--sidebar-width:\s*224px/);
@@ -612,6 +614,13 @@ test("shared styles preserve the shell geometry and apply the glass control syst
   assert.match(dashboard, /\.panel\s*\{[^}]*backdrop-filter:\s*blur\(var\(--glass-panel-blur\)\)/s);
   assert.match(shell, /\.app-navigation\s*\{[^}]*background:\s*transparent/s);
   assert.match(shell, /html\[data-platform\] \.app-page-bar\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none[^}]*backdrop-filter:\s*none/s);
+  assert.match(dashboard, /body:has\(\.mt5-dashboard-layout\)[\s\S]*?\.app-shell\s*\{[^}]*border:\s*0[^}]*background:\s*transparent[^}]*box-shadow:\s*none/s);
+  assert.match(dashboard, /body:has\(\.mt5-dashboard-layout\)[\s\S]*?\.app-shell::after\s*\{[^}]*display:\s*none/s);
+  assert.match(dashboard, /body:has\(\.mt5-dashboard-layout\)[\s\S]*?\.app-shell__main\s*\{[^}]*background:\s*transparent/s);
+  assert.match(dashboard, /body:has\(\.mt5-dashboard-layout\)[\s\S]*?\.app-page-bar\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none/s);
+  assert.match(dashboardHtml, /class="mt5-dashboard-layout grid-stack"/);
+  assert.doesNotMatch(dashboard, /\.app-navigation(?:\s|:)/);
+  assert.match(surfaceLanguage, /html\[data-platform\] \.app-navigation\s*\{[^}]*border:\s*1px solid var\(--glass-card-rim\)[^}]*background:\s*var\(--glass-card-fill\)[^}]*box-shadow:\s*var\(--glass-card-shadow\)/s);
   assert.match(shell, /\.app-page-bar\s*\{[^}]*min-height:\s*56px/s);
   assert.match(shell, /\.app-page-bar__actions\s*>\s*\.app-icon-button\s*\{[^}]*width:\s*30px[^}]*height:\s*30px/s);
   assert.match(shell, /\.app-shell\[data-navigation-collapsed="true"\]\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-collapsed-width\)/s);

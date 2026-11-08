@@ -43,7 +43,7 @@ def _read_local_status() -> dict[str, Any]:
         "latest_trade": dict(latest_trade) if latest_trade else None,
         "latest_backup": dict(latest_backup) if latest_backup else None,
         "latest_raw_event_file": str(latest_raw_file) if latest_raw_file else "",
-        "bridge_endpoint": "http://127.0.0.1:8787/api/mt5/events",
+        "bridge_endpoint": "http://127.0.0.1:9277/api/mt5/events",
     }
 
 

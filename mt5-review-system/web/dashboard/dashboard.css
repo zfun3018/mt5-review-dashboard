@@ -1,6 +1,39 @@
 /* Dashboard workspace — analysis-only page layout.
    Colors, spacing, type, radius, and elevation come from shared tokens. */
 
+/* The dashboard is a page-wide canvas. Keep the shared navigation and the
+   module cards visible while removing the extra window chrome around them. */
+body:has(.mt5-dashboard-layout) > [data-app-shell].app-shell,
+body:has(.domestic-dashboard) > [data-app-shell].app-shell {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body:has(.mt5-dashboard-layout) > [data-app-shell].app-shell::after,
+body:has(.domestic-dashboard) > [data-app-shell].app-shell::after {
+  display: none;
+}
+
+body:has(.mt5-dashboard-layout) > [data-app-shell].app-shell::before,
+body:has(.domestic-dashboard) > [data-app-shell].app-shell::before {
+  display: none;
+}
+
+body:has(.mt5-dashboard-layout) .app-shell__main,
+body:has(.domestic-dashboard) .app-shell__main {
+  background: transparent !important;
+}
+
+body:has(.mt5-dashboard-layout) .app-page-bar,
+body:has(.domestic-dashboard) .app-page-bar {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 .region-anchor {
   display: none;
 }
@@ -59,13 +92,15 @@
 .mt5-dashboard-layout .r-metric-grid {
   grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
   flex: 1 1 auto;
-  align-content: start;
+  align-content: stretch;
+  padding: 0;
   overflow: hidden;
 }
 
 .mt5-dashboard-layout .session-list {
   flex: 1 1 auto;
-  align-content: start;
+  align-content: stretch;
+  overflow: hidden;
 }
 
 .mt5-dashboard-layout .evaluation-panel {
@@ -96,25 +131,28 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: var(--control-height);
+  height: 34px;
+  min-height: 34px;
   margin-left: auto;
   padding: 0 16px;
-  border: 1px solid rgba(201, 250, 252, 0.65);
+  border: 1px solid var(--glass-control-rim);
   border-radius: var(--radius-control);
-  color: #0a1518;
-  background: linear-gradient(145deg, #b4edf0, #66bac7);
-  box-shadow: 0 12px 32px rgba(53, 155, 171, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  font-weight: 760;
+  color: var(--color-text);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
+  font-weight: 650;
   text-decoration: none;
   font-size: var(--font-size-sm);
   white-space: nowrap;
 }
 
 .dashboard-layout-link:hover {
-  border-color: rgba(201, 250, 252, 0.82);
-  color: #081316;
-  background: linear-gradient(145deg, #c5f6f7, #7acbd5);
-  box-shadow: 0 15px 38px rgba(53, 155, 171, 0.39), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  border-color: color-mix(in srgb, var(--color-accent) 78%, white 22%);
+  color: var(--color-text);
+  background: var(--glass-control-fill-selected);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--color-accent) 24%, transparent), var(--glass-control-shadow);
 }
 
 .dashboard-layout-link svg {
@@ -255,24 +293,42 @@
 }
 
 /* R summary */
-.r-metric-panel {
+.mt5-dashboard-layout .r-metric-panel {
   margin-bottom: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.mt5-dashboard-layout .r-metric-panel::before {
+  display: none;
 }
 
 .r-metric-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--space-3);
-  padding: 0 var(--space-4) var(--space-4);
+  min-width: 0;
+  align-content: center;
+  overflow: hidden;
 }
 
 .r-metric-item {
   display: grid;
+  min-width: 0;
   gap: var(--space-1);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface-raised);
+  overflow: hidden;
+  border: 1px solid var(--glass-control-rim);
+  border-radius: var(--radius-inner);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
 }
 
 .r-metric-item span {
@@ -303,6 +359,69 @@
 .equity-panel {
   grid-column: 1 / -1;
   grid-row: auto;
+}
+
+.mt5-dashboard-layout .equity-panel {
+  border-color: var(--glass-refraction-rim);
+  background: var(--glass-refraction-fill);
+  box-shadow: var(--glass-refraction-card-shadow), 0 0 34px rgba(var(--color-accent-rgb), 0.08);
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+}
+
+.mt5-dashboard-layout .heatmap-panel {
+  overflow: hidden;
+  border-color: var(--glass-refraction-rim);
+  background: var(--glass-refraction-fill);
+  box-shadow: var(--glass-refraction-card-shadow), 0 0 30px rgba(var(--color-accent-rgb), 0.08);
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+}
+
+.mt5-dashboard-layout .heatmap-panel .chart-frame {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+}
+
+.mt5-dashboard-layout .period-overview-panel {
+  overflow: hidden;
+  border-color: var(--glass-refraction-rim);
+  background: var(--glass-refraction-fill);
+  box-shadow: var(--glass-refraction-card-shadow), 0 0 30px rgba(var(--color-accent-rgb), 0.08);
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+}
+
+.mt5-dashboard-layout .period-overview-panel .system-evaluation-cards {
+  flex: 1 1 0;
+  min-height: 0;
+  align-content: stretch;
+  grid-auto-rows: minmax(0, 1fr);
+  overflow: hidden;
+  padding: 0 12px 12px;
+}
+
+.mt5-dashboard-layout .panel.daily-evaluation-panel,
+.mt5-dashboard-layout [data-layout-module="mode-evaluation"] {
+  overflow: hidden;
+  border-color: var(--glass-refraction-rim);
+  background: var(--glass-refraction-fill);
+  box-shadow: var(--glass-refraction-card-shadow), 0 0 30px rgba(var(--color-accent-rgb), 0.08);
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+}
+
+/* GridStack owns an extra wrapper around every module. Keep that wrapper
+   visually inert so the mode panel has one rounded glass surface instead of
+   a sharp rectangular shell behind it. */
+.mt5-dashboard-layout > .grid-stack-item[data-layout-module="mode-evaluation"],
+.mt5-dashboard-layout > .grid-stack-item[data-layout-module="mode-evaluation"] > .grid-stack-item-content {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .calendar-panel {
@@ -374,6 +493,26 @@
   background: var(--color-negative-soft);
 }
 
+.equity-total {
+  min-width: 92px;
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+}
+
+.equity-total.profit-text {
+  color: var(--color-positive);
+  background: rgba(var(--color-positive-rgb), 0.12);
+}
+
+.equity-total.loss-text {
+  color: var(--color-negative);
+  background: rgba(255, 125, 136, 0.12);
+}
+
 .chart-frame {
   position: relative;
   flex: 1 1 auto;
@@ -441,6 +580,212 @@
 /* Calendar */
 .calendar-panel .panel-head {
   padding: var(--space-2) var(--space-4) var(--space-1);
+}
+
+.mt5-dashboard-layout .calendar-panel.domestic-calendar-module {
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-summary {
+  min-width: 0;
+  min-height: 0;
+  gap: 14px;
+  padding: 12px 2px 4px;
+  justify-content: space-between;
+  overflow: visible;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-content: stretch;
+  min-width: 0;
+  gap: 6px;
+  padding: 0;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month > div:first-child {
+  min-width: 0;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month h2 {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month .eyebrow,
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month .layout-subtitle {
+  display: none;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-nav {
+  width: 100%;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-nav .calendar-month-label {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: 760;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-nav .app-icon-button {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-result {
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-items: start;
+  gap: 3px;
+  padding: 11px 12px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-result .domestic-calendar-eyebrow {
+  grid-column: auto;
+  grid-row: auto;
+  font-size: 12px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-result .domestic-calendar-total {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-month-result .domestic-calendar-trades {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-total {
+  font-size: clamp(28px, 3vw, 36px);
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-goals {
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-goal {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  gap: 5px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-goal-head {
+  align-items: baseline;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 1px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-goal-value {
+  padding: 3px 7px;
+  font-size: 12px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-progress {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 11px;
+}
+
+.mt5-dashboard-layout .calendar-panel .domestic-calendar-goal small {
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The four-row editor minimum is intentionally denser so both goals and the
+   chart remain fully visible while the regular footprint gets the more
+   readable vertical goal rhythm. */
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-summary {
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-goals {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-month-result {
+  gap: 1px;
+  padding: 4px 6px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-month-result .domestic-calendar-eyebrow {
+  font-size: 10px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-total {
+  font-size: clamp(21px, 2.5vw, 27px);
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-progress {
+  height: 8px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-month-nav .app-icon-button {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  min-height: 22px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-goal {
+  gap: 2px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-goal-value {
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .domestic-calendar-goal small {
+  font-size: 9px;
+}
+
+.mt5-dashboard-layout .grid-stack-item[gs-h="4"] .calendar-panel .calendar-chart {
+  min-height: 0;
+  padding: 0;
+}
+
+.mt5-dashboard-layout .calendar-panel .calendar-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.mt5-dashboard-layout .calendar-panel .calendar-drag-handle:active {
+  cursor: grabbing;
+}
+
+.mt5-dashboard-layout .calendar-panel .calendar-drag-handle .app-icon-button {
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: auto;
 }
 
 .month-nav {
@@ -525,7 +870,7 @@
 
 .heatmap {
   max-width: 100%;
-  overflow-x: auto;
+  overflow: hidden;
   padding: 0 var(--space-4) var(--space-4);
 }
 
@@ -576,21 +921,58 @@
   gap: var(--space-2);
   padding: 0 var(--space-4) var(--space-4);
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.mt5-dashboard-layout .session-panel {
+  container-type: inline-size;
+  overflow: hidden;
+  border-color: var(--glass-refraction-rim);
+  background: var(--glass-refraction-fill);
+  box-shadow: var(--glass-refraction-card-shadow), 0 0 30px rgba(var(--color-accent-rgb), 0.08);
+  backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-refraction-blur)) saturate(var(--order-list-surface-saturation));
+}
+
+.mt5-dashboard-layout .session-panel .panel-head {
+  padding-bottom: 8px;
 }
 
 .session-item {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface-raised);
+  min-width: 0;
+  min-height: 0;
+  gap: 6px;
+  overflow: hidden;
+  padding: 10px;
+  border: 1px solid var(--glass-control-rim);
+  border-radius: var(--radius-inner);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
+}
+
+.session-item > div,
+.session-item strong,
+.session-item p,
+.session-item small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.session-item > div:nth-child(2) {
+  max-width: 100%;
+  font-size: var(--font-size-readable-min);
+  line-height: 1.2;
+  text-align: right;
+  white-space: normal;
 }
 
 .session-item .bar {
   grid-column: 1 / -1;
-  height: 6px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--color-border);
@@ -606,10 +988,21 @@
 .session-item small {
   grid-column: 1 / -1;
   color: var(--color-muted);
+  font-size: var(--font-size-micro);
+  line-height: 1.3;
+  white-space: normal;
 }
 
 .session-item p.eyebrow {
   margin: 0;
+  font-size: var(--font-size-micro);
+  line-height: 1.25;
+}
+
+@container (max-width: 520px) {
+  .mt5-dashboard-layout .session-panel .session-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Evaluation */
@@ -627,11 +1020,19 @@
 }
 
 .system-period-card {
+  display: flex;
+  min-height: 0;
+  box-sizing: border-box;
+  flex-direction: column;
   min-width: 0;
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-panel);
-  background: var(--color-surface-raised);
+  overflow: hidden;
+  border: 1px solid var(--glass-control-rim);
+  border-radius: var(--glass-refraction-radius);
+  background: var(--glass-control-fill);
+  box-shadow: var(--glass-control-shadow);
+  backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-float-blur)) saturate(var(--glass-saturation));
 }
 
 .system-period-card > header {
@@ -643,8 +1044,12 @@
 .system-period-card > header strong { font-size: var(--font-size-sm); }
 
 .system-period-metrics {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+  align-content: stretch;
   gap: var(--space-2);
   margin: 0;
 }
@@ -700,11 +1105,99 @@ html[data-platform="mt5"] .evaluation-table thead th {
   min-width: 860px;
 }
 
+.mt5-dashboard-layout .panel.daily-evaluation-panel > .evaluation-table-wrap {
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline: 12px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mt5-dashboard-layout .panel.daily-evaluation-panel > .evaluation-table-wrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.mt5-dashboard-layout .daily-evaluation-panel .evaluation-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.mt5-dashboard-layout .daily-evaluation-panel .evaluation-table th,
+.mt5-dashboard-layout .daily-evaluation-panel .evaluation-table td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 /* Mode evaluation */
 .mode-evaluation {
   display: grid;
   gap: var(--space-4);
   padding: 0 var(--space-4) var(--space-4);
+}
+
+.mt5-dashboard-layout .mode-evaluation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 540px), 1fr));
+  flex: 1 1 0;
+  min-height: 0;
+  align-content: start;
+  gap: 18px;
+  overflow: auto;
+  padding: 16px 18px 18px;
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-group {
+  min-width: 0;
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-group header,
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-row {
+  grid-template-columns:
+    minmax(0, 1.7fr)
+    minmax(54px, .55fr)
+    minmax(90px, 1fr)
+    minmax(80px, .9fr)
+    minmax(64px, .65fr)
+    minmax(74px, .8fr);
+  gap: 10px;
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-group header > :not(:first-child),
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-row > :not(:first-child) {
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-group header > :first-child,
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-row > :first-child {
+  justify-self: start;
+  text-align: left;
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-group header {
+  border-bottom: 1px solid rgba(205, 228, 237, .2);
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-row {
+  border-bottom: 1px solid rgba(205, 228, 237, .16);
+}
+
+.mt5-dashboard-layout .mode-evaluation .domestic-mode-group + .domestic-mode-group {
+  padding-top: 14px;
+  border-top: 1px solid rgba(205, 228, 237, .16);
+}
+
+@media (min-width: 1120px) {
+  .mt5-dashboard-layout .mode-evaluation .domestic-mode-group + .domestic-mode-group {
+    padding-top: 0;
+    border-top: 0;
+    border-left: 1px solid rgba(205, 228, 237, .2);
+    padding-left: 18px;
+  }
 }
 
 .mode-group h3 {
@@ -944,8 +1437,33 @@ html[data-platform="mt5"] .evaluation-table thead th {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .r-metric-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .mt5-dashboard-layout .r-metric-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+  }
+
+  .r-metric-item {
+    min-height: 0;
+    padding: var(--space-2);
+    gap: 2px;
+  }
+
+  .r-metric-item span,
+  .r-metric-item strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .r-metric-item span {
+    font-size: var(--font-size-micro);
+  }
+
+  .r-metric-item strong {
+    font-size: var(--font-size-sm);
   }
 
   .system-evaluation-cards {
@@ -959,6 +1477,13 @@ html[data-platform="mt5"] .evaluation-table thead th {
 
   .calendar-chart {
     min-height: 200px;
+  }
+
+  /* The MT5 calendar stacks its summary above the chart on narrow screens.
+     Let the grid row absorb the remaining module height instead of the
+     desktop chart minimum forcing the canvas below the panel. */
+  .mt5-dashboard-layout .calendar-panel .calendar-chart {
+    min-height: 0;
   }
 
   .calendar-stats {
@@ -987,6 +1512,23 @@ html[data-platform="mt5"] .evaluation-table thead th {
   .mode-card-grid--3,
   .mode-card-grid--4 {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mt5-dashboard-layout .mode-evaluation {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .mt5-dashboard-layout .mode-evaluation .domestic-mode-group {
+    overflow-x: auto;
+  }
+
+  .mt5-dashboard-layout .mode-evaluation .domestic-mode-group header,
+  .mt5-dashboard-layout .mode-evaluation .domestic-mode-row {
+    min-width: 520px;
   }
 }
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Callable
 
 from .responses import ApiResponse, bad_request, internal_error, not_found
@@ -8,6 +10,25 @@ from .routes import Body, Query
 
 
 RouteHandler = Callable[[str, Query, Body], ApiResponse]
+
+
+def _dashboard_layout_error_code(error: Exception) -> str:
+    if isinstance(error, sqlite3.OperationalError):
+        message = str(error).casefold()
+        if "no such table" in message:
+            return "database_table_missing"
+        if "no such column" in message:
+            return "database_column_missing"
+        if "readonly" in message or "read-only" in message:
+            return "database_read_only"
+        if "locked" in message:
+            return "database_locked"
+        if "unable to open" in message:
+            return "database_unavailable"
+        return "database_operation_failed"
+    if isinstance(error, sqlite3.DatabaseError):
+        return "database_error"
+    return "layout_storage_error"
 
 
 @dataclass(frozen=True)
@@ -77,7 +98,15 @@ class Router:
             return route.handler(path, request_query, body)
         except ValueError as exc:
             return bad_request(str(exc))
-        except Exception:
+        except Exception as exc:
+            if path == "/api/dashboard-layout":
+                return ApiResponse(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "error": "Internal server error",
+                        "diagnostic": _dashboard_layout_error_code(exc),
+                    },
+                )
             return internal_error()
 
     def _resolve(self, method: str, path: str) -> _Route | None:

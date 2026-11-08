@@ -158,6 +158,49 @@ test("dashboard loads analysis without campaigns or bootstrap", async () => {
   );
 });
 
+test("dashboard renders the cumulative equity amount in the chart header", async () => {
+  const view = new FakeView();
+  const api = recordingApi({"/api/analysis": ANALYSIS});
+  const controller = createDashboardController({
+    api,
+    view,
+    location: {search: ""},
+    history: {replaceState() {}},
+  });
+
+  await controller.load();
+
+  assert.equal(view.getElementById("equityDelta").textContent, "+$50.00");
+  assert.match(view.getElementById("equityDelta").getAttribute("aria-label"), /累计净盈亏/);
+});
+
+test("MT5 calendar renders daily and monthly target progress", async () => {
+  const view = new FakeView();
+  const api = recordingApi({
+    "/api/analysis": {
+      ...ANALYSIS,
+      calendar: {
+        ...ANALYSIS.calendar,
+        month_target_pnl: 500,
+        daily_target_pnl: 100,
+        month_target_completion_percent: 68.1,
+        daily_target_days_met: 2,
+        daily_target_days_total: 4,
+      },
+    },
+  });
+  const controller = createDashboardController({api, view, location: {search: ""}, history: {replaceState() {}}});
+
+  await controller.load();
+
+  const goals = view.getElementById("calendarGoals").innerHTML;
+  assert.match(goals, /日均目标/);
+  assert.match(goals, /月目标/);
+  assert.match(goals, /2\/4天/);
+  assert.match(goals, /68\.1%/);
+  assert.doesNotMatch(goals, /达到目标的交易日/);
+});
+
 test("dashboard resolves a preset into a dated analysis window", async () => {
   const api = recordingApi({});
   api.requestJson = async (requestPath) => {

@@ -62,6 +62,8 @@ export function createSettingsController({
       scratch_threshold_r: 0.15,
       domestic_futures_monthly_target_pnl: 0,
       domestic_futures_daily_target_pnl: 0,
+      mt5_monthly_target_pnl: 0,
+      mt5_daily_target_pnl: 0,
     },
     status: null,
     backups: [],
@@ -147,9 +149,12 @@ export function createSettingsController({
     state.dataAccounts = accounts?.accounts || [];
     scratchValue = Number(state.analysisSettings.scratch_threshold_r ?? 0.15);
     renderScratchThreshold();
-    renderDomesticCalendarTargets();
+    renderCalendarTargets("domestic_futures");
+    renderCalendarTargets("mt5");
     const targetSettings = getElement("domesticCalendarTargets");
     if (targetSettings) targetSettings.hidden = platform !== "domestic_futures";
+    const mt5TargetSettings = getElement("mt5CalendarTargets");
+    if (mt5TargetSettings) mt5TargetSettings.hidden = platform !== "mt5";
     renderStatus();
     renderBackups();
     classificationsModule.render();
@@ -269,11 +274,17 @@ export function createSettingsController({
     if (input) input.value = Number(scratchValue).toFixed(2);
   }
 
+  function renderCalendarTargets(platform) {
+    const prefix = platform === "domestic_futures" ? "domestic" : "mt5";
+    const keyPrefix = platform === "domestic_futures" ? "domestic_futures" : "mt5";
+    const monthly = getElement(`${prefix}MonthlyTargetPnl`);
+    const daily = getElement(`${prefix}DailyTargetPnl`);
+    if (monthly) monthly.value = Number(state.analysisSettings[`${keyPrefix}_monthly_target_pnl`] ?? 0).toFixed(2);
+    if (daily) daily.value = Number(state.analysisSettings[`${keyPrefix}_daily_target_pnl`] ?? 0).toFixed(2);
+  }
+
   function renderDomesticCalendarTargets() {
-    const monthly = getElement("domesticMonthlyTargetPnl");
-    const daily = getElement("domesticDailyTargetPnl");
-    if (monthly) monthly.value = Number(state.analysisSettings.domestic_futures_monthly_target_pnl ?? 0).toFixed(2);
-    if (daily) daily.value = Number(state.analysisSettings.domestic_futures_daily_target_pnl ?? 0).toFixed(2);
+    renderCalendarTargets("domestic_futures");
   }
 
   function renderStatus() {
@@ -622,10 +633,14 @@ export function createSettingsController({
     return true;
   }
 
-  async function saveDomesticCalendarTargets(values = {}) {
-    if (readPlatform(location) !== "domestic_futures") return false;
-    const monthlyRaw = values.monthly ?? getElement("domesticMonthlyTargetPnl")?.value;
-    const dailyRaw = values.daily ?? getElement("domesticDailyTargetPnl")?.value;
+  async function saveCalendarTargets(platform, values = {}) {
+    if (readPlatform(location) !== platform) return false;
+    const prefix = platform === "domestic_futures" ? "domestic" : "mt5";
+    const keyPrefix = platform === "domestic_futures" ? "domestic_futures" : "mt5";
+    const monthlyKey = `${keyPrefix}_monthly_target_pnl`;
+    const dailyKey = `${keyPrefix}_daily_target_pnl`;
+    const monthlyRaw = values.monthly ?? getElement(`${prefix}MonthlyTargetPnl`)?.value;
+    const dailyRaw = values.daily ?? getElement(`${prefix}DailyTargetPnl`)?.value;
     const monthly = Number(monthlyRaw);
     const daily = Number(dailyRaw);
     if (!Number.isFinite(monthly) || !Number.isFinite(daily)
@@ -638,32 +653,40 @@ export function createSettingsController({
       const updated = await api.requestJson("/api/analysis-settings", {
         method: "PATCH",
         body: {
-          domestic_futures_monthly_target_pnl: monthly,
-          domestic_futures_daily_target_pnl: daily,
+          [monthlyKey]: monthly,
+          [dailyKey]: daily,
         },
       });
-      if (!Number.isFinite(Number(updated?.domestic_futures_monthly_target_pnl))
-        || !Number.isFinite(Number(updated?.domestic_futures_daily_target_pnl))) {
-        throw new Error("当前本地服务尚未识别期货日历目标字段，请重启本地服务后重试");
+      if (!Number.isFinite(Number(updated?.[monthlyKey]))
+        || !Number.isFinite(Number(updated?.[dailyKey]))) {
+        throw new Error(`当前本地服务尚未识别${platform === "mt5" ? "MT5" : "期货"}日历目标字段，请重启本地服务后重试`);
       }
       const persisted = await api.requestJson("/api/analysis-settings");
-      const savedMonthly = Number(persisted?.domestic_futures_monthly_target_pnl);
-      const savedDaily = Number(persisted?.domestic_futures_daily_target_pnl);
+      const savedMonthly = Number(persisted?.[monthlyKey]);
+      const savedDaily = Number(persisted?.[dailyKey]);
       if (!Number.isFinite(savedMonthly) || !Number.isFinite(savedDaily)
         || Math.abs(savedMonthly - monthly) > 1e-9 || Math.abs(savedDaily - daily) > 1e-9) {
         throw new Error("目标未能从本地服务回读，请重启本地服务后重试");
       }
       state.analysisSettings = {...state.analysisSettings, ...persisted};
-      renderDomesticCalendarTargets();
-      toast("期货日历目标已保存");
+      renderCalendarTargets(platform);
+      toast(`${platform === "mt5" ? "MT5" : "期货"}日历目标已保存`);
       return true;
     } catch (error) {
       const message = Number(error?.status) === 400 || Number(error?.status) === 404
-        ? "当前本地服务尚未支持期货日历目标保存，请重启本地服务后重试"
-        : error?.message || "期货日历目标保存失败，请稍后重试";
+        ? `当前本地服务尚未支持${platform === "mt5" ? "MT5" : "期货"}日历目标保存，请重启本地服务后重试`
+        : error?.message || `${platform === "mt5" ? "MT5" : "期货"}日历目标保存失败，请稍后重试`;
       toast(message, {tone: "error"});
       return false;
     }
+  }
+
+  async function saveDomesticCalendarTargets(values = {}) {
+    return saveCalendarTargets("domestic_futures", values);
+  }
+
+  async function saveMt5CalendarTargets(values = {}) {
+    return saveCalendarTargets("mt5", values);
   }
 
   async function createBackup() {
@@ -762,6 +785,7 @@ export function createSettingsController({
     });
     getElement("saveScratchThreshold")?.addEventListener("click", () => saveScratchThreshold());
     getElement("saveDomesticCalendarTargets")?.addEventListener("click", () => saveDomesticCalendarTargets());
+    getElement("saveMt5CalendarTargets")?.addEventListener("click", () => saveMt5CalendarTargets());
     getElement("refreshStatus")?.addEventListener("click", refreshStatus);
     getElement("previewDataCleanup")?.addEventListener("click", () => previewDataCleanup().catch(() => {}));
     getElement("executeDataCleanup")?.addEventListener("click", () => executeDataCleanup().catch((error) => {
@@ -795,6 +819,7 @@ export function createSettingsController({
     downloadFuturesTemplate,
     saveScratchThreshold,
     saveDomesticCalendarTargets,
+    saveMt5CalendarTargets,
     createBackup,
     importFuturesData,
     refreshImportReconciliation,

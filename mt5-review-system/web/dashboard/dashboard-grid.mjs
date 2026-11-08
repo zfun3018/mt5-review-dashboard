@@ -16,8 +16,25 @@ export function buildDashboardGridOptions({editable = false} = {}) {
     disableDrag: !editable,
     disableResize: !editable,
     alwaysShowResizeHandle: editable,
-    draggable: {handle: editable ? ".panel-head, .domestic-panel-head" : ".grid-stack-item-content", cancel: "button, input, a, select, textarea"},
+    draggable: {handle: editable ? "[data-layout-drag-handle], .panel-head, .domestic-panel-head" : ".grid-stack-item-content", cancel: "button, input, a, select, textarea"},
     resizable: {handles: "e, se, s, sw, w"},
+  };
+}
+
+export function adaptDashboardLayout(layout, viewportWidth = globalThis.window?.innerWidth ?? globalThis.innerWidth ?? 1280) {
+  const narrow = Number(viewportWidth) <= 760;
+  return {
+    ...layout,
+    items: (layout?.items || []).map((item) => {
+      if (item.id === "r-metrics") {
+        const height = narrow ? Math.max(4, Number(item.h) || 4) : item.h;
+        return {...item, h: height, minH: narrow ? Math.max(2, Number(item.minH) || 2) : item.minH};
+      }
+      if (item.id === "sessions" && narrow) {
+        return {...item, h: Math.max(7, Number(item.h) || 7), minH: Math.max(4, Number(item.minH) || 4)};
+      }
+      return {...item};
+    }),
   };
 }
 
@@ -80,7 +97,8 @@ export function createDashboardGrid({
 } = {}) {
   if (!root) return {runtime: "none", grid: null, destroy() {}, refresh() {}};
   root.classList?.add("grid-stack");
-  configureGridItems(root, layout, selector, document);
+  const responsiveLayout = adaptDashboardLayout(layout);
+  configureGridItems(root, responsiveLayout, selector, document);
   const runtime = runtimeFor(GridStack);
   if (!runtime) {
     return {runtime: "fallback", grid: null, destroy() {}, refresh() {}};

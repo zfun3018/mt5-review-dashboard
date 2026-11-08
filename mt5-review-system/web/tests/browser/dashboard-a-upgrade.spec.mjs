@@ -40,6 +40,23 @@ test("MT5 dashboard keeps its modules, evaluation cards, and non-overlapping des
   }));
   expect(chartCanvasBounds.filter((bounds) => !bounds.fits)).toEqual([]);
 
+  const rMetricGeometry = await page.evaluate(() => {
+    const metric = document.querySelector('[data-layout-module="r-metrics"]');
+    const wrapper = metric?.closest(".grid-stack-item");
+    const card = metric?.querySelector(".r-metric-item:last-child");
+    const equity = document.querySelector('[data-layout-module="equity"]')?.closest(".grid-stack-item");
+    const bounds = (node) => {
+      const rect = node?.getBoundingClientRect();
+      return rect ? {top: rect.top, bottom: rect.bottom, height: rect.height} : null;
+    };
+    return {wrapper: bounds(wrapper), card: bounds(card), equity: bounds(equity)};
+  });
+  expect(rMetricGeometry.wrapper).not.toBeNull();
+  expect(rMetricGeometry.card).not.toBeNull();
+  expect(rMetricGeometry.equity).not.toBeNull();
+  expect(rMetricGeometry.wrapper.bottom - rMetricGeometry.card.bottom).toBeLessThanOrEqual(12);
+  expect(rMetricGeometry.equity.top - rMetricGeometry.wrapper.bottom).toBeLessThanOrEqual(28);
+
   if (testInfo.project.name === "desktop-chromium") {
     const overlap = await page.locator("#mt5DashboardLayout > .grid-stack-item:not([hidden])").evaluateAll((items) => {
       const bounds = items.map((item) => item.getBoundingClientRect());
@@ -71,9 +88,14 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
       last_30_days: {net_pnl: 80, order_count: 20, payoff_ratio: 1.2, r_metrics: {complete_count: 20, decisive_win_rate: 0.55, expectancy_r: 0.15, sqn_status: "insufficient_sample"}},
       last_365_days: {net_pnl: -250, order_count: 140, payoff_ratio: 0.9, r_metrics: {complete_count: 140, decisive_win_rate: 0.48, expectancy_r: -0.05, sqn: 1.12, sqn_status: "available"}},
     },
-    equity: [],
+    equity: [
+      {time_bj: "2026-10-01T10:00:00+08:00", cumulative_return: 0},
+      {time_bj: "2026-10-02T10:00:00+08:00", cumulative_return: 50},
+    ],
     calendar: {
       year: 2026, month: 10, month_net_pnl: 5.5, month_order_count: 2, month_win_rate: 0.5,
+      month_target_pnl: 500, daily_target_pnl: 100, month_target_completion_percent: 1.1,
+      daily_target_days_met: 0, daily_target_days_total: 1,
       days: Object.fromEntries(Array.from({length: 31}, (_, index) => {
         const day = String(index + 1).padStart(2, "0");
         return [`2026-10-${day}`, {label: `2026-10-${day}`, net_pnl: index % 2 ? -6.4 : 5.5, order_count: 1, win_rate: 0.75}];
@@ -86,6 +108,7 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
   }}));
   await page.goto(`${syntheticServer.baseURL}/dashboard/?platform=mt5`);
   await expect(page.locator("#calendarChart canvas")).toHaveCount(1);
+  await expect(page.locator("#calendarGoals .domestic-calendar-goal")).toHaveCount(2);
   await expect(page.locator("#systemEvaluationCards .system-period-card")).toHaveCount(4);
   await expect(page.locator('[data-layout-module="period-overview"] h2')).toHaveText("交易系统评估");
 
@@ -102,9 +125,13 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
     const activeNav = document.querySelector('.app-navigation__link[aria-current="page"]');
     const navIcon = activeNav.querySelector("svg");
     const calendarPanel = document.querySelector('[data-layout-module="calendar"] .panel');
+    const equityPanel = document.querySelector('[data-layout-module="equity"] .panel');
     const calendarChart = document.querySelector("#calendarChart");
+    const equityChart = document.querySelector("#equityChart");
     const calendarInstance = globalThis.echarts.getInstanceByDom(calendarChart);
+    const equityInstance = globalThis.echarts.getInstanceByDom(equityChart);
     const calendarOption = calendarInstance.getOption();
+    const equityOption = equityInstance.getOption();
     const collapseButton = document.querySelector(".app-navigation__collapse");
     return {
       market: rect(document.querySelector("#marketClock")),
@@ -124,6 +151,15 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
       navLinkRadius: getComputedStyle(activeNav).borderRadius,
       navIconBackground: getComputedStyle(navIcon).backgroundColor,
       calendarPanel: rect(calendarPanel),
+      equityPanel: {
+        backgroundImage: getComputedStyle(equityPanel).backgroundImage,
+        backdropFilter: getComputedStyle(equityPanel).backdropFilter,
+        borderColor: getComputedStyle(equityPanel).borderColor,
+      },
+      equityDelta: document.querySelector("#equityDelta")?.textContent,
+      equityAxisLine: equityOption.xAxis[0].axisLine.show,
+      equitySplitLine: equityOption.yAxis[0].splitLine.show,
+      equityZeroAxis: equityOption.series[0].markLine.data[0].yAxis,
       collapseButton: rect(collapseButton),
       collapseRadius: getComputedStyle(collapseButton).borderRadius,
     };
@@ -131,7 +167,7 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
 
   expect(Math.abs(visual.metric.x - visual.market.x)).toBeLessThan(1);
   expect(Math.abs(visual.metric.right - visual.market.right)).toBeLessThan(1);
-  expect(visual.metricOverflow).toBe("auto");
+  expect(visual.metricOverflow).toBe("hidden");
   expect(visual.metricScrollHeight).toBeLessThanOrEqual(visual.metricClientHeight);
   expect(visual.activeMarketBorder).not.toBe("rgb(55, 65, 81)");
   expect(visual.activeMarketShadow).not.toBe("none");
@@ -144,6 +180,13 @@ test("MT5 dashboard aligns full-width modules and keeps its glass controls and c
   expect(visual.navLinkRadius).toBe("50%");
   expect(visual.navIconBackground).toBe("rgba(0, 0, 0, 0)");
   expect(visual.calendarChart.y + visual.calendarChart.height).toBeLessThanOrEqual(visual.calendarPanel.y + visual.calendarPanel.height);
+  expect(visual.equityPanel.backgroundImage).not.toBe("none");
+  expect(visual.equityPanel.backdropFilter).not.toBe("none");
+  expect(visual.equityPanel.borderColor).not.toBe("rgb(55, 65, 81)");
+  expect(visual.equityDelta).toBe("+$50.00");
+  expect(visual.equityAxisLine).toBe(false);
+  expect(visual.equitySplitLine).toBe(false);
+  expect(visual.equityZeroAxis).toBe(0);
   expect(visual.collapseButton.width).toBe(34);
   expect(visual.collapseButton.height).toBe(34);
   expect(visual.collapseRadius).toBe("50%");
@@ -261,17 +304,20 @@ test("MT5 layout editing uses the live dashboard modules and persists a GridStac
       panelHeight: panel.getBoundingClientRect().height,
       headHeight: panel.querySelector(".panel-head").getBoundingClientRect().height,
       statsHeight: panel.querySelector(".calendar-stats").getBoundingClientRect().height,
+      goalsScrollHeight: panel.querySelector("#calendarGoals").scrollHeight,
+      goalsClientHeight: panel.querySelector("#calendarGoals").clientHeight,
       chartHeight: chart.getBoundingClientRect().height,
     };
   });
-  expect(minimumCalendarHeight.w).toBe(6);
-  expect(minimumCalendarHeight.h).toBe(8);
+  expect(minimumCalendarHeight.w).toBe(5);
+  expect(minimumCalendarHeight.h).toBe(4);
   expect(minimumCalendarHeight.chartBottom).toBeLessThanOrEqual(minimumCalendarHeight.panelBottom);
   expect(minimumCalendarHeight.canvasWidth).toBeGreaterThan(0);
   expect(minimumCalendarHeight.canvasHeight).toBeGreaterThan(0);
+  expect(minimumCalendarHeight.goalsScrollHeight).toBeLessThanOrEqual(minimumCalendarHeight.goalsClientHeight);
   await page.locator("#mt5LayoutEditor [data-layout-save]").click();
   await expect(page).toHaveURL(/platform=mt5(?:$|&)/);
   const savedLayout = await page.evaluate(() => JSON.parse(localStorage.getItem("mt5-dashboard-layout-v1")));
-  expect(savedLayout.items.find((item) => item.id === "calendar")).toMatchObject({w: 6, h: 8});
+  expect(savedLayout.items.find((item) => item.id === "calendar")).toMatchObject({w: 5, h: 4});
   await expect(page.locator("#calendarChart canvas")).toHaveCount(1);
 });

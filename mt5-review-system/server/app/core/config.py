@@ -68,7 +68,7 @@ class RuntimeConfig:
         project_root: Path = PROJECT_ROOT,
     ) -> "RuntimeConfig":
         host = env.get("MT5_REVIEW_HOST", "127.0.0.1")
-        port = int(env.get("MT5_REVIEW_PORT", "8787"))
+        port = int(env.get("MT5_REVIEW_PORT", "9277"))
         if not 0 <= port <= 65535:
             raise ValueError("MT5_REVIEW_PORT must be between 0 and 65535")
         return cls(

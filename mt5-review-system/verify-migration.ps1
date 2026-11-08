@@ -3,10 +3,10 @@ $ErrorActionPreference = "Stop"
 # 验证 v0.6.0 已经能读 v0.5.8 的真实数据。
 #
 # 用法（PowerShell）:
-#   .\verify-migration.ps1 [-BaseUrl http://127.0.0.1:8787]
+#   .\verify-migration.ps1 [-BaseUrl http://127.0.0.1:9277]
 
 param(
-  [string]$BaseUrl = "http://127.0.0.1:8787"
+  [string]$BaseUrl = "http://127.0.0.1:9277"
 )
 
 function Check-Status {

@@ -420,6 +420,8 @@ def update_analysis_settings(payload: dict[str, Any]) -> dict[str, Any]:
         "scratch_threshold_r": (0.15, 0, 5, "Scratch 阈值必须在 0R 到 5R 之间"),
         "domestic_futures_monthly_target_pnl": (0, 0, 1e9, "期货月目标必须在 0 到 1,000,000,000 之间"),
         "domestic_futures_daily_target_pnl": (0, 0, 1e9, "期货日均目标必须在 0 到 1,000,000,000 之间"),
+        "mt5_monthly_target_pnl": (0, 0, 1e9, "MT5 月目标必须在 0 到 1,000,000,000 之间"),
+        "mt5_daily_target_pnl": (0, 0, 1e9, "MT5 日均目标必须在 0 到 1,000,000,000 之间"),
     }
     values = {}
     for key, (default, minimum, maximum, range_error) in definitions.items():
@@ -428,7 +430,11 @@ def update_analysis_settings(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             value = float(payload[key])
         except (TypeError, ValueError) as exc:
-            label = "Scratch 阈值" if key == "scratch_threshold_r" else "期货目标"
+            label = (
+                "Scratch 阈值"
+                if key == "scratch_threshold_r"
+                else "MT5 目标" if key.startswith("mt5_") else "期货目标"
+            )
             raise ValueError(f"{label}必须是有效数字") from exc
         if not math.isfinite(value) or not minimum <= value <= maximum:
             raise ValueError(range_error)
@@ -443,7 +449,7 @@ def update_analysis_settings(payload: dict[str, Any]) -> dict[str, Any]:
             [(key, str(value)) for key, value in values.items()],
         )
         rows = conn.execute(
-            "SELECT key, value FROM analysis_settings WHERE key IN (?, ?, ?)",
+            "SELECT key, value FROM analysis_settings WHERE key IN (?, ?, ?, ?, ?)",
             tuple(definitions),
         ).fetchall()
     current = {row["key"]: float(row["value"]) for row in rows}

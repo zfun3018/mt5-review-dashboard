@@ -90,6 +90,25 @@
               <button id="saveDomesticCalendarTargets" class="button-primary" type="button">保存目标</button>
             </div>
           </div>
+
+          <div id="mt5CalendarTargets" class="settings-section" data-mt5-target-settings hidden>
+            <div class="settings-section-head">
+              <div>
+                <p class="eyebrow">MT5 CALENDAR</p>
+                <h2>MT5 日历目标</h2>
+              </div>
+            </div>
+            <p class="settings-hint">日均目标独立设置。填写 0 表示暂不设置目标，日历中的进度会按北京时间已平仓交易统计。</p>
+            <div class="settings-calendar-target-row">
+              <label for="mt5MonthlyTargetPnl">月目标</label>
+              <input id="mt5MonthlyTargetPnl" type="number" step="0.01" min="0" max="1000000000" inputmode="decimal" />
+              <span>美元</span>
+              <label for="mt5DailyTargetPnl">日均目标</label>
+              <input id="mt5DailyTargetPnl" type="number" step="0.01" min="0" max="1000000000" inputmode="decimal" />
+              <span>美元</span>
+              <button id="saveMt5CalendarTargets" class="button-primary" type="button">保存目标</button>
+            </div>
+          </div>
         </div>
 
         <div class="settings-panel glass-surface" data-settings-panel="data" role="tabpanel" hidden>

@@ -20,7 +20,7 @@ import {
   resolveAnalysisWindow,
   writeDashboardState,
 } from "./dashboard-state.mjs";
-import {loadLayout} from "./dashboard-layout.mjs";
+import {loadLayout, loadLayoutFromServer, watchDashboardLayout} from "./dashboard-layout.mjs";
 import {createDashboardGrid} from "./dashboard-grid.mjs";
 import {mountDashboardLayoutEditorMode} from "./dashboard-layout-editor-mode.mjs";
 import {createMt5DashboardCharts} from "./mt5-dashboard-charts.mjs";
@@ -176,6 +176,8 @@ export function createDashboardController({
   let gridController = null;
   let chartController = null;
   let layoutEditorController = null;
+  let layoutRevision = 0;
+  let stopLayoutWatch = () => {};
   let loadRevision = 0;
 
   function getElement(id) {
@@ -227,7 +229,7 @@ export function createDashboardController({
     if (sessionPanel) sessionPanel.hidden = !workspace.showSessions;
   }
 
-  function applyDashboardLayout() {
+  async function applyDashboardLayout() {
     const domesticRoot = getElement("domesticDashboard");
     const legacyRoot = getElement("legacyDashboard");
     if (domesticRoot) domesticRoot.hidden = true;
@@ -236,7 +238,14 @@ export function createDashboardController({
     const layoutRoot = getElement("mt5DashboardLayout");
     gridController?.destroy?.();
     layoutEditorController?.dispose?.();
-    const layout = loadLayout(globalThis.localStorage, "mt5");
+    let layoutState;
+    try {
+      layoutState = await loadLayoutFromServer({api, storage: globalThis.localStorage, platform: "mt5"});
+    } catch (_) {
+      layoutState = {layout: loadLayout(globalThis.localStorage, "mt5"), revision: 0};
+    }
+    layoutRevision = layoutState.revision;
+    const layout = layoutState.layout;
     const layoutEditing = new URLSearchParams(location.search).get("layout") === "edit";
     gridController = createDashboardGrid({
       root: layoutRoot,
@@ -252,6 +261,8 @@ export function createDashboardController({
       gridController,
       layout,
       platform: "mt5",
+      api,
+      revision: layoutState.revision,
       location,
       document: view,
     });
@@ -349,12 +360,13 @@ export function createDashboardController({
     const deltaText = metricValue(rawDelta, (value) => {
       const amount = Number(value);
       const safeAmount = Number.isFinite(amount) ? amount : 0;
-      return `${safeAmount >= 0 ? "+" : ""}${formatMoney(safeAmount)} 区间回报`;
+      return `${safeAmount >= 0 ? "+" : ""}${formatMoney(safeAmount)}`;
     }, equityMeta);
     const deltaNode = getElement("equityDelta");
     if (deltaNode) {
-      deltaNode.textContent = deltaText;
-      deltaNode.className = `status-pill ${metricState(equityMeta) ? "" : profitClass(delta)}`;
+      deltaNode.textContent = Number.isFinite(delta) || metricState(equityMeta) ? deltaText : "—";
+      deltaNode.className = `status-pill equity-total ${metricState(equityMeta) ? "" : profitClass(delta)}`;
+      deltaNode.setAttribute("aria-label", `累计净盈亏 ${deltaNode.textContent}`);
     }
   }
 
@@ -408,24 +420,18 @@ export function createDashboardController({
       groups
         .map(
           ([title, rows]) => `
-            <section class="mode-group">
-              <h3>${title}</h3>
-              <div class="mode-card-grid mode-card-grid--${rows.length}">
-                ${rows.map((row) => `
-                  <article class="mode-card">
-                    <header><strong>${escapeHtml(row.label || row.key)}</strong><span>${formatPercent(row.share)}</span></header>
-                    <div class="${profitClass(row.net_pnl)}">${formatMoney(row.net_pnl)}</div>
-                    <small>${row.order_count} 笔交易 · 总胜率 ${formatPercent(row.cash_win_rate ?? row.win_rate)} · 总盈亏比 ${formatRatio(row.profit_factor)}</small>
-                    <dl class="mode-r-metrics">
-                      <div><dt>净胜率（剔除打平）</dt><dd>${formatPercent(row.r_metrics?.decisive_win_rate)}</dd></div>
-                      <div><dt>有效胜率</dt><dd>${formatPercent(row.r_metrics?.all_sample_win_rate)}</dd></div>
-                      <div><dt>打平占比</dt><dd>${formatPercent(row.r_metrics?.scratch_rate)}</dd></div>
-                      <div><dt>平均数学期望（ER）</dt><dd>${compactMetricText(formatRValue(row.r_metrics?.expectancy_r))}</dd></div>
-                      <div><dt>收益稳定度（SQN）</dt><dd>${row.r_metrics?.sqn_status === "available" ? Number(row.r_metrics.sqn).toFixed(2) : "!"}</dd></div>
-                    </dl>
-                  </article>
-                `).join("") || `<div class="detail-empty">当前范围暂无数据</div>`}
-              </div>
+            <section class="domestic-mode-group">
+              <header><strong>${title}</strong><span>占比</span><span>净盈亏</span><span>有效胜率</span><span>盈亏比</span><span>交易笔数</span></header>
+              ${rows.map((row) => `
+                <div class="domestic-mode-row">
+                  <span>${escapeHtml(row.label || row.key)}</span>
+                  <small>${formatPercent(row.share)}</small>
+                  <b class="${profitClass(row.net_pnl)}">${formatMoney(row.net_pnl)}</b>
+                  <small>${formatPercent(row.r_metrics?.all_sample_win_rate)}</small>
+                  <small>${formatRatio(row.profit_factor)}</small>
+                  <small>${row.order_count || 0} 笔</small>
+                </div>
+              `).join("") || `<div class="domestic-empty">当前范围暂无数据</div>`}
             </section>
           `,
         )
@@ -441,25 +447,42 @@ export function createDashboardController({
     setText("calendarMonthLabel", `${calendar.year} 年 ${String(calendar.month).padStart(2, "0")} 月`);
     if (calendarState && calendarState.status !== "estimated") {
       setHtml("calendarStats", `<div class="detail-empty metric-state-${calendarState.tone}">${calendarState.label}</div>`);
+      setHtml("calendarGoals", "");
       return;
     }
     setHtml(
       "calendarStats",
-      [
-        ["净盈亏", formatMoney(calendar.month_net_pnl), profitClass(calendar.month_net_pnl)],
-        ["月胜率", formatPercent(calendar.month_win_rate)],
-        ["订单数", String(calendar.month_order_count)],
-      ]
-        .map(
-          ([label, value, cls = ""]) => `
-            <div class="calendar-stat">
-              <span>${escapeHtml(label)}</span>
-              <strong class="${cls}">${escapeHtml(value)}</strong>
-            </div>
-          `,
-        )
-        .join(""),
+      `<p class="domestic-calendar-eyebrow">本月净盈亏</p>
+       <strong class="domestic-calendar-total ${profitClass(calendar.month_net_pnl)}">${escapeHtml(formatMoney(calendar.month_net_pnl))}</strong>
+       <span class="domestic-calendar-trades">${Number(calendar.month_order_count || 0)} 笔平仓 · 胜率 ${escapeHtml(formatPercent(calendar.month_win_rate))}</span>`,
     );
+    const monthTarget = Number(calendar.month_target_pnl) || 0;
+    const dailyTarget = Number(calendar.daily_target_pnl) || 0;
+    const monthPercent = Number(calendar.month_target_completion_percent);
+    const dailyMet = Number(calendar.daily_target_days_met) || 0;
+    const dailyTotal = Number(calendar.daily_target_days_total) || 0;
+    const monthProgress = monthTarget > 0 && Number.isFinite(monthPercent)
+      ? Math.max(0, Math.min(100, monthPercent))
+      : 0;
+    const dailyProgress = dailyTarget > 0 && dailyTotal > 0
+      ? Math.max(0, Math.min(100, dailyMet / dailyTotal * 100))
+      : 0;
+    setHtml("calendarGoals", `
+      <div class="domestic-calendar-goal ${dailyTarget > 0 ? "" : "is-unset"}">
+        <div class="domestic-calendar-goal-head">
+          <div class="domestic-calendar-goal-label"><span>日均目标</span><strong>${dailyTarget > 0 ? escapeHtml(formatMoney(dailyTarget)) : "未设置"}</strong></div>
+          <b class="domestic-calendar-goal-value">${dailyTarget > 0 ? `${dailyMet}/${dailyTotal}天` : "待设置"}</b>
+        </div>
+        <div class="domestic-calendar-progress" role="progressbar" aria-label="日均目标达成天数" aria-valuemin="0" aria-valuemax="${dailyTotal}" aria-valuenow="${dailyTarget > 0 ? dailyMet : 0}"><i style="width:${dailyProgress}%"></i></div>
+      </div>
+      <div class="domestic-calendar-goal ${monthTarget > 0 ? "" : "is-unset"}">
+        <div class="domestic-calendar-goal-head">
+          <div class="domestic-calendar-goal-label"><span>月目标</span><strong>${monthTarget > 0 ? escapeHtml(formatMoney(monthTarget)) : "未设置"}</strong></div>
+          <b class="domestic-calendar-goal-value">${monthTarget > 0 && Number.isFinite(monthPercent) ? `${monthPercent.toFixed(1)}%` : "待设置"}</b>
+        </div>
+        <div class="domestic-calendar-progress" role="progressbar" aria-label="月目标完成度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${monthTarget > 0 ? monthProgress : 0}"><i style="width:${monthProgress}%"></i></div>
+        <small>${monthTarget > 0 ? `${escapeHtml(formatMoney(calendar.month_net_pnl))} / ${escapeHtml(formatMoney(monthTarget))}` : "设置月目标后查看"}</small>
+      </div>`);
   }
 
   function renderSessions() {
@@ -510,7 +533,10 @@ export function createDashboardController({
     renderMarketClock();
     const renderers = {
       "r-metrics": renderRMetricSummary,
-      equity: () => chartController?.updateModule("equity", payload || {}),
+      equity: () => {
+        renderEquity();
+        chartController?.updateModule("equity", payload || {});
+      },
       calendar: () => {
         renderCalendar();
         chartController?.updateModule("calendar", payload || {});
@@ -726,7 +752,16 @@ export function createDashboardController({
         toolbarFilters: view.querySelector?.("#legacyDashboard .filter-bar"),
       })
       : null;
-    applyDashboardLayout();
+    // Layout loading is server-backed and therefore asynchronous. Re-render
+    // once it completes so a fast analysis response cannot leave the page
+    // without GridStack wrappers or apply the data to a stale local layout.
+    applyDashboardLayout().then(() => {
+      if (payload) renderAll();
+      if (new URLSearchParams(location.search).get("layout") !== "edit") {
+        stopLayoutWatch();
+        stopLayoutWatch = watchDashboardLayout({api, platform: "mt5", revision: layoutRevision, location});
+      }
+    });
     chartController = createMt5DashboardCharts({view});
     const layoutLink = getElement("mt5DashboardLayoutLink");
     if (layoutLink) {
@@ -738,39 +773,24 @@ export function createDashboardController({
     }
 
     const timePreset = getElement("timePreset");
-    const startDateFilter = getElement("startDateFilter");
-    const endDateFilter = getElement("endDateFilter");
     const prevMonth = getElement("prevMonth");
     const nextMonth = getElement("nextMonth");
     const metricExplanationClose = getElement("metricExplanationClose");
 
     if (timePreset) {
-      timePreset.value = state.preset;
+      // Keep legacy custom URLs readable while the MT5 toolbar only exposes
+      // presets that have a visible control. The state layer still resolves
+      // custom/start/end for bookmarked links and old query strings.
+      timePreset.value = [...timePreset.options].some((option) => option.value === state.preset)
+        ? state.preset
+        : "all";
       timePreset.addEventListener("change", (event) => {
         state.preset = event.target.value;
         if (state.preset !== "custom") {
           state.start = "";
           state.end = "";
-          if (startDateFilter) startDateFilter.value = "";
-          if (endDateFilter) endDateFilter.value = "";
         }
         commitState({ preset: state.preset, start: state.start, end: state.end });
-        load();
-      });
-    }
-    if (startDateFilter) {
-      startDateFilter.value = state.start || "";
-      startDateFilter.addEventListener("change", (event) => {
-        commitState({ start: event.target.value, preset: "custom" });
-        if (timePreset) timePreset.value = "custom";
-        load();
-      });
-    }
-    if (endDateFilter) {
-      endDateFilter.value = state.end || "";
-      endDateFilter.addEventListener("change", (event) => {
-        commitState({ end: event.target.value, preset: "custom" });
-        if (timePreset) timePreset.value = "custom";
         load();
       });
     }
@@ -798,6 +818,7 @@ export function createDashboardController({
     chartController?.dispose?.();
     gridController?.destroy?.();
     layoutEditorController?.dispose?.();
+    stopLayoutWatch();
   }
 
   return {

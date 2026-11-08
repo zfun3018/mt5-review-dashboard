@@ -38,6 +38,16 @@ class SettingsService:
     def get_analysis_settings(self):
         return self.settings.get_analysis_settings()
 
+    def get_dashboard_layout(self, platform):
+        return self.catalogs.get_dashboard_layout(platform)
+
+    def put_dashboard_layout(self, platform, layout, expected_revision=None):
+        return self.catalogs.put_dashboard_layout(
+            platform,
+            layout,
+            expected_revision=expected_revision,
+        )
+
     def get_status(self):
         return self.status.get_status()
 

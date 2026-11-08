@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta, timezone
@@ -13,7 +14,7 @@ from app.application.dashboard_service import DashboardService, _legacy_definiti
 from app.application.orders_service import OrdersService
 from app.application.settings_service import SettingsService
 from app.data.campaign_repository import CampaignRepository
-from app.data.catalog_repository import CatalogRepository
+from app.data.catalog_repository import CatalogRepository, DashboardLayoutConflict
 from app.data.media_repository import MediaRepository
 from app.data.trade_repository import TradeRepository
 from app.domain.analysis_context import AnalysisContext
@@ -495,7 +496,40 @@ class ApplicationRepositoryReadTest(TemporaryStorageCase):
             "scratch_threshold_r": 0.15,
             "domestic_futures_monthly_target_pnl": 0.0,
             "domestic_futures_daily_target_pnl": 0.0,
+            "mt5_monthly_target_pnl": 0.0,
+            "mt5_daily_target_pnl": 0.0,
         })
+
+    def test_dashboard_layout_is_platform_scoped_and_revision_checked(self):
+        catalogs = CatalogRepository(storage.runtime_paths())
+        layout = {"version": 1, "columns": 12, "items": [{"id": "calendar", "x": 6, "y": 10, "w": 6, "h": 8}]}
+
+        with storage.db() as conn:
+            conn.execute("DROP TABLE dashboard_layouts")
+            conn.execute(
+                "CREATE TABLE dashboard_layouts ("
+                "platform TEXT PRIMARY KEY, layout_json TEXT NOT NULL, "
+                "legacy_marker TEXT NOT NULL)"
+            )
+            conn.execute(
+                "INSERT INTO dashboard_layouts(platform, layout_json, legacy_marker) VALUES (?, ?, ?)",
+                ("mt5", json.dumps(layout), "keep-layout"),
+            )
+        migrated = catalogs.get_dashboard_layout("mt5")
+        self.assertEqual(migrated["revision"], 0)
+        self.assertEqual(migrated["layout"], layout)
+        first = catalogs.put_dashboard_layout("mt5", layout, expected_revision=0)
+        self.assertEqual(first["revision"], 1)
+        self.assertEqual(catalogs.get_dashboard_layout("mt5")["layout"], layout)
+        self.assertIsNone(catalogs.get_dashboard_layout("domestic_futures"))
+
+        with self.assertRaises(DashboardLayoutConflict) as raised:
+            catalogs.put_dashboard_layout("mt5", layout, expected_revision=0)
+        self.assertEqual(getattr(raised.exception, "current_revision", None), 1)
+
+        second = catalogs.put_dashboard_layout("domestic_futures", layout, expected_revision=0)
+        self.assertEqual(second["revision"], 1)
+        self.assertEqual(catalogs.get_dashboard_layout("domestic_futures")["layout"], layout)
 
     def test_album_repository_filters_counts_and_pages_before_custom_values(self):
         single = storage.create_custom_field(

@@ -48,7 +48,7 @@ export function buildMt5EquityOption(payload = {}) {
       data: points.map((point) => String(point.time_bj || point.time_utc || "")),
       boundaryGap: false,
       axisTick: {show: false},
-      axisLine: {lineStyle: {color: "rgba(255, 255, 255, 0.12)"}},
+      axisLine: {show: false},
       axisLabel: {color: "#8d96a3", hideOverlap: true, formatter: formatEquityAxisDate},
     },
     yAxis: {
@@ -58,7 +58,7 @@ export function buildMt5EquityOption(payload = {}) {
       axisLabel: {color: "#8d96a3", formatter: compactAxisValue},
       axisLine: {show: false},
       axisTick: {show: false},
-      splitLine: {lineStyle: {color: "rgba(255, 255, 255, 0.08)", type: "dashed"}},
+      splitLine: {show: false},
     },
     series: [{
       name: "累计净盈亏",
@@ -72,7 +72,7 @@ export function buildMt5EquityOption(payload = {}) {
       itemStyle: {color: "#69d6ab"},
       lineStyle: {color: "#69d6ab", width: 3},
       areaStyle: {color: "rgba(105, 214, 171, 0.13)"},
-      markLine: {silent: true, symbol: "none", label: {show: false}, lineStyle: {color: "rgba(255, 255, 255, 0.34)", type: "dashed"}, data: [{yAxis: 0}]},
+      markLine: {silent: true, symbol: "none", label: {show: false}, lineStyle: {color: "rgba(255, 255, 255, 0.42)", width: 1.5, type: "solid"}, data: [{yAxis: 0}]},
     }],
     graphic: points.length < 2 ? [{type: "text", left: "center", top: "middle", style: {text: state?.label || "当前范围暂无累计曲线", fill: "#8d96a3", fontSize: 12}}] : [],
   };
@@ -104,14 +104,17 @@ export function buildMt5CalendarOption(payload = {}) {
     calendar: {
       range: daysInMonth ? [monthKey + "-01", monthKey + "-" + String(daysInMonth).padStart(2, "0")] : monthKey,
       orient: "vertical",
-      cellSize: ["auto", 26],
-      left: 16,
-      right: 16,
-      top: 24,
-      bottom: 12,
+      // Let ECharts use the available height. A fixed row height left a large
+      // empty band in the compact GridStack footprint and made the amounts
+      // hard to read.
+      cellSize: ["auto", "auto"],
+      left: 24,
+      right: 12,
+      top: 16,
+      bottom: 4,
       splitLine: {show: false},
       itemStyle: {borderWidth: 0, borderColor: "transparent", color: "transparent"},
-      dayLabel: {firstDay: 1, nameMap: ["日", "一", "二", "三", "四", "五", "六"], color: "#8d96a3", margin: 10},
+      dayLabel: {firstDay: 1, nameMap: ["日", "一", "二", "三", "四", "五", "六"], color: "#aab4c2", fontSize: 14, fontWeight: 650, margin: 8},
       monthLabel: {show: false},
       yearLabel: {show: false},
     },
@@ -135,10 +138,10 @@ export function buildMt5CalendarOption(payload = {}) {
           return `{day|${String(day).slice(-2)}}\n{${tone}|${count ? compactAxisValue(amount) : "—"}}`;
         },
         rich: {
-          day: {color: "#8d96a3", fontSize: 9, lineHeight: 12},
-          profit: {color: "#69d6ab", fontSize: 11, fontWeight: 600, lineHeight: 14},
-          loss: {color: "#ff7d88", fontSize: 11, fontWeight: 600, lineHeight: 14},
-          flat: {color: "#8d96a3", fontSize: 10, lineHeight: 14},
+          day: {color: "#c0cbd7", fontSize: 15, lineHeight: 18},
+          profit: {color: "#69d6ab", fontSize: 18, fontWeight: 700, lineHeight: 21},
+          loss: {color: "#ff7d88", fontSize: 18, fontWeight: 700, lineHeight: 21},
+          flat: {color: "#aab4c2", fontSize: 16, lineHeight: 20},
         },
       },
     }],

@@ -2,7 +2,7 @@
 
 一个 local-first 的 MT5 交易复盘工具：交易事件和截图留在本机，订单、统计和复盘内容通过本地网页统一查看。
 
-当前版本：`v1.2.0`，版本号以根目录 `VERSION` 为准。正式版本通过 [GitHub Releases](https://github.com/zfun3018/mt5-review-dashboard/releases) 发布。
+当前版本：`v1.2.1`，版本号以根目录 `VERSION` 为准。正式版本通过 [GitHub Releases](https://github.com/zfun3018/mt5-review-dashboard/releases) 发布。
 
 ## 项目适合谁
 
@@ -55,7 +55,7 @@ Set-Location .\mt5-review-system
 浏览器访问：
 
 ```text
-http://127.0.0.1:8787
+http://127.0.0.1:9277
 ```
 
 完整的 MT5 EA 配置、手机访问、JSONL 回灌、数据迁移和接口说明见 [运行与开发说明](mt5-review-system/README.md)。

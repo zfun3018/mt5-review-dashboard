@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import sqlite3
 from dataclasses import FrozenInstanceError
 from http import HTTPStatus
 from http.client import HTTPConnection
@@ -62,6 +63,8 @@ class RecordingStorage:
                 "checked_in": False,
             },
             "get_analysis_settings": {"scratch_threshold_r": 0.15},
+            "get_dashboard_layout": {"platform": "mt5", "revision": 3, "layout": {"version": 1, "columns": 12, "items": []}},
+            "put_dashboard_layout": {"platform": "mt5", "revision": 4, "layout": {"version": 1, "columns": 12, "items": []}},
             "query_review_album": {"trades": [{"id": "T-1"}], "total": 1},
             "get_random_review_album": {"trade": {"id": "T-1"}},
             "get_review_checkins": {
@@ -192,6 +195,47 @@ class HttpRouterTest(unittest.TestCase):
         self.assertEqual(response.status, HTTPStatus.OK)
         self.assertEqual(response.payload, {"imported": True})
         self.assertEqual(self.import_calls, 1)
+
+    def test_dashboard_layout_routes_use_platform_and_revision(self):
+        get_response = self.router.dispatch(
+            "GET",
+            "/api/dashboard-layout",
+            {"platform": ["mt5"]},
+            None,
+        )
+        self.assertEqual(get_response.status, HTTPStatus.OK)
+        self.assertEqual(get_response.payload, self.storage.results["get_dashboard_layout"])
+        self.assertEqual(
+            self.storage.calls,
+            [("get_dashboard_layout", ("mt5",), {})],
+        )
+
+        self.storage.calls.clear()
+        put_response = self.router.dispatch(
+            "PUT",
+            "/api/dashboard-layout",
+            {"platform": ["domestic_futures"]},
+            {"revision": 3, "layout": {"version": 1, "columns": 12, "items": []}},
+        )
+        self.assertEqual(put_response.status, HTTPStatus.OK)
+        self.assertEqual(put_response.payload, self.storage.results["put_dashboard_layout"])
+        self.assertEqual(
+            self.storage.calls,
+            [("put_dashboard_layout", ("domestic_futures", {"version": 1, "columns": 12, "items": []}), {"expected_revision": 3})],
+        )
+
+    def test_dashboard_layout_storage_failure_returns_safe_diagnostic_code(self):
+        self.storage.failures["get_dashboard_layout"] = sqlite3.OperationalError(
+            "no such table: dashboard_layouts"
+        )
+
+        response = self.router.dispatch(
+            "GET", "/api/dashboard-layout", {"platform": ["mt5"]}, None
+        )
+
+        self.assertEqual(response.status, HTTPStatus.INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.payload["diagnostic"], "database_table_missing")
+        self.assertNotIn("dashboard_layouts", response.payload["diagnostic"])
 
     def test_custom_field_option_purge_route_forwards_field_and_option_ids(self):
         response = self.router.dispatch(
@@ -1276,6 +1320,7 @@ class HttpAdapterTest(unittest.TestCase):
         self.assertEqual((static_status, static_body), (HTTPStatus.OK, b"synthetic index"))
         self.assertEqual((module_status, module_body), (HTTPStatus.OK, b"export const value = 1;"))
         self.assertIn(("Content-Type", "text/javascript"), module_headers)
+        self.assertIn(("Cache-Control", "no-store, max-age=0"), module_headers)
         self.assertEqual((media_status, media_body), (HTTPStatus.OK, b"synthetic media"))
         self.assertEqual(
             (encoded_status, encoded_body),
@@ -1283,6 +1328,24 @@ class HttpAdapterTest(unittest.TestCase):
         )
         self.assertEqual(traversal_status, HTTPStatus.NOT_FOUND)
         self.assertNotIn(b"private", traversal_body)
+
+    def test_api_responses_disable_caching_for_mutable_local_state(self):
+        class RouterProbe:
+            def route_requires_body(self, method, path):
+                return False
+
+            def dispatch(self, method, path, query, body):
+                return ApiResponse(HTTPStatus.OK, {"revision": 2})
+
+        server.API_ROUTER = RouterProbe()
+        status, payload, headers = self.request("GET", "/api/dashboard-layout")
+
+        self.assertEqual(status, HTTPStatus.OK)
+        self.assertIn(b'"revision": 2', payload)
+        self.assertIn(
+            ("Cache-Control", "no-store, max-age=0"),
+            headers,
+        )
 
     def test_client_disconnect_during_response_write_is_ignored(self):
         class AbortedWriter:

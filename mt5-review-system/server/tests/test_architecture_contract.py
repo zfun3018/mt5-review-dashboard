@@ -386,7 +386,7 @@ class ArchitectureContractTest(TemporaryStorageCase):
             project_root=self.root,
         )
 
-        self.assertEqual((default.host, default.port), ("127.0.0.1", 8787))
+        self.assertEqual((default.host, default.port), ("127.0.0.1", 9277))
         self.assertEqual((overridden.host, overridden.port), ("0.0.0.0", 8899))
         self.assertEqual(default.paths, RuntimePaths.from_root(self.root))
 

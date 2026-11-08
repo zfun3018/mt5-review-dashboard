@@ -68,23 +68,13 @@
             <option value="today">今日</option>
             <option value="7d">近 7 天</option>
             <option value="30d">本月</option>
-            <option value="custom">自定义</option>
           </select>
         </div>
-        <label class="toolbar-date-control" for="startDateFilter"><span>开始</span><input id="startDateFilter" type="date" aria-label="开始日期" /></label>
-        <label class="toolbar-date-control" for="endDateFilter"><span>结束</span><input id="endDateFilter" type="date" aria-label="结束日期" /></label>
+        <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./index.html?platform=mt5&amp;layout=edit" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
       </section>
-      <a class="dashboard-layout-link" id="mt5DashboardLayoutLink" href="./index.html?platform=mt5&amp;layout=edit" data-dashboard-layout-link hidden><i data-lucide="layout-grid"></i><span>调整布局</span></a>
 
       <div class="mt5-dashboard-layout grid-stack" id="mt5DashboardLayout">
-      <section class="panel r-metric-panel" aria-label="R 指标概览" data-layout-module="r-metrics">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">R SUMMARY</p>
-            <h2 data-layout-title>R 指标概览</h2>
-            <p class="layout-subtitle" data-layout-subtitle>按交易组合评估风险回报</p>
-          </div>
-        </div>
+      <section class="panel r-metric-panel" aria-label="交易指标" data-layout-module="r-metrics">
         <div id="rMetricSummary" class="r-metric-grid"></div>
       </section>
 
@@ -99,26 +89,29 @@
               <div class="chart-legend" aria-label="图表图例">
                 <span class="chart-key return-key">累计净盈亏</span>
               </div>
-              <span id="equityDelta" class="status-pill"></span>
+              <span id="equityDelta" class="status-pill equity-total" aria-label="累计净盈亏"></span>
             </div>
           </div>
           <div id="equityChart" class="chart-frame"></div>
         </article>
 
-        <article class="panel calendar-panel" data-layout-module="calendar">
-          <div class="panel-head">
-            <div>
-              <p class="eyebrow">MONTHLY P/L</p>
-              <h2 id="calendarTitle" data-layout-title>盈亏日历</h2>
-              <span id="calendarMonthLabel" class="calendar-month-label"></span>
-              <p class="layout-subtitle" data-layout-subtitle>按北京时间展示每日净盈亏</p>
+        <article class="panel calendar-panel domestic-calendar-module" data-layout-module="calendar">
+          <div class="domestic-calendar-summary">
+            <div class="panel-head domestic-calendar-month calendar-drag-handle" data-layout-drag-handle aria-label="拖动调整日历模块">
+              <div>
+                <p class="eyebrow">MONTHLY P/L</p>
+                <h2 id="calendarTitle" data-layout-title>盈亏日历</h2>
+                <p class="layout-subtitle" data-layout-subtitle>按北京时间展示每日净盈亏</p>
+              </div>
+              <div class="domestic-calendar-month-nav month-nav">
+                <button id="prevMonth" class="app-icon-button" type="button" title="上月" aria-label="上月">&lt;</button>
+                <span id="calendarMonthLabel" class="calendar-month-label"></span>
+                <button id="nextMonth" class="app-icon-button" type="button" title="下月" aria-label="下月">&gt;</button>
+              </div>
             </div>
-            <div class="month-nav">
-              <button id="prevMonth" class="app-icon-button" type="button" title="上月" aria-label="上月">&lt;</button>
-              <button id="nextMonth" class="app-icon-button" type="button" title="下月" aria-label="下月">&gt;</button>
-            </div>
+            <div id="calendarStats" class="calendar-stats domestic-calendar-month-result"></div>
+            <div id="calendarGoals" class="domestic-calendar-goals"></div>
           </div>
-          <div id="calendarStats" class="calendar-stats"></div>
           <div id="calendarChart" class="calendar-chart" role="img" aria-label="盈亏日历"></div>
         </article>
 

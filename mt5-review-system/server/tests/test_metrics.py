@@ -242,7 +242,7 @@ class CommonMetricRegistryTest(unittest.TestCase):
         self.assertEqual(calendar.value["daily_target_days_total"], 4)
         self.assertEqual(calendar.value["days"]["2026-10-02"]["net_pnl"], 50.0)
 
-    def test_mt5_calendar_does_not_receive_domestic_target_fields(self):
+    def test_mt5_calendar_uses_mt5_target_fields_without_crossing_platform_settings(self):
         context = _context(
             [_campaign("C-1", "2026-10-01T01:00:00+00:00", 50.0)],
             settings={
@@ -250,12 +250,18 @@ class CommonMetricRegistryTest(unittest.TestCase):
                 "selected_month": 10,
                 "domestic_futures_monthly_target_pnl": 500.0,
                 "domestic_futures_daily_target_pnl": 100.0,
+                "mt5_monthly_target_pnl": 200.0,
+                "mt5_daily_target_pnl": 40.0,
             },
         )
         calendar = next(
             result for result in build_metric_registry().evaluate(context) if result.key == "calendar"
         )
-        self.assertNotIn("month_target_pnl", calendar.value)
+        self.assertEqual(calendar.value["month_target_pnl"], 200.0)
+        self.assertEqual(calendar.value["daily_target_pnl"], 40.0)
+        self.assertEqual(calendar.value["month_target_completion_percent"], 25.0)
+        self.assertEqual(calendar.value["daily_target_days_met"], 1)
+        self.assertEqual(calendar.value["daily_target_days_total"], 1)
 
     def test_sessions_include_both_sides_of_cross_midnight_window(self):
         context = _context(

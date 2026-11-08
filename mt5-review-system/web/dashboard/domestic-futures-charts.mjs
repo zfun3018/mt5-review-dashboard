@@ -598,9 +598,23 @@ export function buildHeatmapOption(payload = {}) {
   const state = chartMetricState(payload, "hour_heatmap");
   const rows = Array.isArray(payload.heatmap?.days) ? payload.heatmap.days : [];
   const hours = Array.from({length: 24}, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
-  const dates = rows.map((row) => row.label || row.weekday_label || shortDate(row.date, ""));
+  const weekdayNames = ["周一", "周二", "周三", "周四", "周五"];
+  const weekdayForRow = (row) => {
+    const label = String(row?.weekday_label || row?.label || "");
+    const fromLabel = weekdayNames.find((weekday) => label.includes(weekday));
+    if (fromLabel) return fromLabel;
+    const date = String(row?.date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    return weekday >= 1 && weekday <= 5 ? ["", "周一", "周二", "周三", "周四", "周五"][weekday] : "";
+  };
+  const displayRows = rows
+    .filter((row) => weekdayForRow(row))
+    .sort((left, right) => weekdayNames.indexOf(weekdayForRow(left)) - weekdayNames.indexOf(weekdayForRow(right)))
+    .slice(0, 5);
+  const dates = displayRows.map((row) => weekdayForRow(row) || shortDate(row?.date, ""));
   const data = [];
-  rows.forEach((row, rowIndex) => {
+  displayRows.forEach((row, rowIndex) => {
     if (state) return;
     (row.hours || []).forEach((cell) => {
       if (!hasFiniteValue(cell?.hour) || !hasFiniteValue(cell?.net_pnl) || !hasFiniteValue(cell?.order_count)) return;
@@ -611,7 +625,7 @@ export function buildHeatmapOption(payload = {}) {
   const empty = !rows.length || !data.some((cell) => cell[3] > 0);
   return {
     animation: false,
-    grid: {left: 50, right: 18, top: 18, bottom: 34, containLabel: true},
+    grid: {left: 24, right: 4, top: 3, bottom: 14, containLabel: true},
     tooltip: {
       position: "top",
       formatter: (params) => {
@@ -622,14 +636,15 @@ export function buildHeatmapOption(payload = {}) {
     xAxis: {
       type: "category",
       data: hours,
-      axisLabel: {color: "#8d96a3", interval: 2, fontSize: 12},
+      axisLabel: {color: "#aab4c2", interval: 2, fontSize: 11},
       axisTick: {show: false},
       axisLine: {lineStyle: {color: "rgba(255, 255, 255, 0.12)"}},
     },
     yAxis: {
       type: "category",
       data: dates,
-      axisLabel: {color: "#8d96a3", fontSize: 12, interval: 0},
+      inverse: true,
+      axisLabel: {color: "#c0cbd7", fontSize: 13, interval: 0},
       axisTick: {show: false},
       axisLine: {show: false},
     },

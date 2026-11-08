@@ -29,6 +29,13 @@ def bad_request(message: str) -> ApiResponse:
     return ApiResponse(HTTPStatus.BAD_REQUEST, {"error": message})
 
 
+def conflict(message: str, payload: dict[str, Any] | None = None) -> ApiResponse:
+    body = {"error": message}
+    if payload:
+        body.update(payload)
+    return ApiResponse(HTTPStatus.CONFLICT, body)
+
+
 def not_found(message: str = "Not found") -> ApiResponse:
     return ApiResponse(HTTPStatus.NOT_FOUND, {"error": message})
 

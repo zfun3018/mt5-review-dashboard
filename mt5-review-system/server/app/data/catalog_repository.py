@@ -6,11 +6,19 @@ from contextlib import closing, nullcontext
 from typing import Any
 
 from ..core.config import RuntimePaths
-from .database import connect
+from .database import connect, transaction
+from .dashboard_layout_schema import ensure_dashboard_layout_schema
 from ..platforms import normalize_platform
 
 
 CLASSIFICATION_DIMENSIONS = {"trade_type", "strategy"}
+
+
+class DashboardLayoutConflict(RuntimeError):
+    def __init__(self, platform: str, current_revision: int) -> None:
+        super().__init__(f"Dashboard layout for {platform} changed; reload before saving")
+        self.platform = platform
+        self.current_revision = current_revision
 
 
 def _normalize_platforms(value: Any) -> list[str]:
@@ -202,11 +210,13 @@ class CatalogRepository:
         context = nullcontext(conn) if conn is not None else closing(connect(self.paths))
         with context as active_conn:
             rows = active_conn.execute(
-                "SELECT key, value FROM analysis_settings WHERE key IN (?, ?, ?) ",
+                "SELECT key, value FROM analysis_settings WHERE key IN (?, ?, ?, ?, ?) ",
                 (
                     "scratch_threshold_r",
                     "domestic_futures_monthly_target_pnl",
                     "domestic_futures_daily_target_pnl",
+                    "mt5_monthly_target_pnl",
+                    "mt5_daily_target_pnl",
                 ),
             ).fetchall()
         values = {row["key"]: float(row["value"]) for row in rows}
@@ -214,4 +224,72 @@ class CatalogRepository:
             "scratch_threshold_r": values.get("scratch_threshold_r", 0.15),
             "domestic_futures_monthly_target_pnl": values.get("domestic_futures_monthly_target_pnl", 0),
             "domestic_futures_daily_target_pnl": values.get("domestic_futures_daily_target_pnl", 0),
+            "mt5_monthly_target_pnl": values.get("mt5_monthly_target_pnl", 0),
+            "mt5_daily_target_pnl": values.get("mt5_daily_target_pnl", 0),
+        }
+
+    def get_dashboard_layout(self, platform: str) -> dict[str, Any] | None:
+        normalized_platform = normalize_platform(platform)
+        with transaction(self.paths) as conn:
+            ensure_dashboard_layout_schema(conn)
+            row = conn.execute(
+                "SELECT platform, revision, layout_json, updated_at "
+                "FROM dashboard_layouts WHERE platform = ?",
+                (normalized_platform,),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            layout = json.loads(row["layout_json"])
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError("Stored dashboard layout is invalid") from exc
+        if not isinstance(layout, dict):
+            raise ValueError("Stored dashboard layout must be an object")
+        return {
+            "platform": normalized_platform,
+            "revision": int(row["revision"]),
+            "layout": layout,
+            "updated_at": row["updated_at"],
+        }
+
+    def put_dashboard_layout(
+        self,
+        platform: str,
+        layout: dict[str, Any],
+        *,
+        expected_revision: int | None = None,
+    ) -> dict[str, Any]:
+        normalized_platform = normalize_platform(platform)
+        if not isinstance(layout, dict) or not isinstance(layout.get("items"), list):
+            raise ValueError("layout must be an object with an items list")
+        serialized = json.dumps(layout, ensure_ascii=False, separators=(",", ":"))
+        if len(serialized.encode("utf-8")) > 512_000:
+            raise ValueError("layout is too large")
+        with transaction(self.paths) as conn:
+            ensure_dashboard_layout_schema(conn)
+            existing = conn.execute(
+                "SELECT revision FROM dashboard_layouts WHERE platform = ?",
+                (normalized_platform,),
+            ).fetchone()
+            current_revision = int(existing["revision"]) if existing else 0
+            if expected_revision is not None and int(expected_revision) != current_revision:
+                raise DashboardLayoutConflict(normalized_platform, current_revision)
+            next_revision = current_revision + 1
+            conn.execute(
+                "INSERT INTO dashboard_layouts(platform, revision, layout_json, updated_at) "
+                "VALUES (?, ?, ?, CURRENT_TIMESTAMP) "
+                "ON CONFLICT(platform) DO UPDATE SET revision = excluded.revision, "
+                "layout_json = excluded.layout_json, updated_at = CURRENT_TIMESTAMP",
+                (normalized_platform, next_revision, serialized),
+            )
+            row = conn.execute(
+                "SELECT platform, revision, layout_json, updated_at "
+                "FROM dashboard_layouts WHERE platform = ?",
+                (normalized_platform,),
+            ).fetchone()
+        return {
+            "platform": normalized_platform,
+            "revision": int(row["revision"]),
+            "layout": json.loads(row["layout_json"]),
+            "updated_at": row["updated_at"],
         }

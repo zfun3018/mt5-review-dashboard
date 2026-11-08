@@ -110,6 +110,8 @@ class CampaignApiTest(unittest.TestCase):
         self.assertEqual(settings["scratch_threshold_r"], 0.15)
         self.assertEqual(settings["domestic_futures_monthly_target_pnl"], 0)
         self.assertEqual(settings["domestic_futures_daily_target_pnl"], 0)
+        self.assertEqual(settings["mt5_monthly_target_pnl"], 0)
+        self.assertEqual(settings["mt5_daily_target_pnl"], 0)
         self.assertEqual(patch_status, 200)
         self.assertEqual(updated["scratch_threshold_r"], 0.2)
 
@@ -125,6 +127,14 @@ class CampaignApiTest(unittest.TestCase):
         self.assertEqual(saved["scratch_threshold_r"], 0.2)
         self.assertEqual(reloaded["domestic_futures_monthly_target_pnl"], 5000)
         self.assertEqual(reloaded["domestic_futures_daily_target_pnl"], 250)
+
+        _, mt5_saved = self.request(
+            "/api/analysis-settings",
+            method="PATCH",
+            payload={"mt5_monthly_target_pnl": 1200, "mt5_daily_target_pnl": 60},
+        )
+        self.assertEqual(mt5_saved["mt5_monthly_target_pnl"], 1200)
+        self.assertEqual(mt5_saved["mt5_daily_target_pnl"], 60)
 
         storage.upsert_trade({
             "id": "FUTURES-TARGET-1",

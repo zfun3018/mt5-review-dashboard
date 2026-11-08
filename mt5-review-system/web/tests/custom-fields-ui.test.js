@@ -156,6 +156,15 @@ test("order screenshot supports preview, replace, paste/upload, and delete", () 
 test("analysis workspace exposes cumulative return, shared filters, system matrix, and daily evaluation", () => {
   assert.match(dashboardHtml, /收益累计曲线/);
   assert.match(dashboardHtml, /id="timePreset"/);
+  assert.doesNotMatch(dashboardHtml, /<p class="eyebrow">R SUMMARY<\/p>/);
+  assert.doesNotMatch(dashboardHtml, /<h2 data-layout-title>R 指标概览<\/h2>/);
+  assert.doesNotMatch(dashboardHtml, /按交易组合评估风险回报/);
+  assert.doesNotMatch(dashboardHtml, /value="custom"/);
+  assert.doesNotMatch(dashboardHtml, /id="startDateFilter"|id="endDateFilter"/);
+  const mt5FilterStart = dashboardHtml.indexOf('<section class="filter-bar"');
+  const mt5FilterEnd = dashboardHtml.indexOf('</section>', mt5FilterStart);
+  const mt5LayoutLink = dashboardHtml.indexOf('id="mt5DashboardLayoutLink"');
+  assert.ok(mt5FilterStart > -1 && mt5LayoutLink > mt5FilterStart && mt5LayoutLink < mt5FilterEnd);
   assert.doesNotMatch(dashboardHtml, /id="equityPreset"/);
   assert.match(dashboardHtml, /id="systemEvaluationCards"/);
   assert.match(dashboardHtml, /<h2 data-layout-title>交易系统评估<\/h2>/);
@@ -172,6 +181,8 @@ test("analysis workspace exposes cumulative return, shared filters, system matri
   assert.match(dashboardCharts, /buildMonthlyPnlOption/);
   assert.match(dashboardCharts, /buildHeatmapOption/);
   assert.match(dashboardCss, /\.r-metric-grid\s*\{[^}]*repeat\(7,/s);
+  assert.match(dashboardCss, /\.mt5-dashboard-layout \.r-metric-panel\s*\{[^}]*overflow:\s*hidden[^}]*border:\s*0/s);
+  assert.match(dashboardCss, /\.r-metric-item\s*\{[^}]*border:\s*1px solid var\(--glass-control-rim\)[^}]*background:\s*var\(--glass-control-fill\)[^}]*backdrop-filter:/s);
   assert.match(dashboardCss, /\.evaluation-table-wrap\s*\{[^}]*overflow-x:\s*auto/s);
   assert.match(dashboardCss, /\.evaluation-table\s*\{[^}]*min-width:\s*860px/s);
   assert.match(dashboardCss, /\.equity-panel\s*\{[^}]*grid-column:\s*1 \/ -1/s);
@@ -181,6 +192,12 @@ test("daily evaluation keeps all rows in the scrollable module body with recent 
   assert.match(dashboardCss, /\.evaluation-panel\s*\{[\s\S]*display:\s*flex/s);
   assert.match(dashboardCss, /\.evaluation-table-wrap\s*\{[\s\S]*flex:\s*1/s);
   assert.doesNotMatch(dashboardCss, /\.evaluation-table-wrap\s*\{[\s\S]*max-height:\s*330px/s);
+  assert.match(dashboardCss, /\.mt5-dashboard-layout \.panel\.daily-evaluation-panel\s*> \.evaluation-table-wrap\s*\{[\s\S]*overflow-x:\s*hidden[\s\S]*overflow-y:\s*auto[\s\S]*scrollbar-width:\s*none/s);
+  assert.match(dashboardCss, /daily-evaluation-panel\s*> \.evaluation-table-wrap::-webkit-scrollbar\s*\{[\s\S]*width:\s*0[\s\S]*height:\s*0/s);
+  assert.match(dashboardCss, /\.mt5-dashboard-layout \.mode-evaluation \.domestic-mode-group header,[\s\S]*\.mt5-dashboard-layout \.mode-evaluation \.domestic-mode-row\s*\{[\s\S]*grid-template-columns:[\s\S]*minmax\(0,\s*1\.7fr\)[\s\S]*minmax\(74px,\s*\.8fr\)/s);
+  assert.match(dashboardCss, /\.mt5-dashboard-layout \.mode-evaluation \.domestic-mode-row\s*\{[^}]*border-bottom:\s*1px solid rgba\(205, 228, 237, \.16\)/s);
+  assert.match(dashboardCss, /\.mt5-dashboard-layout \.mode-evaluation \.domestic-mode-group \+ \.domestic-mode-group\s*\{[^}]*border-left:\s*1px solid/s);
+  assert.match(dashboardCss, /grid-stack-item\[data-layout-module="mode-evaluation"\][\s\S]*background:\s*transparent[\s\S]*box-shadow:\s*none/s);
   assert.match(dashboardJs, /const rows = allRows\.reverse\(\)/);
   assert.doesNotMatch(dashboardJs, /allRows\.slice\(-30\)/);
 });
