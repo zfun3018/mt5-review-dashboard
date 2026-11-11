@@ -40,6 +40,32 @@ flowchart LR
 - **导入审计**：国内期货导入保留来源文件、批次、工作表、行号和成交序号，可查看重复、无效、冲突和未配对原因，并撤销导入批次。
 - **本地维护**：设置页提供数据状态、配置、备份和按账户/日期范围预览后清理数据的入口。
 
+## 界面预览
+
+仪表盘汇总交易表现、风险状态、月度盈亏与交易日历：
+
+![国内期货分析仪表盘](docs/images/dashboard-overview.png)
+
+订单复盘页面将成交列表、图表、标签、笔记和打卡记录放在一起：
+
+![订单复盘与打卡](docs/images/order-review-and-checkins.png)
+
+<details>
+<summary>查看其他项目界面图</summary>
+
+![项目介绍与功能总览](docs/images/project-intro.png)
+
+![可自定义的仪表盘模块](docs/images/custom-dashboard-modules.png)
+
+![盈亏日历与目标设置](docs/images/profit-calendar-goals.png)
+
+![订单列表和交易图表](docs/images/orders-with-chart.png)
+
+![复盘标签和笔记](docs/images/review-tags-and-notes.png)
+
+![仪表盘分析模块](docs/images/dashboard-analysis.png)
+</details>
+
 ## 安装与启动
 
 ### 环境要求
